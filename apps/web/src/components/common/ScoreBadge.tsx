@@ -1,0 +1,79 @@
+import React from 'react';
+import { motion } from 'framer-motion';
+import { cn, getScoreColor, getScoreBgColor, getChessNotation } from '@/lib/utils';
+import { ScoreBadgeProps } from '@/types';
+import { useDisplaySettings } from '@/stores/settingsStore';
+
+const ScoreBadge: React.FC<ScoreBadgeProps> = ({
+  score,
+  dimension = 'overall',
+  size = 'md',
+  animated = true,
+  showNotation = true,
+  className
+}) => {
+  const { showChessNotation, animationsEnabled } = useDisplaySettings();
+  const { symbol, name } = getChessNotation(score);
+  
+  const sizeClasses = {
+    sm: 'h-6 px-2 text-xs',
+    md: 'h-8 px-3 text-sm',
+    lg: 'h-10 px-4 text-base'
+  };
+  
+  const dimensionColors = {
+    overall: getScoreBgColor(score),
+    strategic: 'bg-purple-500',
+    tactical: 'bg-blue-500',
+    cognitive: 'bg-green-500',
+    innovation: 'bg-yellow-500'
+  };
+  
+  const bgColor = dimension === 'overall' ? dimensionColors.overall : dimensionColors[dimension];
+  
+  const badgeContent = (
+    <div
+      className={cn(
+        'inline-flex items-center justify-center rounded-full font-semibold text-white',
+        sizeClasses[size],
+        bgColor,
+        'shadow-sm border border-white/20',
+        className
+      )}
+    >
+      <span className="mr-1">{Math.round(score)}</span>
+      {showNotation && showChessNotation && (
+        <span className="text-xs opacity-90">{symbol}</span>
+      )}
+    </div>
+  );
+  
+  if (animated && animationsEnabled) {
+    return (
+      <motion.div
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ 
+          type: "spring", 
+          stiffness: 300, 
+          damping: 20,
+          delay: 0.1 
+        }}
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        title={`${name}: ${Math.round(score)}/100`}
+      >
+        {badgeContent}
+      </motion.div>
+    );
+  }
+  
+  return (
+    <div title={`${name}: ${Math.round(score)}/100`}>
+      {badgeContent}
+    </div>
+  );
+};
+
+export default ScoreBadge;
+
