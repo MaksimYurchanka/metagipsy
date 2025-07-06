@@ -1,0 +1,219 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  avatar    String?
+  tier      UserTier @default(FREE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sessions Session[]
+  apiKeys  ApiKey[]
+
+  @@map("users")
+}
+
+model Session {
+  id          String      @id @default(cuid())
+  userId      String
+  title       String?
+  platform    Platform    @default(OTHER)
+  status      SessionStatus @default(ACTIVE)
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    Message[]
+  scores      Score[]
+  patterns    Pattern[]
+  insights    Insight[]
+
+  @@map("sessions")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      Role
+  content   String
+  timestamp DateTime?
+  index     Int
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  // Relations
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  score     Score?
+
+  @@unique([sessionId, index])
+  @@map("messages")
+}
+
+model Score {
+  id          String   @id @default(cuid())
+  messageId   String   @unique
+  sessionId   String
+  overall     Float
+  strategic   Float
+  tactical    Float
+  cognitive   Float
+  innovation  Float
+  classification String
+  chessNotation  String
+  confidence  Float
+  explanation String?
+  betterMove  String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  message     Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("scores")
+}
+
+model Pattern {
+  id          String      @id @default(cuid())
+  sessionId   String
+  type        PatternType
+  name        String
+  startIndex  Int
+  endIndex    Int
+  confidence  Float
+  description String
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+
+  // Relations
+  session     Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("patterns")
+}
+
+model Insight {
+  id          String      @id @default(cuid())
+  sessionId   String
+  type        InsightType
+  title       String
+  description String
+  priority    Priority    @default(MEDIUM)
+  actionable  Boolean     @default(false)
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+
+  // Relations
+  session     Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("insights")
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  key       String   @unique
+  lastUsed  DateTime?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+// Analytics tables
+model DailyStats {
+  id              String   @id @default(cuid())
+  date            DateTime @unique
+  totalSessions   Int      @default(0)
+  totalMessages   Int      @default(0)
+  avgScore        Float?
+  activeUsers     Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@map("daily_stats")
+}
+
+model UserStats {
+  id              String   @id @default(cuid())
+  userId          String
+  date            DateTime
+  sessionsCount   Int      @default(0)
+  messagesCount   Int      @default(0)
+  avgScore        Float?
+  bestScore       Float?
+  worstScore      Float?
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, date])
+  @@map("user_stats")
+}
+
+// Enums
+enum UserTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum Platform {
+  CLAUDE
+  CHATGPT
+  OTHER
+  AUTO
+}
+
+enum Role {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum SessionStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+  DELETED
+}
+
+enum PatternType {
+  MOMENTUM
+  CIRCULAR
+  FATIGUE
+  BREAKTHROUGH
+  DECLINE
+  OSCILLATION
+}
+
+enum InsightType {
+  IMPROVEMENT
+  WARNING
+  CELEBRATION
+  SUGGESTION
+  PATTERN
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
