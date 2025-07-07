@@ -21,7 +21,9 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
   const { compactMode, animationsEnabled, autoExpandLowScores } = useDisplaySettings();
   
   const expanded = onToggle ? isExpanded : localExpanded;
-  const toggleExpanded = onToggle || (() => setLocalExpanded(!localExpanded));
+  const toggleExpanded = onToggle || useCallback(() => {
+    setLocalExpanded(prev => !prev);
+  }, []);
   
   // Auto-expand low scores
   React.useEffect(() => {
