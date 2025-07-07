@@ -8,30 +8,6 @@ import { useAnalysisSettings } from '@/stores/settingsStore';
 import { api } from '@/lib/api';
 import { Message, AnalyzeRequest } from '@/types';
 
-// ✅ FIX: Move features array OUTSIDE component to prevent recreation
-const FEATURES = [
-  {
-    icon: '🎯',
-    title: 'Strategic Analysis',
-    description: 'Goal alignment and progress tracking'
-  },
-  {
-    icon: '⚔️',
-    title: 'Tactical Scoring',
-    description: 'Clarity, specificity, and actionability'
-  },
-  {
-    icon: '🧠',
-    title: 'Cognitive Assessment',
-    description: 'Mental load and timing optimization'
-  },
-  {
-    icon: '💡',
-    title: 'Innovation Metrics',
-    description: 'Creativity and breakthrough potential'
-  }
-];
-
 const AnalysisPage: React.FC = () => {
   const {
     messages,
@@ -364,14 +340,35 @@ const AnalysisPage: React.FC = () => {
         </motion.div>
       </div>
 
-      {/* ✅ FIX: Use the constant FEATURES array instead of inline array */}
+      {/* Features */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-12"
       >
-        {FEATURES.map((feature, index) => (
+        {[
+          {
+            icon: '🎯',
+            title: 'Strategic Analysis',
+            description: 'Goal alignment and progress tracking'
+          },
+          {
+            icon: '⚔️',
+            title: 'Tactical Scoring',
+            description: 'Clarity, specificity, and actionability'
+          },
+          {
+            icon: '🧠',
+            title: 'Cognitive Assessment',
+            description: 'Mental load and timing optimization'
+          },
+          {
+            icon: '💡',
+            title: 'Innovation Metrics',
+            description: 'Creativity and breakthrough potential'
+          }
+        ].map((feature, index) => (
           <div
             key={index}
             className="text-center p-6 rounded-lg border bg-card hover:shadow-md transition-shadow"
