@@ -320,3 +320,5 @@ function generateInsights(scores: any[], messages: any[], dimensionAverages: any
 
   return insights;
 }
+
+export default router;

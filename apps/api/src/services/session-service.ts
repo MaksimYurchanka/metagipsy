@@ -10,7 +10,7 @@ export class SessionService {
         data: {
           userId,
           // FIXED: Type cast platform and remove non-existent fields
-          platform: (metadata.platform as Platform) || 'OTHER',
+          platform: (metadata.platform as Platform) || 'other',
           // FIXED: Store everything in metadata JSON field
           metadata: {
             ...metadata,
