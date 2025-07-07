@@ -15,9 +15,9 @@ export const prisma = globalThis.__prisma || new PrismaClient({
   ]
 });
 
-// Log queries in development
+// FIXED: Properly type the query event handler
 if (process.env.NODE_ENV === 'development') {
-  prisma.$on('query', (e) => {
+  prisma.$on('query' as any, (e: any) => {
     logger.debug(`Query: ${e.query}`);
     logger.debug(`Params: ${e.params}`);
     logger.debug(`Duration: ${e.duration}ms`);
@@ -29,4 +29,3 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 export default prisma;
-

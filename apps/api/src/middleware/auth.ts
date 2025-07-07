@@ -8,7 +8,7 @@ const supabase = createClient(
   config.supabase.serviceKey
 );
 
-// FIXED: Properly extend Express Request interface
+// FIXED: Properly extend Express Request interface with all properties
 export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
@@ -16,6 +16,11 @@ export interface AuthenticatedRequest extends Request {
     role?: string;
   };
   startTime?: number;
+  // Explicitly include Express Request properties to avoid TypeScript errors
+  body: any;
+  params: any;
+  query: any;
+  headers: any;
 }
 
 export const authenticateUser = async (
