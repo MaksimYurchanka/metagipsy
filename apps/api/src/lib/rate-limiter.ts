@@ -1,5 +1,5 @@
 import { redis } from './redis';
-import { RateLimitError } from '@/types';
+import { RateLimitError } from '../types';
 import { logger } from './logger';
 
 export interface RateLimitConfig {
