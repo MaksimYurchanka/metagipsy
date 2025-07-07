@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, TrendingUp, Eye, Download, Share2, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,77 +8,117 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import MessageAnalysis from './MessageAnalysis';
 import ScoreBadge from '@/components/common/ScoreBadge';
-import { useMessages, useScores, useSessionSummary, useAnalysisStats, useCurrentTrend } from '@/stores/analysisStore';
+import { useAnalysisStore } from '@/stores/analysisStore';
 import { useDisplaySettings } from '@/stores/settingsStore';
 import { cn, getTrendIcon, getTrendColor, getDimensionIcon } from '@/lib/utils';
 
 const AnalysisResults: React.FC = () => {
-  const messages = useMessages();
-  const scores = useScores();
-  const sessionSummary = useSessionSummary();
-  const stats = useAnalysisStats();
-  const trend = useCurrentTrend();
+  // ✅ FIX 1: Single store subscription to prevent cascade
+  const analysisData = useAnalysisStore(state => ({
+    messages: state.messages,
+    scores: state.scores,
+    sessionSummary: state.sessionSummary,
+    // Compute stats inline to avoid separate subscription
+    stats: {
+      averageScore: state.scores.length > 0 
+        ? state.scores.reduce((sum, score) => sum + score.overall, 0) / state.scores.length 
+        : 0,
+      bestScore: state.scores.length > 0 
+        ? Math.max(...state.scores.map(s => s.overall)) 
+        : 0,
+      totalMessages: state.messages.length,
+      completedAnalysis: state.scores.length,
+      // ✅ FIX 2: Calculate actual dimension averages
+      dimensionAverages: state.scores.length > 0 ? {
+        strategic: state.scores.reduce((sum, s) => sum + s.dimensions.strategic, 0) / state.scores.length,
+        tactical: state.scores.reduce((sum, s) => sum + s.dimensions.tactical, 0) / state.scores.length,
+        cognitive: state.scores.reduce((sum, s) => sum + s.dimensions.cognitive, 0) / state.scores.length,
+        innovation: state.scores.reduce((sum, s) => sum + s.dimensions.innovation, 0) / state.scores.length,
+      } : { strategic: 0, tactical: 0, cognitive: 0, innovation: 0 }
+    },
+    // Compute trend inline
+    trend: state.scores.length >= 3 
+      ? (() => {
+          const recent = state.scores.slice(-3);
+          const oldAvg = (recent[0].overall + recent[1].overall) / 2;
+          const newAvg = recent[2].overall;
+          return newAvg > oldAvg + 5 ? 'improving' : 
+                 newAvg < oldAvg - 5 ? 'declining' : 'stable';
+        })()
+      : 'stable'
+  }));
+  
   const { compactMode, animationsEnabled } = useDisplaySettings();
   
   const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
   const [filterBy, setFilterBy] = useState<'all' | 'low' | 'high'>('all');
   const [sortBy, setSortBy] = useState<'index' | 'score'>('index');
   
+  const { messages, scores, stats, trend } = analysisData;
+  
   if (messages.length === 0 || scores.length === 0) {
     return null;
   }
   
-  const toggleExpanded = (index: number) => {
-    const newExpanded = new Set(expandedMessages);
-    if (newExpanded.has(index)) {
-      newExpanded.delete(index);
-    } else {
-      newExpanded.add(index);
-    }
-    setExpandedMessages(newExpanded);
-  };
+  // ✅ FIX 3: Memoize callback to prevent re-renders
+  const toggleExpanded = useCallback((index: number) => {
+    setExpandedMessages(prev => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(index)) {
+        newExpanded.delete(index);
+      } else {
+        newExpanded.add(index);
+      }
+      return newExpanded;
+    });
+  }, []);
   
-  const expandAll = () => {
+  const expandAll = useCallback(() => {
     setExpandedMessages(new Set(messages.map((_, i) => i)));
-  };
+  }, [messages.length]);
   
-  const collapseAll = () => {
+  const collapseAll = useCallback(() => {
     setExpandedMessages(new Set());
-  };
+  }, []);
   
-  // Filter and sort messages
-  const filteredMessages = messages.filter((_, index) => {
-    const score = scores[index];
-    if (!score) return false;
-    
-    switch (filterBy) {
-      case 'low':
-        return score.overall < 60;
-      case 'high':
-        return score.overall >= 80;
-      default:
-        return true;
-    }
-  });
+  // ✅ FIX 4: Memoize filtered and sorted arrays
+  const filteredMessages = useMemo(() => {
+    return messages.filter((_, index) => {
+      const score = scores[index];
+      if (!score) return false;
+      
+      switch (filterBy) {
+        case 'low':
+          return score.overall < 60;
+        case 'high':
+          return score.overall >= 80;
+        default:
+          return true;
+      }
+    });
+  }, [messages, scores, filterBy]);
   
-  const sortedMessages = [...filteredMessages].sort((a, b) => {
-    const aIndex = messages.indexOf(a);
-    const bIndex = messages.indexOf(b);
-    const aScore = scores[aIndex];
-    const bScore = scores[bIndex];
-    
-    if (sortBy === 'score') {
-      return bScore.overall - aScore.overall;
-    }
-    return aIndex - bIndex;
-  });
+  const sortedMessages = useMemo(() => {
+    return [...filteredMessages].sort((a, b) => {
+      const aIndex = messages.indexOf(a);
+      const bIndex = messages.indexOf(b);
+      const aScore = scores[aIndex];
+      const bScore = scores[bIndex];
+      
+      if (sortBy === 'score') {
+        return bScore.overall - aScore.overall;
+      }
+      return aIndex - bIndex;
+    });
+  }, [filteredMessages, messages, scores, sortBy]);
   
-  const dimensions = [
-    { key: 'strategic', label: 'Strategic', value: stats.averageScore },
-    { key: 'tactical', label: 'Tactical', value: stats.averageScore },
-    { key: 'cognitive', label: 'Cognitive', value: stats.averageScore },
-    { key: 'innovation', label: 'Innovation', value: stats.averageScore }
-  ];
+  // ✅ FIX 5: Use actual dimension averages instead of overall average
+  const dimensions = useMemo(() => [
+    { key: 'strategic', label: 'Strategic', value: stats.dimensionAverages.strategic },
+    { key: 'tactical', label: 'Tactical', value: stats.dimensionAverages.tactical },
+    { key: 'cognitive', label: 'Cognitive', value: stats.dimensionAverages.cognitive },
+    { key: 'innovation', label: 'Innovation', value: stats.dimensionAverages.innovation }
+  ], [stats.dimensionAverages]);
   
   return (
     <div className="space-y-6">
@@ -321,4 +361,3 @@ const AnalysisResults: React.FC = () => {
 };
 
 export default AnalysisResults;
-
