@@ -1,3 +1,5 @@
+import { Request } from 'express';
+
 // Core types for MetaGipsy OWL Chess Engine API
 
 export interface Message {
@@ -363,7 +365,7 @@ export interface AppConfig {
     serviceRoleKey: string;
     serviceKey?: string; // Alias
   };
-  claude?: {
+  anthropic?: {
     apiKey?: string;
   };
   jwt: {
@@ -394,14 +396,7 @@ export interface User {
   tier?: UserTier;
 }
 
-export interface AuthenticatedRequest extends Request {
-  user?: User;
-  startTime?: number;
-  body: any;
-  params: any;
-  query: any;
-  headers: any;
-}
+// REMOVED: AuthenticatedRequest interface (using the one from middleware/auth.ts instead)
 
 // Utility types
 export type DeepPartial<T> = {

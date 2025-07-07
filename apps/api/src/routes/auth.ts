@@ -144,8 +144,10 @@ router.get('/usage', authenticateUser, async (req: AuthenticatedRequest, res) =>
           messages: monthlyUsage.reduce((sum, s) => sum + (s.message_count || 0), 0)
         },
         limits: {
-          sessions: config.limits.sessionsPerMonth,
-          messages: config.limits.messagesPerMonth
+          // FIXED: Changed from sessionsPerMonth to maxSessionsPerMonth
+          sessions: config.limits.maxSessionsPerMonth,
+          // FIXED: Changed from messagesPerMonth to maxMessagesPerMonth  
+          messages: config.limits.maxMessagesPerMonth
         }
       }
     });
@@ -158,4 +160,3 @@ router.get('/usage', authenticateUser, async (req: AuthenticatedRequest, res) =>
 });
 
 export default router;
-

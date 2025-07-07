@@ -45,8 +45,9 @@ export const config = {
     serviceKey: getEnvVar('SUPABASE_SERVICE_KEY') // Alias for compatibility
   },
   
-  claude: {
-    apiKey: getEnvVar('CLAUDE_API_KEY', '')
+  // FIXED: Changed from claude to anthropic
+  anthropic: {
+    apiKey: getEnvVar('ANTHROPIC_API_KEY', '')
   },
   
   jwt: {

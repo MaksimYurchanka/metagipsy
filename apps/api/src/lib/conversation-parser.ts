@@ -1,4 +1,4 @@
-import { Message, Platform } from '@/types';
+import { Message, Platform } from '../types';
 
 export interface ParseResult {
   messages: Message[];
@@ -135,7 +135,7 @@ export class ConversationParser {
       parts = text.split(/(?=\*\*User\*\*|\*\*Assistant\*\*)/i);
     }
     // Format 3: Numbered format (1. User, 2. Assistant)
-    else if (text.match(/\d+\.\s*(User|Assistant)/i)) {
+    else if (text.match(/\d+\.\s*(?:User|Assistant)/i)) {
       parts = text.split(/(?=\d+\.\s*(?:User|Assistant))/i);
     }
     // Format 4: Simple alternating (assume first is user)
@@ -151,12 +151,12 @@ export class ConversationParser {
       let role: 'user' | 'assistant';
       let content: string;
       
-      if (part.match(/^(?:User:|**User**|\d+\.\s*User)/i)) {
+      if (part.match(/^(?:User:|\*\*User\*\*|\d+\.\s*User)/i)) {
         role = 'user';
-        content = part.replace(/^(?:User:|**User**|\d+\.\s*User)\s*/i, '').trim();
-      } else if (part.match(/^(?:ChatGPT:|Assistant:|**Assistant**|\d+\.\s*Assistant)/i)) {
+        content = part.replace(/^(?:User:|\*\*User\*\*|\d+\.\s*User)\s*/i, '').trim();
+      } else if (part.match(/^(?:ChatGPT:|Assistant:|\*\*Assistant\*\*|\d+\.\s*Assistant)/i)) {
         role = 'assistant';
-        content = part.replace(/^(?:ChatGPT:|Assistant:|**Assistant**|\d+\.\s*Assistant)\s*/i, '').trim();
+        content = part.replace(/^(?:ChatGPT:|Assistant:|\*\*Assistant\*\*|\d+\.\s*Assistant)\s*/i, '').trim();
       } else {
         // Infer role based on position
         role = i % 2 === 0 ? 'user' : 'assistant';
