@@ -9,7 +9,13 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ConversationInputProps, Platform } from '@/types';
-import { useAnalysisSettings, useDisplaySettings } from '@/stores/settingsStore';
+import { useAnalysisSettings, useDisplaySettings } from '@/stores/settingsStore';import { 
+  useAnalysisDepth, 
+  usePatternDetection, 
+  useClaudeAnalysis,
+  useAutoDetectPlatform,
+  useAnimationsEnabled 
+} from '@/stores/settingsStore';
 import { cn } from '@/lib/utils';
 
 const ConversationInput: React.FC<ConversationInputProps> = ({
@@ -24,13 +30,11 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
   const [detectedPlatform, setDetectedPlatform] = useState<Platform | null>(null);
   const [messageCount, setMessageCount] = useState(0);
   
-  const { 
-    defaultAnalysisDepth, 
-    enablePatternDetection, 
-    enableClaudeAnalysis 
-  } = useAnalysisSettings();
-  
-  const { autoDetectPlatform, animationsEnabled } = useDisplaySettings();
+  const defaultAnalysisDepth = useAnalysisDepth();
+  const enablePatternDetection = usePatternDetection();
+  const enableClaudeAnalysis = useClaudeAnalysis();
+  const autoDetectPlatform = useAutoDetectPlatform();
+  const animationsEnabled = useAnimationsEnabled();
   
   // Auto-detect platform and count messages
   const analyzeText = useCallback((text: string) => {
