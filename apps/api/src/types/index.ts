@@ -1,6 +1,3 @@
-# 📋 Complete apps/api/src/types/index.ts - Full Replacement
-
-```typescript
 // Core types for MetaGipsy OWL Chess Engine API
 
 export interface Message {
@@ -429,40 +426,3 @@ export interface ScoringOptions {
   projectContext?: string;
   sessionGoal?: string;
 }
-
-// Export all types as default for convenience
-export default {
-  Message,
-  ChessScore,
-  ConversationContext,
-  Pattern,
-  SessionSummary,
-  Insight,
-  Platform,
-  UserTier,
-  SessionMetadata,
-  AnalysisPattern,
-  AnalyzeRequest,
-  AnalyzeResponse,
-  QuickAnalyzeRequest,
-  QuickAnalyzeResponse,
-  SessionsQuery,
-  SessionsResponse,
-  SessionDetailResponse,
-  AnalyticsQuery,
-  AnalyticsData,
-  AnalyticsResponse,
-  SessionData,
-  ApiError,
-  RateLimitError,
-  ValidationError,
-  AuthenticationError,
-  AuthorizationError,
-  WebSocketEvents,
-  AppConfig,
-  User,
-  AuthenticatedRequest,
-  ScoringWeights,
-  ScoringOptions
-};
-```
