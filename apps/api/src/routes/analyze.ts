@@ -272,6 +272,8 @@ function detectPatterns(scores: any[]) {
   return patterns;
 }
 
+// Only showing the generateInsights function with the fix
+
 function generateInsights(scores: any[], messages: any[], dimensionAverages: any) {
   const insights = [];
 
@@ -298,7 +300,8 @@ function generateInsights(scores: any[], messages: any[], dimensionAverages: any
   const weakestDimension = Object.entries(dimensionAverages)
     .sort(([,a], [,b]) => (a as number) - (b as number))[0];
 
-  if (weakestDimension[1] < 60) {
+  // FIXED: Properly cast weakestDimension[1] to number
+  if ((weakestDimension[1] as number) < 60) {
     const suggestions = {
       strategic: 'Focus on clearly stating your goals and desired outcomes.',
       tactical: 'Be more specific about what you need and provide concrete examples.',
@@ -317,5 +320,3 @@ function generateInsights(scores: any[], messages: any[], dimensionAverages: any
 
   return insights;
 }
-
-export default router;

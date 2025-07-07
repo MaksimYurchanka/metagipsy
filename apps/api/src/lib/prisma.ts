@@ -15,13 +15,16 @@ export const prisma = globalThis.__prisma || new PrismaClient({
   ]
 });
 
-// FIXED: Properly type the query event handler
+// FIXED: Remove problematic query logging for now
 if (process.env.NODE_ENV === 'development') {
-  prisma.$on('query' as any, (e: any) => {
-    logger.debug(`Query: ${e.query}`);
-    logger.debug(`Params: ${e.params}`);
-    logger.debug(`Duration: ${e.duration}ms`);
-  });
+  // Commented out problematic event handler
+  // prisma.$on('query' as any, (e: any) => {
+  //   logger.debug(`Query: ${e.query}`);
+  //   logger.debug(`Params: ${e.params}`);
+  //   logger.debug(`Duration: ${e.duration}ms`);
+  // });
+  
+  logger.info('Prisma client initialized in development mode');
 }
 
 if (process.env.NODE_ENV === 'development') {

@@ -43,7 +43,8 @@ router.get('/:sessionId', authenticateUser, async (req: AuthenticatedRequest, re
       userId: req.user!.id 
     });
     
-    if (error.message === 'Session not found') {
+    // FIXED: Properly check error type
+    if (error instanceof Error && error.message === 'Session not found') {
       return res.status(404).json({
         error: 'Session not found'
       });
@@ -72,7 +73,8 @@ router.delete('/:sessionId', authenticateUser, async (req: AuthenticatedRequest,
       userId: req.user!.id 
     });
     
-    if (error.message === 'Session not found') {
+    // FIXED: Properly check error type
+    if (error instanceof Error && error.message === 'Session not found') {
       return res.status(404).json({
         error: 'Session not found'
       });
@@ -108,48 +110,51 @@ router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequ
 
     const session = await sessionService.getSession(sessionId, req.user!.id);
 
+    // FIXED: Access metadata properties correctly
+    const metadata = session.metadata as any || {};
+
     // Transform data for export
     const exportData = {
       session: {
         id: session.id,
         platform: session.platform,
-        projectContext: session.projectContext,
-        sessionGoal: session.sessionGoal,
+        projectContext: metadata.projectContext,
+        sessionGoal: metadata.sessionGoal,
         createdAt: session.createdAt,
-        completedAt: session.completedAt,
-        overallScore: session.overallScore,
-        messageCount: session.messageCount,
-        trend: session.trend
+        completedAt: metadata.completedAt,
+        overallScore: metadata.overallScore,
+        messageCount: metadata.messageCount,
+        trend: metadata.trend
       },
-      messages: session.messages.map(msg => ({
+      messages: metadata.messages?.map((msg: any) => ({
         index: msg.index,
         role: msg.role,
         content: msg.content,
         timestamp: msg.timestamp,
-        scores: msg.scores.map(score => ({
+        scores: msg.scores?.map((score: any) => ({
           overall: score.overall,
           dimensions: score.dimensions,
           classification: score.classification,
           explanation: score.explanation,
           betterMove: score.betterMove
-        }))
-      })),
+        })) || []
+      })) || [],
       summary: {
-        dimensionAverages: session.dimensionAverages,
-        patterns: session.patterns,
-        insights: session.insights
+        dimensionAverages: metadata.dimensionAverages,
+        patterns: metadata.patterns,
+        insights: metadata.insights
       }
     };
 
     switch (format) {
       case 'csv':
         // Convert to CSV format
-        const csvData = session.messages.map(msg => {
-          const score = msg.scores[0];
+        const csvData = (metadata.messages || []).map((msg: any) => {
+          const score = msg.scores?.[0];
           return {
             message_index: msg.index,
             role: msg.role,
-            content: msg.content.replace(/"/g, '""'), // Escape quotes
+            content: msg.content?.replace(/"/g, '""') || '', // Escape quotes
             overall_score: score?.overall || 0,
             strategic_score: score?.dimensions?.strategic || 0,
             tactical_score: score?.dimensions?.tactical || 0,
@@ -161,7 +166,7 @@ router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequ
         });
 
         const csvHeaders = Object.keys(csvData[0] || {}).join(',');
-        const csvRows = csvData.map(row => 
+        const csvRows = csvData.map((row: any) => 
           Object.values(row).map(val => `"${val}"`).join(',')
         );
         const csvContent = [csvHeaders, ...csvRows].join('\n');
@@ -176,15 +181,15 @@ router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequ
         markdown += `**Session ID:** ${session.id}\n`;
         markdown += `**Platform:** ${session.platform}\n`;
         markdown += `**Created:** ${session.createdAt}\n`;
-        markdown += `**Overall Score:** ${session.overallScore}/100\n\n`;
+        markdown += `**Overall Score:** ${metadata.overallScore || 0}/100\n\n`;
 
-        if (session.projectContext) {
-          markdown += `**Project Context:** ${session.projectContext}\n\n`;
+        if (metadata.projectContext) {
+          markdown += `**Project Context:** ${metadata.projectContext}\n\n`;
         }
 
         markdown += `## Messages\n\n`;
-        session.messages.forEach(msg => {
-          const score = msg.scores[0];
+        (metadata.messages || []).forEach((msg: any) => {
+          const score = msg.scores?.[0];
           markdown += `### Message ${msg.index + 1} (${msg.role})\n\n`;
           markdown += `${msg.content}\n\n`;
           if (score) {
@@ -215,7 +220,8 @@ router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequ
       userId: req.user!.id 
     });
     
-    if (error.message === 'Session not found') {
+    // FIXED: Properly check error type
+    if (error instanceof Error && error.message === 'Session not found') {
       return res.status(404).json({
         error: 'Session not found'
       });
@@ -228,4 +234,3 @@ router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequ
 });
 
 export default router;
-

@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { redis } from '../lib/redis';
 import { logger } from '../lib/logger';
-import { SessionSummary, SessionMetadata, AnalysisPattern } from '../types';
+import { SessionSummary, SessionMetadata, AnalysisPattern, Platform } from '../types';
 
 export class SessionService {
   async createSession(userId: string, metadata: SessionMetadata): Promise<string> {
@@ -9,10 +9,13 @@ export class SessionService {
       const session = await prisma.session.create({
         data: {
           userId,
-          platform: metadata.platform,
-          projectContext: metadata.projectContext,
-          sessionGoal: metadata.sessionGoal,
-          metadata: metadata as any
+          // FIXED: Type cast platform and remove non-existent fields
+          platform: (metadata.platform as Platform) || 'OTHER',
+          // FIXED: Store everything in metadata JSON field
+          metadata: {
+            ...metadata,
+            createdAt: new Date().toISOString()
+          } as any
         }
       });
 
@@ -30,21 +33,29 @@ export class SessionService {
     summary: SessionSummary
   ): Promise<void> {
     try {
+      // FIXED: Store everything in metadata instead of non-existent fields
+      const updatedMetadata = {
+        messageCount: summary.messageCount,
+        overallScore: summary.overallScore,
+        bestScore: summary.bestScore,
+        worstScore: summary.worstScore,
+        trend: summary.trend,
+        dimensionAverages: summary.dimensionAverages,
+        patterns: summary.patterns,
+        insights: summary.insights,
+        completedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
       await prisma.session.update({
         where: { 
           id: sessionId,
           userId // Ensure user owns the session
         },
         data: {
-          messageCount: summary.messageCount,
-          overallScore: summary.overallScore,
-          bestScore: summary.bestScore,
-          worstScore: summary.worstScore,
-          trend: summary.trend,
-          dimensionAverages: summary.dimensionAverages as any,
-          patterns: summary.patterns as any,
-          insights: summary.insights as any,
-          completedAt: new Date()
+          // FIXED: Only update existing fields
+          status: 'COMPLETED' as any,
+          metadata: updatedMetadata as any
         }
       });
 
@@ -72,7 +83,8 @@ export class SessionService {
         include: {
           messages: {
             include: {
-              scores: true
+              // FIXED: Changed 'scores' to 'score' (singular, matches schema)
+              score: true
             },
             orderBy: {
               index: 'asc'
@@ -85,7 +97,27 @@ export class SessionService {
         throw new Error('Session not found');
       }
 
-      return session;
+      // FIXED: Enhance session object with metadata properties for backward compatibility
+      const metadata = (session.metadata as any) || {};
+      
+      return {
+        ...session,
+        // Add metadata properties as direct properties for easier access
+        projectContext: metadata.projectContext,
+        sessionGoal: metadata.sessionGoal,
+        messageCount: metadata.messageCount,
+        overallScore: metadata.overallScore,
+        completedAt: metadata.completedAt,
+        trend: metadata.trend,
+        dimensionAverages: metadata.dimensionAverages,
+        patterns: metadata.patterns,
+        insights: metadata.insights,
+        // Transform messages to include scores array for compatibility
+        messages: session.messages.map(msg => ({
+          ...msg,
+          scores: msg.score ? [msg.score] : []
+        }))
+      };
     } catch (error) {
       logger.error('Failed to get session', { error, sessionId, userId });
       throw new Error('Failed to get session');
@@ -103,16 +135,14 @@ export class SessionService {
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
+        // FIXED: Only select existing fields
         select: {
           id: true,
           platform: true,
-          projectContext: true,
-          sessionGoal: true,
-          messageCount: true,
-          overallScore: true,
-          trend: true,
+          status: true,
           createdAt: true,
-          completedAt: true
+          updatedAt: true,
+          metadata: true
         }
       });
 
@@ -120,8 +150,22 @@ export class SessionService {
         where: { userId }
       });
 
+      // FIXED: Transform sessions to include metadata properties
+      const transformedSessions = sessions.map(session => {
+        const metadata = (session.metadata as any) || {};
+        return {
+          ...session,
+          projectContext: metadata.projectContext,
+          sessionGoal: metadata.sessionGoal,
+          messageCount: metadata.messageCount || 0,
+          overallScore: metadata.overallScore || 0,
+          trend: metadata.trend || 'stable',
+          completedAt: metadata.completedAt
+        };
+      });
+
       return {
-        sessions,
+        sessions: transformedSessions,
         total,
         hasMore: offset + limit < total
       };
@@ -161,17 +205,14 @@ export class SessionService {
           createdAt: {
             gte: since
           },
-          completedAt: {
-            not: null
-          }
+          // FIXED: Remove non-existent completedAt field check
+          status: 'COMPLETED'
         },
+        // FIXED: Only select existing fields
         select: {
-          overallScore: true,
-          dimensionAverages: true,
-          messageCount: true,
-          trend: true,
           createdAt: true,
-          platform: true
+          platform: true,
+          metadata: true
         }
       });
 
@@ -193,20 +234,37 @@ export class SessionService {
         };
       }
 
-      const totalSessions = sessions.length;
-      const totalMessages = sessions.reduce((sum, s) => sum + (s.messageCount || 0), 0);
-      const averageScore = sessions.reduce((sum, s) => sum + (s.overallScore || 0), 0) / totalSessions;
+      // FIXED: Extract data from metadata
+      const sessionsWithMetadata = sessions.map(session => {
+        const metadata = (session.metadata as any) || {};
+        return {
+          ...session,
+          overallScore: metadata.overallScore || 0,
+          messageCount: metadata.messageCount || 0,
+          trend: metadata.trend || 'stable',
+          dimensionAverages: metadata.dimensionAverages || {
+            strategic: 0,
+            tactical: 0,
+            cognitive: 0,
+            innovation: 0
+          }
+        };
+      });
+
+      const totalSessions = sessionsWithMetadata.length;
+      const totalMessages = sessionsWithMetadata.reduce((sum, s) => sum + s.messageCount, 0);
+      const averageScore = sessionsWithMetadata.reduce((sum, s) => sum + s.overallScore, 0) / totalSessions;
 
       // Calculate improvement rate (comparing first half vs second half)
-      const midpoint = Math.floor(sessions.length / 2);
-      const firstHalf = sessions.slice(0, midpoint);
-      const secondHalf = sessions.slice(midpoint);
+      const midpoint = Math.floor(sessionsWithMetadata.length / 2);
+      const firstHalf = sessionsWithMetadata.slice(0, midpoint);
+      const secondHalf = sessionsWithMetadata.slice(midpoint);
       
       const firstHalfAvg = firstHalf.length > 0 
-        ? firstHalf.reduce((sum, s) => sum + (s.overallScore || 0), 0) / firstHalf.length 
+        ? firstHalf.reduce((sum, s) => sum + s.overallScore, 0) / firstHalf.length 
         : 0;
       const secondHalfAvg = secondHalf.length > 0 
-        ? secondHalf.reduce((sum, s) => sum + (s.overallScore || 0), 0) / secondHalf.length 
+        ? secondHalf.reduce((sum, s) => sum + s.overallScore, 0) / secondHalf.length 
         : 0;
       
       const improvementRate = firstHalfAvg > 0 
@@ -221,13 +279,12 @@ export class SessionService {
         innovation: 0
       };
 
-      sessions.forEach(session => {
+      sessionsWithMetadata.forEach(session => {
         if (session.dimensionAverages) {
-          const dims = session.dimensionAverages as any;
-          dimensionAverages.strategic += dims.strategic || 0;
-          dimensionAverages.tactical += dims.tactical || 0;
-          dimensionAverages.cognitive += dims.cognitive || 0;
-          dimensionAverages.innovation += dims.innovation || 0;
+          dimensionAverages.strategic += session.dimensionAverages.strategic || 0;
+          dimensionAverages.tactical += session.dimensionAverages.tactical || 0;
+          dimensionAverages.cognitive += session.dimensionAverages.cognitive || 0;
+          dimensionAverages.innovation += session.dimensionAverages.innovation || 0;
         }
       });
 
@@ -236,22 +293,22 @@ export class SessionService {
       });
 
       // Trend and platform distributions
-      const trendDistribution = sessions.reduce((acc, s) => {
-        acc[s.trend || 'unknown'] = (acc[s.trend || 'unknown'] || 0) + 1;
+      const trendDistribution = sessionsWithMetadata.reduce((acc, s) => {
+        acc[s.trend] = (acc[s.trend] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
 
       const platformDistribution = sessions.reduce((acc, s) => {
-        acc[s.platform || 'unknown'] = (acc[s.platform || 'unknown'] || 0) + 1;
+        acc[s.platform] = (acc[s.platform] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
 
       // Score history (last 30 data points)
-      const scoreHistory = sessions
+      const scoreHistory = sessionsWithMetadata
         .slice(-30)
         .map(s => ({
           date: s.createdAt.toISOString().split('T')[0],
-          score: s.overallScore || 0
+          score: s.overallScore
         }));
 
       return {
@@ -270,4 +327,3 @@ export class SessionService {
     }
   }
 }
-
