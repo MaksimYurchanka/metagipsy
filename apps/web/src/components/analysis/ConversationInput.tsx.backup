@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Zap, Settings, AlertCircle, CheckCircle, Sparkles } from 'lucide-react';
+import { Upload, Zap, Settings, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ConversationInputProps, Platform } from '@/types';
-import { 
+import { useAnalysisSettings, useDisplaySettings } from '@/stores/settingsStore';import { 
   useAnalysisDepth, 
   usePatternDetection, 
   useClaudeAnalysis,
@@ -29,9 +29,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [detectedPlatform, setDetectedPlatform] = useState<Platform | null>(null);
   const [messageCount, setMessageCount] = useState(0);
-  const [localClaudeEnabled, setLocalClaudeEnabled] = useState(true); // Local override for Claude
   
-  // Settings from store
   const defaultAnalysisDepth = useAnalysisDepth();
   const enablePatternDetection = usePatternDetection();
   const enableClaudeAnalysis = useClaudeAnalysis();
@@ -46,28 +44,20 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       return;
     }
     
-    // Enhanced platform detection
+    // Simple platform detection
     let detected: Platform = 'other';
-    const content = text.toLowerCase();
-    
-    if (content.includes('human:') && content.includes('assistant:')) {
+    if (text.includes('Human:') || text.includes('Assistant:')) {
       detected = 'claude';
-    } else if (content.includes('user:') && (content.includes('chatgpt:') || content.includes('openai'))) {
+    } else if (text.includes('User:') || text.includes('ChatGPT:') || text.includes('**User**')) {
       detected = 'chatgpt';
-    } else if (content.includes('**user**') || content.includes('**assistant**')) {
-      detected = 'chatgpt';
-    } else if (content.match(/^(you|me|user|assistant):/mi)) {
-      detected = 'other';
     }
     
     setDetectedPlatform(detected);
     
-    // More accurate message counting
-    const messageMarkers = text.match(/(Human:|Assistant:|User:|ChatGPT:|\*\*User\*\*|\*\*Assistant\*\*|^You:|^Me:|^User:|^Assistant:)/gmi);
-    const alternatingBlocks = text.split(/\n\s*\n/).filter(block => block.trim().length > 10);
-    
-    const estimatedMessages = messageMarkers ? messageMarkers.length : Math.min(alternatingBlocks.length, Math.ceil(text.length / 200));
-    setMessageCount(estimatedMessages);
+    // Count potential messages (rough estimate)
+    const lines = text.split('\n').filter(line => line.trim());
+    const messageMarkers = text.match(/(Human:|Assistant:|User:|ChatGPT:|\*\*User\*\*|\*\*Assistant\*\*)/gi);
+    setMessageCount(messageMarkers ? messageMarkers.length : Math.ceil(lines.length / 3));
   }, []);
   
   const handleTextChange = (value: string) => {
@@ -75,75 +65,26 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     analyzeText(value);
   };
   
-  const handleAnalyze = useCallback(async () => {
+  const handleAnalyze = () => {
     if (!conversationText.trim()) return;
     
-    // Parse conversation into messages
-    const messages = parseConversation(
-      conversationText, 
-      platform === 'auto' ? detectedPlatform || 'other' : platform
-    );
+    // Parse conversation into messages (simplified)
+    const messages = parseConversation(conversationText, platform === 'auto' ? detectedPlatform || 'other' : platform);
     
-    if (messages.length < 2) {
-      alert('Please provide at least 2 messages (one exchange) to analyze.');
-      return;
-    }
-    
-    // Prepare analysis request with Claude API enabled
-    const analysisRequest = {
-      conversation: {
-        messages,
-        platform: platform === 'auto' ? detectedPlatform || 'other' : platform
-      },
-      options: {
-        useClaudeAnalysis: localClaudeEnabled && enableClaudeAnalysis, // ✅ Enable Claude!
-        analysisDepth: defaultAnalysisDepth || 'standard',
-        enablePatternDetection,
-        generateSuggestions: true,
-        detectPatterns: enablePatternDetection
-      },
-      metadata: {
-        projectContext: projectContext.trim() || undefined,
-        sessionGoal: sessionGoal.trim() || undefined,
-        messageCount: messages.length,
-        detectedPlatform,
-        timestamp: new Date().toISOString()
-      }
-    };
-    
-    console.log('🚀 Analyzing with Claude API:', {
-      messageCount: messages.length,
-      claudeEnabled: localClaudeEnabled && enableClaudeAnalysis,
-      platform: platform === 'auto' ? detectedPlatform : platform
-    });
-    
-    // Call the analysis function
-    onAnalyze(analysisRequest);
-  }, [
-    conversationText, 
-    platform, 
-    detectedPlatform, 
-    sessionGoal, 
-    projectContext, 
-    localClaudeEnabled,
-    enableClaudeAnalysis,
-    defaultAnalysisDepth,
-    enablePatternDetection,
-    onAnalyze
-  ]);
+    onAnalyze(messages);
+  };
   
   const parseConversation = (text: string, detectedPlatform: Platform) => {
-    const messages: any[] = [];
+    // This is a simplified parser - in real implementation, use the backend parser
+    const messages = [];
     let parts: string[] = [];
     
-    // Enhanced parsing for different platforms
     if (detectedPlatform === 'claude') {
-      parts = text.split(/(?=(?:Human:|Assistant:))/i).filter(p => p.trim());
+      parts = text.split(/(?=Human:|Assistant:)/i);
     } else if (detectedPlatform === 'chatgpt') {
-      parts = text.split(/(?=(?:User:|ChatGPT:|\*\*User\*\*|\*\*Assistant\*\*))/i).filter(p => p.trim());
+      parts = text.split(/(?=User:|ChatGPT:|\*\*User\*\*|\*\*Assistant\*\*)/i);
     } else {
-      // For 'other' platform, try to split by double newlines or detect patterns
-      parts = text.split(/\n\s*\n/).filter(p => p.trim().length > 10);
+      parts = text.split(/\n\s*\n/).filter(p => p.trim());
     }
     
     parts.forEach((part, index) => {
@@ -153,15 +94,13 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       let role: 'user' | 'assistant' = 'user';
       let content = trimmed;
       
-      // Role detection based on prefixes
-      if (trimmed.match(/^(Human:|User:|\*\*User\*\*|You:)/i)) {
+      if (trimmed.match(/^(Human:|User:|\*\*User\*\*)/i)) {
         role = 'user';
-        content = trimmed.replace(/^(Human:|User:|\*\*User\*\*|You:)\s*/i, '').trim();
-      } else if (trimmed.match(/^(Assistant:|ChatGPT:|\*\*Assistant\*\*|Me:)/i)) {
+        content = trimmed.replace(/^(Human:|User:|\*\*User\*\*)\s*/i, '');
+      } else if (trimmed.match(/^(Assistant:|ChatGPT:|\*\*Assistant\*\*)/i)) {
         role = 'assistant';
-        content = trimmed.replace(/^(Assistant:|ChatGPT:|\*\*Assistant\*\*|Me:)\s*/i, '').trim();
+        content = trimmed.replace(/^(Assistant:|ChatGPT:|\*\*Assistant\*\*)\s*/i, '');
       } else {
-        // For untagged content, alternate roles starting with user
         role = index % 2 === 0 ? 'user' : 'assistant';
       }
       
@@ -170,7 +109,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
           role,
           content: content.trim(),
           index: messages.length,
-          timestamp: new Date(Date.now() - (parts.length - index) * 60000).toISOString()
+          timestamp: new Date().toISOString()
         });
       }
     });
@@ -179,7 +118,6 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
   };
   
   const canAnalyze = conversationText.trim().length > 50 && messageCount >= 2;
-  const claudeAnalysisEnabled = localClaudeEnabled && enableClaudeAnalysis;
   
   return (
     <Card className="w-full">
@@ -187,51 +125,20 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
         <CardTitle className="flex items-center gap-2">
           <Upload className="h-5 w-5" />
           Paste Your Conversation
-          {claudeAnalysisEnabled && (
-            <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200">
-              <Sparkles className="h-3 w-3 mr-1" />
-              Claude AI
-            </Badge>
-          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Claude Analysis Toggle */}
-        <motion.div 
-          className="p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-purple-600" />
-              <span className="font-medium text-purple-900">AI-Powered Analysis</span>
-            </div>
-            <Switch
-              checked={localClaudeEnabled}
-              onCheckedChange={setLocalClaudeEnabled}
-              disabled={isAnalyzing}
-            />
-          </div>
-          <p className="text-sm text-purple-700 mt-1">
-            {claudeAnalysisEnabled 
-              ? "Using Claude AI for sophisticated 4-dimension scoring"
-              : "Using local analysis engine (faster but simpler)"
-            }
-          </p>
-        </motion.div>
-        
         {/* Main input area */}
         <div className="space-y-2">
           <Textarea
             placeholder="Paste your ChatGPT or Claude conversation here...
 
 Example:
-Human: I need help with my React project performance optimization
-Assistant: I'd be happy to help optimize your React project! Let's start by identifying the main performance bottlenecks..."
+Human: I need help with my React project
+Assistant: I'd be happy to help! What specific aspect of your React project are you working on?"
             value={conversationText}
             onChange={(e) => handleTextChange(e.target.value)}
-            className="min-h-[200px] resize-y font-mono text-sm"
+            className="min-h-[200px] resize-y"
             disabled={isAnalyzing}
           />
           
@@ -241,7 +148,7 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
               {detectedPlatform && (
                 <div className="flex items-center gap-1">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span className="capitalize">Detected: {detectedPlatform}</span>
+                  <span>Detected: {detectedPlatform}</span>
                 </div>
               )}
               {messageCount > 0 && (
@@ -249,22 +156,14 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
                   {messageCount} messages
                 </Badge>
               )}
-              {claudeAnalysisEnabled && (
-                <Badge variant="outline" className="text-purple-600 border-purple-300">
-                  AI Analysis Ready
-                </Badge>
-              )}
             </div>
-            <div className={cn(
-              conversationText.length > 8000 && "text-amber-600",
-              conversationText.length > 9500 && "text-red-600"
-            )}>
+            <div>
               {conversationText.length}/10000 characters
             </div>
           </div>
         </div>
         
-        {/* Platform and goal selection */}
+        {/* Platform selection */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="platform">Platform</Label>
@@ -273,13 +172,10 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
                 <SelectValue placeholder="Select platform" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="auto">
-                  🔍 Auto-detect
-                  {detectedPlatform && ` (${detectedPlatform})`}
-                </SelectItem>
-                <SelectItem value="claude">🤖 Claude</SelectItem>
-                <SelectItem value="chatgpt">💬 ChatGPT</SelectItem>
-                <SelectItem value="other">📝 Other</SelectItem>
+                <SelectItem value="auto">Auto-detect</SelectItem>
+                <SelectItem value="claude">Claude</SelectItem>
+                <SelectItem value="chatgpt">ChatGPT</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -289,7 +185,7 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
             <input
               id="goal"
               type="text"
-              placeholder="e.g., Debug React component, Plan project architecture"
+              placeholder="e.g., Debug React component"
               value={sessionGoal}
               onChange={(e) => setSessionGoal(e.target.value)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -321,7 +217,7 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
                 <Label htmlFor="context">Project Context (Optional)</Label>
                 <Textarea
                   id="context"
-                  placeholder="Describe your project, goals, or the context of this conversation to help the AI provide better analysis..."
+                  placeholder="Describe your project or the context of this conversation..."
                   value={projectContext}
                   onChange={(e) => setProjectContext(e.target.value)}
                   className="min-h-[80px]"
@@ -339,18 +235,13 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
                   <Label htmlFor="pattern-detection">Pattern Detection</Label>
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="analysis-depth">Analysis Depth</Label>
-                  <Select value={defaultAnalysisDepth} disabled={isAnalyzing}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="quick">⚡ Quick</SelectItem>
-                      <SelectItem value="standard">🎯 Standard</SelectItem>
-                      <SelectItem value="deep">🔍 Deep</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="claude-analysis"
+                    checked={enableClaudeAnalysis}
+                    disabled={isAnalyzing}
+                  />
+                  <Label htmlFor="claude-analysis">Enhanced Analysis</Label>
                 </div>
               </div>
             </motion.div>
@@ -363,11 +254,8 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
             onClick={handleAnalyze}
             disabled={!canAnalyze || isAnalyzing}
             className={cn(
-              "w-full h-12 text-base font-semibold transition-all duration-200",
-              canAnalyze && !isAnalyzing && claudeAnalysisEnabled && 
-                "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg hover:shadow-xl",
-              canAnalyze && !isAnalyzing && !claudeAnalysisEnabled && 
-                "bg-gradient-to-r from-gray-600 to-slate-600 hover:from-gray-700 hover:to-slate-700"
+              "w-full h-12 text-base font-semibold",
+              canAnalyze && !isAnalyzing && "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
             )}
           >
             {isAnalyzing ? (
@@ -378,12 +266,12 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
                 >
                   <Zap className="h-5 w-5" />
                 </motion.div>
-                {claudeAnalysisEnabled ? "AI Analyzing..." : "Analyzing..."}
+                Analyzing...
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                {claudeAnalysisEnabled ? <Sparkles className="h-5 w-5" /> : <Zap className="h-5 w-5" />}
-                {claudeAnalysisEnabled ? "Analyze with AI" : "Analyze Conversation"}
+                <Zap className="h-5 w-5" />
+                Analyze Conversation
               </div>
             )}
           </Button>
@@ -393,16 +281,10 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
               <AlertCircle className="h-4 w-4" />
               <span>
                 {messageCount < 2 
-                  ? "Need at least 2 messages to analyze (one conversation exchange)" 
+                  ? "Need at least 2 messages to analyze" 
                   : "Conversation too short (minimum 50 characters)"
                 }
               </span>
-            </div>
-          )}
-          
-          {canAnalyze && claudeAnalysisEnabled && (
-            <div className="text-center text-sm text-purple-600">
-              ✨ Ready for AI-powered chess analysis with Claude
             </div>
           )}
         </div>
@@ -412,3 +294,4 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
 };
 
 export default ConversationInput;
+

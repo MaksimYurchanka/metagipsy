@@ -64,7 +64,7 @@ router.post('/',
       // FIXED: Changed config.claude.apiKey to config.anthropic.apiKey
       const useClaudeAnalysis = options.useClaudeAnalysis && 
         config.anthropic?.apiKey && 
-        (req.user?.role === 'premium' || req.user?.role === 'admin');
+        config.anthropic.apiKey.length > 0;
 
       for (let i = 0; i < messages.length; i++) {
         const message = messages[i];
