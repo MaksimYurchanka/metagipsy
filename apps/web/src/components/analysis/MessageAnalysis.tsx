@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, User, Bot, Lightbulb, AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,36 +17,143 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
   isExpanded = false,
   onToggle
 }) => {
+  // ✅ ARCHITECTURAL FIX 1: Simplified local state (only when no parent control)
   const [localExpanded, setLocalExpanded] = useState(isExpanded);
-  const { compactMode, animationsEnabled, autoExpandLowScores } = useDisplaySettings();
   
-  const expanded = onToggle ? isExpanded : localExpanded;
-  const toggleExpanded = onToggle || useCallback(() => {
-    setLocalExpanded(prev => !prev);
-  }, []);
+  // ✅ ARCHITECTURAL FIX 2: Single, stable settings subscription
+  const displaySettings = useDisplaySettings((state) => ({
+    compactMode: state.compactMode,
+    animationsEnabled: state.animationsEnabled,
+    autoExpandLowScores: state.autoExpandLowScores
+  }));
   
-  // Auto-expand low scores
-  React.useEffect(() => {
-    if (autoExpandLowScores && score.overall < 60 && !expanded) {
-      toggleExpanded();
+  const { compactMode, animationsEnabled, autoExpandLowScores } = displaySettings;
+  
+  // ✅ ARCHITECTURAL FIX 3: Determine final expanded state with auto-expand logic
+  const shouldAutoExpand = autoExpandLowScores && score.overall < 60;
+  const finalExpanded = onToggle ? isExpanded : (shouldAutoExpand || localExpanded);
+  
+  // ✅ ARCHITECTURAL FIX 4: Stable toggle function
+  const handleToggle = useCallback(() => {
+    if (onToggle) {
+      onToggle(index);
+    } else {
+      setLocalExpanded(prev => !prev);
     }
-  }, [score.overall, autoExpandLowScores, expanded, toggleExpanded]);
+  }, [onToggle, index]);
   
-  const roleIcon = message.role === 'user' ? User : Bot;
-  const roleColor = message.role === 'user' ? 'text-blue-500' : 'text-green-500';
-  const roleBg = message.role === 'user' ? 'bg-blue-50 dark:bg-blue-950/20' : 'bg-green-50 dark:bg-green-950/20';
+  // ✅ ARCHITECTURAL FIX 5: Memoized role styling (prevent recalculation)
+  const roleStyles = useMemo(() => {
+    const isUser = message.role === 'user';
+    return {
+      icon: isUser ? User : Bot,
+      color: isUser ? 'text-blue-500' : 'text-green-500',
+      bg: isUser ? 'bg-blue-50 dark:bg-blue-950/20' : 'bg-green-50 dark:bg-green-950/20'
+    };
+  }, [message.role]);
   
-  const dimensions = [
+  // ✅ ARCHITECTURAL FIX 6: Memoized dimensions array (stable reference)
+  const dimensions = useMemo(() => [
     { key: 'strategic', label: 'Strategic', value: score.dimensions.strategic },
     { key: 'tactical', label: 'Tactical', value: score.dimensions.tactical },
     { key: 'cognitive', label: 'Cognitive', value: score.dimensions.cognitive },
     { key: 'innovation', label: 'Innovation', value: score.dimensions.innovation }
-  ];
+  ], [score.dimensions]);
   
-  const cardContent = (
+  // ✅ ARCHITECTURAL FIX 7: Memoized expanded content (expensive computation)
+  const expandedContent = useMemo(() => {
+    if (!finalExpanded) return null;
+    
+    return (
+      <motion.div
+        initial={{ height: 0, opacity: 0 }}
+        animate={{ height: 'auto', opacity: 1 }}
+        exit={{ height: 0, opacity: 0 }}
+        transition={{ duration: animationsEnabled ? 0.2 : 0 }}
+        className="space-y-4"
+      >
+        {/* Dimension scores */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium">Dimension Breakdown</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {dimensions.map(({ key, label, value }) => (
+              <div key={key} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm">{getDimensionIcon(key)}</span>
+                    <span className="text-sm font-medium">{label}</span>
+                  </div>
+                  <ScoreBadge 
+                    score={value} 
+                    dimension={key as any}
+                    size="sm"
+                    animated={false}
+                  />
+                </div>
+                <Progress 
+                  value={value} 
+                  className="h-2"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Explanation */}
+        {score.explanation && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Analysis</h4>
+            <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+              {score.explanation}
+            </p>
+          </div>
+        )}
+        
+        {/* Better move suggestion */}
+        {score.betterMove && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Lightbulb className="h-4 w-4 text-yellow-500" />
+              <h4 className="text-sm font-medium">Suggestion</h4>
+            </div>
+            <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 p-3 rounded-md">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                {score.betterMove}
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {/* Low score warning */}
+        {score.overall < 40 && (
+          <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-3 rounded-md">
+            <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-red-800 dark:text-red-200">
+              <p className="font-medium">Low Score Alert</p>
+              <p>This message scored below average. Consider the suggestions above to improve future interactions.</p>
+            </div>
+          </div>
+        )}
+        
+        {/* Metadata */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
+          <div className="flex items-center gap-4">
+            <span>Confidence: {Math.round(score.confidence * 100)}%</span>
+            <span>Classification: {score.classification}</span>
+          </div>
+          <div>
+            {message.content.length} characters
+          </div>
+        </div>
+      </motion.div>
+    );
+  }, [finalExpanded, dimensions, score, animationsEnabled, message.content.length]);
+  
+  // ✅ ARCHITECTURAL FIX 8: Memoized card content (prevent unnecessary re-renders)
+  const cardContent = useMemo(() => (
     <Card className={cn(
       "transition-all duration-200",
-      expanded && "ring-2 ring-blue-200 dark:ring-blue-800",
+      finalExpanded && "ring-2 ring-blue-200 dark:ring-blue-800",
       compactMode && "p-2"
     )}>
       <CardContent className={cn("p-4", compactMode && "p-3")}>
@@ -55,10 +162,10 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
           <div className="flex items-start gap-3 flex-1 min-w-0">
             <div className={cn(
               "flex items-center justify-center w-8 h-8 rounded-full",
-              roleBg
+              roleStyles.bg
             )}>
-              {React.createElement(roleIcon, { 
-                className: cn("h-4 w-4", roleColor) 
+              {React.createElement(roleStyles.icon, { 
+                className: cn("h-4 w-4", roleStyles.color) 
               })}
             </div>
             
@@ -77,7 +184,7 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
               
               <p className={cn(
                 "text-sm text-muted-foreground line-clamp-2",
-                expanded && "line-clamp-none"
+                finalExpanded && "line-clamp-none"
               )}>
                 {message.content}
               </p>
@@ -94,10 +201,10 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={toggleExpanded}
+              onClick={handleToggle}
               className="h-8 w-8 p-0"
             >
-              {expanded ? (
+              {finalExpanded ? (
                 <ChevronUp className="h-4 w-4" />
               ) : (
                 <ChevronDown className="h-4 w-4" />
@@ -108,94 +215,23 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
         
         {/* Expanded content */}
         <AnimatePresence>
-          {expanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: animationsEnabled ? 0.2 : 0 }}
-              className="space-y-4"
-            >
-              {/* Dimension scores */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-medium">Dimension Breakdown</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {dimensions.map(({ key, label, value }) => (
-                    <div key={key} className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm">{getDimensionIcon(key)}</span>
-                          <span className="text-sm font-medium">{label}</span>
-                        </div>
-                        <ScoreBadge 
-                          score={value} 
-                          dimension={key as any}
-                          size="sm"
-                          animated={false}
-                        />
-                      </div>
-                      <Progress 
-                        value={value} 
-                        className="h-2"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Explanation */}
-              {score.explanation && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium">Analysis</h4>
-                  <p className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
-                    {score.explanation}
-                  </p>
-                </div>
-              )}
-              
-              {/* Better move suggestion */}
-              {score.betterMove && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Lightbulb className="h-4 w-4 text-yellow-500" />
-                    <h4 className="text-sm font-medium">Suggestion</h4>
-                  </div>
-                  <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 p-3 rounded-md">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                      {score.betterMove}
-                    </p>
-                  </div>
-                </div>
-              )}
-              
-              {/* Low score warning */}
-              {score.overall < 40 && (
-                <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-3 rounded-md">
-                  <AlertTriangle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-red-800 dark:text-red-200">
-                    <p className="font-medium">Low Score Alert</p>
-                    <p>This message scored below average. Consider the suggestions above to improve future interactions.</p>
-                  </div>
-                </div>
-              )}
-              
-              {/* Metadata */}
-              <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-                <div className="flex items-center gap-4">
-                  <span>Confidence: {Math.round(score.confidence * 100)}%</span>
-                  <span>Classification: {score.classification}</span>
-                </div>
-                <div>
-                  {message.content.length} characters
-                </div>
-              </div>
-            </motion.div>
-          )}
+          {expandedContent}
         </AnimatePresence>
       </CardContent>
     </Card>
-  );
+  ), [
+    finalExpanded, 
+    compactMode, 
+    roleStyles, 
+    message, 
+    index, 
+    score.overall, 
+    animationsEnabled, 
+    handleToggle,
+    expandedContent
+  ]);
   
+  // ✅ ARCHITECTURAL FIX 9: Conditional animation wrapper (stable logic)
   if (animationsEnabled) {
     return (
       <motion.div
@@ -217,4 +253,3 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
 };
 
 export default MessageAnalysis;
-

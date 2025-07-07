@@ -12,76 +12,79 @@ import { useAnalysisStore } from '@/stores/analysisStore';
 import { useDisplaySettings } from '@/stores/settingsStore';
 import { cn, getTrendIcon, getTrendColor, getDimensionIcon } from '@/lib/utils';
 
+// ✅ ARCHITECTURAL FIX 1: Types for component state
+type FilterType = 'all' | 'low' | 'high';
+type SortType = 'index' | 'score';
+
 const AnalysisResults: React.FC = () => {
-  // ✅ FIX 1: Single store subscription to prevent cascade
-  const analysisData = useAnalysisStore(state => ({
+  // ✅ ARCHITECTURAL FIX 2: Single store subscription - batched data access
+  const analysisData = useAnalysisStore((state) => ({
     messages: state.messages,
     scores: state.scores,
+    patterns: state.patterns,
+    insights: state.insights,
     sessionSummary: state.sessionSummary,
-    // Compute stats inline to avoid separate subscription
-    stats: {
-      averageScore: state.scores.length > 0 
-        ? state.scores.reduce((sum, score) => sum + score.overall, 0) / state.scores.length 
-        : 0,
-      bestScore: state.scores.length > 0 
-        ? Math.max(...state.scores.map(s => s.overall)) 
-        : 0,
-      totalMessages: state.messages.length,
-      completedAnalysis: state.scores.length,
-      // ✅ FIX 2: Calculate actual dimension averages
-      dimensionAverages: state.scores.length > 0 ? {
-        strategic: state.scores.reduce((sum, s) => sum + s.dimensions.strategic, 0) / state.scores.length,
-        tactical: state.scores.reduce((sum, s) => sum + s.dimensions.tactical, 0) / state.scores.length,
-        cognitive: state.scores.reduce((sum, s) => sum + s.dimensions.cognitive, 0) / state.scores.length,
-        innovation: state.scores.reduce((sum, s) => sum + s.dimensions.innovation, 0) / state.scores.length,
-      } : { strategic: 0, tactical: 0, cognitive: 0, innovation: 0 }
-    },
-    // Compute trend inline
-    trend: state.scores.length >= 3 
-      ? (() => {
-          const recent = state.scores.slice(-3);
-          const oldAvg = (recent[0].overall + recent[1].overall) / 2;
-          const newAvg = recent[2].overall;
-          return newAvg > oldAvg + 5 ? 'improving' : 
-                 newAvg < oldAvg - 5 ? 'declining' : 'stable';
-        })()
-      : 'stable'
+    computedStats: state.computedStats, // ← This is now stable reference
+    isAnalyzing: state.isAnalyzing,
+    error: state.error
   }));
   
-  const { compactMode, animationsEnabled } = useDisplaySettings();
+  // ✅ ARCHITECTURAL FIX 3: Separate subscription for settings (different update frequency)
+  const displaySettings = useDisplaySettings((state) => ({
+    compactMode: state.compactMode,
+    animationsEnabled: state.animationsEnabled
+  }));
   
-  const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
-  const [filterBy, setFilterBy] = useState<'all' | 'low' | 'high'>('all');
-  const [sortBy, setSortBy] = useState<'index' | 'score'>('index');
+  // ✅ ARCHITECTURAL FIX 4: Local state with stable initial values
+  const [expandedMessages, setExpandedMessages] = useState<Set<number>>(() => new Set());
+  const [filterBy, setFilterBy] = useState<FilterType>('all');
+  const [sortBy, setSortBy] = useState<SortType>('index');
   
-  const { messages, scores, stats, trend } = analysisData;
+  const { messages, scores, computedStats } = analysisData;
+  const { compactMode, animationsEnabled } = displaySettings;
   
+  // Early return if no data - prevents unnecessary computation
   if (messages.length === 0 || scores.length === 0) {
-    return null;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="text-4xl mb-2">♟️</div>
+          <p className="text-muted-foreground">No analysis data available</p>
+        </div>
+      </div>
+    );
   }
   
-  // ✅ FIX 3: Memoize callback to prevent re-renders
+  // ✅ ARCHITECTURAL FIX 5: Stable callback functions with proper dependencies
   const toggleExpanded = useCallback((index: number) => {
     setExpandedMessages(prev => {
-      const newExpanded = new Set(prev);
-      if (newExpanded.has(index)) {
-        newExpanded.delete(index);
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
       } else {
-        newExpanded.add(index);
+        newSet.add(index);
       }
-      return newExpanded;
+      return newSet;
     });
-  }, []);
+  }, []); // ← Empty deps - function is stable
   
   const expandAll = useCallback(() => {
-    setExpandedMessages(new Set(messages.map((_, i) => i)));
-  }, [messages.length]);
+    setExpandedMessages(new Set(Array.from({ length: messages.length }, (_, i) => i)));
+  }, [messages.length]); // ← Only depends on length, not messages array
   
   const collapseAll = useCallback(() => {
     setExpandedMessages(new Set());
   }, []);
   
-  // ✅ FIX 4: Memoize filtered and sorted arrays
+  const handleFilterChange = useCallback((value: FilterType) => {
+    setFilterBy(value);
+  }, []);
+  
+  const handleSortChange = useCallback((value: SortType) => {
+    setSortBy(value);
+  }, []);
+  
+  // ✅ ARCHITECTURAL FIX 6: Memoized filtered messages with stable dependencies
   const filteredMessages = useMemo(() => {
     return messages.filter((_, index) => {
       const score = scores[index];
@@ -96,29 +99,50 @@ const AnalysisResults: React.FC = () => {
           return true;
       }
     });
-  }, [messages, scores, filterBy]);
+  }, [messages, scores, filterBy]); // ← Stable dependencies
   
+  // ✅ ARCHITECTURAL FIX 7: Memoized sorted messages 
   const sortedMessages = useMemo(() => {
+    if (sortBy === 'index') {
+      return filteredMessages; // No sorting needed, return same reference
+    }
+    
+    // Only create new array when actually sorting by score
     return [...filteredMessages].sort((a, b) => {
       const aIndex = messages.indexOf(a);
       const bIndex = messages.indexOf(b);
       const aScore = scores[aIndex];
       const bScore = scores[bIndex];
-      
-      if (sortBy === 'score') {
-        return bScore.overall - aScore.overall;
-      }
-      return aIndex - bIndex;
+      return bScore.overall - aScore.overall;
     });
-  }, [filteredMessages, messages, scores, sortBy]);
+  }, [filteredMessages, sortBy, messages, scores]);
   
-  // ✅ FIX 5: Use actual dimension averages instead of overall average
+  // ✅ ARCHITECTURAL FIX 8: Memoized dimensions array using stable computedStats
   const dimensions = useMemo(() => [
-    { key: 'strategic', label: 'Strategic', value: stats.dimensionAverages.strategic },
-    { key: 'tactical', label: 'Tactical', value: stats.dimensionAverages.tactical },
-    { key: 'cognitive', label: 'Cognitive', value: stats.dimensionAverages.cognitive },
-    { key: 'innovation', label: 'Innovation', value: stats.dimensionAverages.innovation }
-  ], [stats.dimensionAverages]);
+    { key: 'strategic', label: 'Strategic', value: computedStats.dimensionAverages.strategic },
+    { key: 'tactical', label: 'Tactical', value: computedStats.dimensionAverages.tactical },
+    { key: 'cognitive', label: 'Cognitive', value: computedStats.dimensionAverages.cognitive },
+    { key: 'innovation', label: 'Innovation', value: computedStats.dimensionAverages.innovation }
+  ], [computedStats.dimensionAverages]); // ← Stable reference from store
+  
+  // ✅ ARCHITECTURAL FIX 9: Memoized message components list
+  const messageComponents = useMemo(() => {
+    return sortedMessages.map((message) => {
+      const originalIndex = messages.indexOf(message);
+      const score = scores[originalIndex];
+      
+      return (
+        <MessageAnalysis
+          key={originalIndex}
+          message={message}
+          score={score}
+          index={originalIndex}
+          isExpanded={expandedMessages.has(originalIndex)}
+          onToggle={toggleExpanded}
+        />
+      );
+    });
+  }, [sortedMessages, messages, scores, expandedMessages, toggleExpanded]);
   
   return (
     <div className="space-y-6">
@@ -129,9 +153,9 @@ const AnalysisResults: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Overall Score</p>
-                <p className="text-2xl font-bold">{Math.round(stats.averageScore)}</p>
+                <p className="text-2xl font-bold">{Math.round(computedStats.averageScore)}</p>
               </div>
-              <ScoreBadge score={stats.averageScore} size="lg" />
+              <ScoreBadge score={computedStats.averageScore} size="lg" />
             </div>
           </CardContent>
         </Card>
@@ -142,9 +166,9 @@ const AnalysisResults: React.FC = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Trend</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl">{getTrendIcon(trend)}</span>
-                  <span className={cn("text-sm font-medium", getTrendColor(trend))}>
-                    {trend.charAt(0).toUpperCase() + trend.slice(1)}
+                  <span className="text-2xl">{getTrendIcon(computedStats.trend)}</span>
+                  <span className={cn("text-sm font-medium", getTrendColor(computedStats.trend))}>
+                    {computedStats.trend.charAt(0).toUpperCase() + computedStats.trend.slice(1)}
                   </span>
                 </div>
               </div>
@@ -158,7 +182,7 @@ const AnalysisResults: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Best Score</p>
-                <p className="text-2xl font-bold">{Math.round(stats.bestScore)}</p>
+                <p className="text-2xl font-bold">{Math.round(computedStats.bestScore)}</p>
               </div>
               <div className="text-green-500">
                 <BarChart3 className="h-8 w-8" />
@@ -172,10 +196,10 @@ const AnalysisResults: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Messages</p>
-                <p className="text-2xl font-bold">{stats.totalMessages}</p>
+                <p className="text-2xl font-bold">{computedStats.totalMessages}</p>
               </div>
               <Badge variant="secondary" className="text-lg px-3 py-1">
-                {stats.completedAnalysis}/{stats.totalMessages}
+                {computedStats.completedAnalysis}/{computedStats.totalMessages}
               </Badge>
             </div>
           </CardContent>
@@ -219,7 +243,7 @@ const AnalysisResults: React.FC = () => {
               <span className="text-sm font-medium">Filters:</span>
             </div>
             
-            <Select value={filterBy} onValueChange={(value: any) => setFilterBy(value)}>
+            <Select value={filterBy} onValueChange={handleFilterChange}>
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
@@ -230,7 +254,7 @@ const AnalysisResults: React.FC = () => {
               </SelectContent>
             </Select>
             
-            <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+            <Select value={sortBy} onValueChange={handleSortChange}>
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
@@ -247,21 +271,7 @@ const AnalysisResults: React.FC = () => {
           
           {/* Messages List */}
           <div className="space-y-3">
-            {sortedMessages.map((message) => {
-              const originalIndex = messages.indexOf(message);
-              const score = scores[originalIndex];
-              
-              return (
-                <MessageAnalysis
-                  key={originalIndex}
-                  message={message}
-                  score={score}
-                  index={originalIndex}
-                  isExpanded={expandedMessages.has(originalIndex)}
-                  onToggle={() => toggleExpanded(originalIndex)}
-                />
-              );
-            })}
+            {messageComponents}
           </div>
         </TabsContent>
         

@@ -24,6 +24,22 @@ interface AnalysisState {
     total: number;
   };
   
+  // ✅ ARCHITECTURAL FIX 1: Add computed state to store instead of external selectors
+  computedStats: {
+    averageScore: number;
+    bestScore: number;
+    worstScore: number;
+    totalMessages: number;
+    completedAnalysis: number;
+    dimensionAverages: {
+      strategic: number;
+      tactical: number;
+      cognitive: number;
+      innovation: number;
+    };
+    trend: 'improving' | 'declining' | 'stable';
+  };
+  
   // Actions
   setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
@@ -48,7 +64,73 @@ interface AnalysisState {
   
   clearSession: () => void;
   resetState: () => void;
+  
+  // ✅ ARCHITECTURAL FIX 2: Internal method to recompute stats (called only when data changes)
+  _recomputeStats: () => void;
 }
+
+// ✅ ARCHITECTURAL FIX 3: Pure function to calculate stats (no side effects)
+const calculateStats = (messages: Message[], scores: ChessScore[]) => {
+  if (scores.length === 0) {
+    return {
+      averageScore: 0,
+      bestScore: 0,
+      worstScore: 0,
+      totalMessages: messages.length,
+      completedAnalysis: 0,
+      dimensionAverages: {
+        strategic: 0,
+        tactical: 0,
+        cognitive: 0,
+        innovation: 0
+      },
+      trend: 'stable' as const
+    };
+  }
+  
+  const overallScores = scores.map(s => s.overall);
+  
+  // Calculate dimension averages
+  const dimensionTotals = scores.reduce(
+    (acc, score) => ({
+      strategic: acc.strategic + score.dimensions.strategic,
+      tactical: acc.tactical + score.dimensions.tactical,
+      cognitive: acc.cognitive + score.dimensions.cognitive,
+      innovation: acc.innovation + score.dimensions.innovation
+    }),
+    { strategic: 0, tactical: 0, cognitive: 0, innovation: 0 }
+  );
+  
+  const count = scores.length;
+  const dimensionAverages = {
+    strategic: dimensionTotals.strategic / count,
+    tactical: dimensionTotals.tactical / count,
+    cognitive: dimensionTotals.cognitive / count,
+    innovation: dimensionTotals.innovation / count
+  };
+  
+  // Calculate trend
+  let trend: 'improving' | 'declining' | 'stable' = 'stable';
+  if (scores.length >= 2) {
+    const recent = scores.slice(-3);
+    const first = recent[0].overall;
+    const last = recent[recent.length - 1].overall;
+    const diff = last - first;
+    
+    if (diff > 5) trend = 'improving';
+    else if (diff < -5) trend = 'declining';
+  }
+  
+  return {
+    averageScore: overallScores.reduce((sum, score) => sum + score, 0) / overallScores.length,
+    bestScore: Math.max(...overallScores),
+    worstScore: Math.min(...overallScores),
+    totalMessages: messages.length,
+    completedAnalysis: scores.length,
+    dimensionAverages,
+    trend
+  };
+};
 
 const initialState = {
   messages: [],
@@ -59,7 +141,8 @@ const initialState = {
   sessionMetadata: {},
   isAnalyzing: false,
   error: null,
-  progress: { current: 0, total: 0 }
+  progress: { current: 0, total: 0 },
+  computedStats: calculateStats([], [])
 };
 
 export const useAnalysisStore = create<AnalysisState>()(
@@ -68,70 +151,97 @@ export const useAnalysisStore = create<AnalysisState>()(
       (set, get) => ({
         ...initialState,
 
-        // Message actions
-        setMessages: (messages) => set({ messages, scores: [], patterns: [], insights: [] }),
+        // ✅ ARCHITECTURAL FIX 4: Internal recompute method
+        _recomputeStats: () => {
+          const state = get();
+          const newStats = calculateStats(state.messages, state.scores);
+          set({ computedStats: newStats });
+        },
+
+        // ✅ ARCHITECTURAL FIX 5: All mutations trigger stats recomputation
+        setMessages: (messages) => {
+          set({ messages, scores: [], patterns: [], insights: [] });
+          get()._recomputeStats();
+        },
         
-        addMessage: (message) => set((state) => ({
-          messages: [...state.messages, { ...message, index: state.messages.length }]
-        })),
+        addMessage: (message) => {
+          set((state) => ({
+            messages: [...state.messages, { ...message, index: state.messages.length }]
+          }));
+          get()._recomputeStats();
+        },
         
-        updateMessage: (index, messageUpdate) => set((state) => ({
-          messages: state.messages.map((msg, i) => 
-            i === index ? { ...msg, ...messageUpdate } : msg
-          )
-        })),
+        updateMessage: (index, messageUpdate) => {
+          set((state) => ({
+            messages: state.messages.map((msg, i) => 
+              i === index ? { ...msg, ...messageUpdate } : msg
+            )
+          }));
+          get()._recomputeStats();
+        },
         
-        removeMessage: (index) => set((state) => ({
-          messages: state.messages.filter((_, i) => i !== index)
-            .map((msg, i) => ({ ...msg, index: i })),
-          scores: state.scores.filter((_, i) => i !== index),
-        })),
+        removeMessage: (index) => {
+          set((state) => ({
+            messages: state.messages.filter((_, i) => i !== index)
+              .map((msg, i) => ({ ...msg, index: i })),
+            scores: state.scores.filter((_, i) => i !== index),
+          }));
+          get()._recomputeStats();
+        },
 
         // Score actions
-        setScores: (scores) => set({ scores }),
+        setScores: (scores) => {
+          set({ scores });
+          get()._recomputeStats();
+        },
         
-        updateScore: (index, score) => set((state) => ({
-          scores: state.scores.map((s, i) => i === index ? score : s)
-        })),
+        updateScore: (index, score) => {
+          set((state) => ({
+            scores: state.scores.map((s, i) => i === index ? score : s)
+          }));
+          get()._recomputeStats();
+        },
 
-        // Pattern actions
+        // Pattern actions (no stats impact)
         setPatterns: (patterns) => set({ patterns }),
-        
         addPattern: (pattern) => set((state) => ({
           patterns: [...state.patterns, pattern]
         })),
 
-        // Insight actions
+        // Insight actions (no stats impact)
         setInsights: (insights) => set({ insights }),
-        
         addInsight: (insight) => set((state) => ({
           insights: [...state.insights, insight]
         })),
 
-        // Session actions
+        // Session actions (no stats impact)
         setSessionSummary: (sessionSummary) => set({ sessionSummary }),
-        
         setSessionMetadata: (metadata) => set((state) => ({
           sessionMetadata: { ...state.sessionMetadata, ...metadata }
         })),
 
-        // UI state actions
+        // UI state actions (no stats impact)
         setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
         setError: (error) => set({ error }),
         setProgress: (progress) => set({ progress }),
 
         // Reset actions
-        clearSession: () => set({
-          messages: [],
-          scores: [],
-          patterns: [],
-          insights: [],
-          sessionSummary: null,
-          error: null,
-          progress: { current: 0, total: 0 }
-        }),
+        clearSession: () => {
+          set({
+            messages: [],
+            scores: [],
+            patterns: [],
+            insights: [],
+            sessionSummary: null,
+            error: null,
+            progress: { current: 0, total: 0 }
+          });
+          get()._recomputeStats();
+        },
         
-        resetState: () => set(initialState)
+        resetState: () => {
+          set(initialState);
+        }
       }),
       {
         name: 'analysis-storage',
@@ -146,7 +256,7 @@ export const useAnalysisStore = create<AnalysisState>()(
   )
 );
 
-// Selectors
+// ✅ ARCHITECTURAL FIX 6: Simple, stable selectors (no computation, just access)
 export const useMessages = () => useAnalysisStore((state) => state.messages);
 export const useScores = () => useAnalysisStore((state) => state.scores);
 export const usePatterns = () => useAnalysisStore((state) => state.patterns);
@@ -157,78 +267,9 @@ export const useIsAnalyzing = () => useAnalysisStore((state) => state.isAnalyzin
 export const useAnalysisError = () => useAnalysisStore((state) => state.error);
 export const useAnalysisProgress = () => useAnalysisStore((state) => state.progress);
 
-// Computed selectors
-export const useAnalysisStats = () => useAnalysisStore((state) => {
-  const { scores, messages } = state;
-  
-  if (scores.length === 0) {
-    return {
-      averageScore: 0,
-      bestScore: 0,
-      worstScore: 0,
-      totalMessages: messages.length,
-      completedAnalysis: 0
-    };
-  }
-  
-  const overallScores = scores.map(s => s.overall);
-  
-  return {
-    averageScore: overallScores.reduce((sum, score) => sum + score, 0) / overallScores.length,
-    bestScore: Math.max(...overallScores),
-    worstScore: Math.min(...overallScores),
-    totalMessages: messages.length,
-    completedAnalysis: scores.length
-  };
-});
-
-export const useCurrentTrend = () => useAnalysisStore((state) => {
-  const { scores } = state;
-  
-  if (scores.length < 2) return 'stable';
-  
-  const recent = scores.slice(-3);
-  const first = recent[0].overall;
-  const last = recent[recent.length - 1].overall;
-  
-  const diff = last - first;
-  
-  if (diff > 5) return 'improving';
-  if (diff < -5) return 'declining';
-  return 'stable';
-});
-
-export const useDimensionAverages = () => useAnalysisStore((state) => {
-  const { scores } = state;
-  
-  if (scores.length === 0) {
-    return {
-      strategic: 0,
-      tactical: 0,
-      cognitive: 0,
-      innovation: 0
-    };
-  }
-  
-  const totals = scores.reduce(
-    (acc, score) => ({
-      strategic: acc.strategic + score.dimensions.strategic,
-      tactical: acc.tactical + score.dimensions.tactical,
-      cognitive: acc.cognitive + score.dimensions.cognitive,
-      innovation: acc.innovation + score.dimensions.innovation
-    }),
-    { strategic: 0, tactical: 0, cognitive: 0, innovation: 0 }
-  );
-  
-  const count = scores.length;
-  
-  return {
-    strategic: totals.strategic / count,
-    tactical: totals.tactical / count,
-    cognitive: totals.cognitive / count,
-    innovation: totals.innovation / count
-  };
-});
+// ✅ ARCHITECTURAL FIX 7: Stable computed selectors (return same object reference until data changes)
+export const useAnalysisStats = () => useAnalysisStore((state) => state.computedStats);
+export const useCurrentTrend = () => useAnalysisStore((state) => state.computedStats.trend);
+export const useDimensionAverages = () => useAnalysisStore((state) => state.computedStats.dimensionAverages);
 
 export default useAnalysisStore;
-
