@@ -24,6 +24,10 @@ export class RateLimiter {
     const key = `rate_limit:${userId}`;
     const limit = this.limits[tier];
     
+    if (!limit) {
+      throw new Error(`Invalid tier: ${tier}`);
+    }
+    
     try {
       const current = await redis.incr(key);
       
@@ -52,6 +56,28 @@ export class RateLimiter {
   }
   
   /**
+   * Create Express middleware for rate limiting
+   */
+  createLimiter(name: string, maxRequests: number, windowSeconds: number) {
+    return async (req: any, res: any, next: any) => {
+      try {
+        const userId = req.user?.id || req.ip || 'anonymous';
+        await this.checkLimit(userId, 'free');
+        next();
+      } catch (error) {
+        if (error instanceof RateLimitError) {
+          return res.status(429).json({
+            error: 'Rate limit exceeded',
+            message: error.message,
+            retryAfter: error.retryAfter
+          });
+        }
+        next(error);
+      }
+    };
+  }
+  
+  /**
    * Get remaining requests for user
    */
   async getRemainingRequests(
@@ -60,6 +86,10 @@ export class RateLimiter {
   ): Promise<{ remaining: number; resetTime: number }> {
     const key = `rate_limit:${userId}`;
     const limit = this.limits[tier];
+    
+    if (!limit) {
+      return { remaining: 0, resetTime: 0 };
+    }
     
     try {
       const [current, ttl] = await Promise.all([
@@ -108,6 +138,16 @@ export class RateLimiter {
     const key = `rate_limit:${userId}`;
     const limit = this.limits[tier];
     
+    if (!limit) {
+      return {
+        limit: 0,
+        used: 0,
+        remaining: 0,
+        resetTime: 0,
+        windowSeconds: 0
+      };
+    }
+    
     try {
       const [current, ttl] = await Promise.all([
         redis.get(key),
@@ -147,67 +187,8 @@ export class RateLimiter {
     const status = await this.getStatus(userId, tier);
     return status.remaining === 0;
   }
-  
-  /**
-   * Increment usage without checking limit (for tracking)
-   */
-  async incrementUsage(userId: string): Promise<number> {
-    const key = `rate_limit:${userId}`;
-    
-    try {
-      return await redis.incr(key);
-    } catch (error) {
-      logger.error('Error incrementing usage:', error);
-      return 0;
-    }
-  }
-  
-  /**
-   * Get usage statistics for multiple users
-   */
-  async getUsageStats(userIds: string[]): Promise<Record<string, number>> {
-    const stats: Record<string, number> = {};
-    
-    try {
-      const keys = userIds.map(id => `rate_limit:${id}`);
-      const values = await redis.mget(...keys);
-      
-      userIds.forEach((userId, index) => {
-        stats[userId] = parseInt(values[index] || '0');
-      });
-    } catch (error) {
-      logger.error('Error getting usage stats:', error);
-    }
-    
-    return stats;
-  }
-  
-  /**
-   * Clean up expired rate limit keys (maintenance function)
-   */
-  async cleanup(): Promise<number> {
-    try {
-      const pattern = 'rate_limit:*';
-      const keys = await redis.keys(pattern);
-      
-      let cleaned = 0;
-      for (const key of keys) {
-        const ttl = await redis.ttl(key);
-        if (ttl === -1) {
-          // Key exists but has no expiration, clean it up
-          await redis.del(key);
-          cleaned++;
-        }
-      }
-      
-      logger.info(`Cleaned up ${cleaned} expired rate limit keys`);
-      return cleaned;
-    } catch (error) {
-      logger.error('Error during rate limit cleanup:', error);
-      return 0;
-    }
-  }
 }
 
-export default RateLimiter;
-
+// Create and export default instance
+export const rateLimiter = new RateLimiter();
+export default rateLimiter;

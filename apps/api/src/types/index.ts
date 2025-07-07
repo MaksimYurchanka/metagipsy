@@ -1,4 +1,7 @@
-// Core types for MetaGipsy OWL Chess Engine
+# 📋 Complete apps/api/src/types/index.ts - Full Replacement
+
+```typescript
+// Core types for MetaGipsy OWL Chess Engine API
 
 export interface Message {
   id?: string;
@@ -21,7 +24,7 @@ export interface ChessScore {
   chessNotation: '!!' | '!' | '+' | '=' | '?' | '??';
   confidence: number;
   explanation?: string;
-  betterMove?: string;
+  betterMove?: string; // Optional
 }
 
 export interface ConversationContext {
@@ -32,6 +35,7 @@ export interface ConversationContext {
   messagePosition?: number;
   scoreTrend?: 'improving' | 'declining' | 'stable';
   platform?: Platform;
+  analysisDepth?: 'quick' | 'standard' | 'deep';
 }
 
 export interface Pattern {
@@ -46,10 +50,10 @@ export interface Pattern {
 }
 
 export interface SessionSummary {
-  sessionId: string;
+  sessionId?: string;
   messageCount: number;
   overallScore: number;
-  trend: 'improving' | 'declining' | 'stable';
+  trend: 'improving' | 'declining' | 'stable' | 'volatile'; // Include volatile
   bestScore: number;
   worstScore: number;
   dimensionAverages: {
@@ -76,6 +80,36 @@ export type Platform = 'claude' | 'chatgpt' | 'other' | 'auto';
 
 export type UserTier = 'free' | 'pro' | 'enterprise';
 
+// Missing interfaces that caused build errors
+export interface SessionMetadata {
+  platform?: string;
+  projectContext?: string;
+  sessionGoal?: string;
+  completedAt?: string;
+  overallScore?: number;
+  messageCount?: number;
+  trend?: 'improving' | 'declining' | 'stable' | 'volatile';
+  dimensionAverages?: {
+    strategic: number;
+    tactical: number;
+    cognitive: number;
+    innovation: number;
+  };
+  messages?: Message[];
+  patterns?: Pattern[];
+  insights?: Insight[];
+}
+
+export interface AnalysisPattern {
+  type: string;
+  name: string;
+  description: string;
+  confidence: number;
+  startIndex: number;
+  endIndex: number;
+  metadata?: Record<string, any>;
+}
+
 // API Request/Response types
 export interface AnalyzeRequest {
   conversation: {
@@ -91,27 +125,27 @@ export interface AnalyzeRequest {
     useClaudeAnalysis?: boolean;
     analysisDepth?: 'quick' | 'standard' | 'deep';
     enablePatternDetection?: boolean;
+    projectContext?: string;
+    sessionGoal?: string;
   };
 }
 
 export interface AnalyzeResponse {
-  sessionId: string;
-  createdAt: string;
-  summary: SessionSummary;
+  sessionId?: string;
+  messages: Message[];
   scores: Array<{
     messageIndex: number;
     role: string;
     score: ChessScore;
   }>;
-  patterns?: {
-    detected: Pattern[];
-    confidence: number;
-  };
-  insights?: Insight[];
-  metadata?: {
+  summary: SessionSummary;
+  metadata: {
+    analysisMethod: string;
+    analysisDepth: string;
     processingTime: number;
-    claudeAnalysisUsed: boolean;
-    cacheHit: boolean;
+    version: string;
+    claudeAnalysisUsed?: boolean;
+    cacheHit?: boolean;
   };
 }
 
@@ -178,6 +212,30 @@ export interface AnalyticsQuery {
   granularity?: 'day' | 'week' | 'month';
 }
 
+export interface AnalyticsData {
+  overview: {
+    totalSessions: number;
+    totalMessages: number;
+    averageScore: number;
+    improvementRate: number;
+  };
+  trends: Array<{
+    date: string;
+    sessionsCount: number;
+    averageScore: number;
+    messageCount: number;
+  }>;
+  patterns: {
+    mostCommon: Pattern[];
+    emerging: Pattern[];
+  };
+  insights: {
+    strengths: string[];
+    improvements: string[];
+    recommendations: string[];
+  };
+}
+
 export interface AnalyticsResponse {
   overview: {
     totalSessions: number;
@@ -200,6 +258,32 @@ export interface AnalyticsResponse {
     improvements: string[];
     recommendations: string[];
   };
+}
+
+// Session Data type for API responses
+export interface SessionData {
+  id: string;
+  title?: string;
+  platform: Platform;
+  status: string;
+  messageCount: number;
+  overallScore?: number;
+  projectContext?: string;
+  sessionGoal?: string;
+  completedAt?: string;
+  trend?: 'improving' | 'declining' | 'stable' | 'volatile';
+  dimensionAverages?: {
+    strategic: number;
+    tactical: number;
+    cognitive: number;
+    innovation: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+  messages?: Message[];
+  scores?: ChessScore[];
+  patterns?: Pattern[];
+  insights?: Insight[];
 }
 
 // Error types
@@ -276,20 +360,25 @@ export interface AppConfig {
   redis: {
     url: string;
   };
-  auth: {
-    jwtSecret: string;
-    jwtExpiresIn: string;
-  };
   supabase: {
     url: string;
     anonKey: string;
     serviceRoleKey: string;
+    serviceKey?: string; // Alias
   };
-  anthropic: {
-    apiKey: string;
+  claude?: {
+    apiKey?: string;
+  };
+  jwt: {
+    secret: string;
   };
   cors: {
-    origin: string[];
+    allowedOrigins: string[];
+  };
+  limits: {
+    maxMessagesPerAnalysis: number;
+    maxSessionsPerMonth: number;
+    maxMessagesPerMonth: number;
   };
   rateLimit: {
     windowMs: number;
@@ -298,6 +387,23 @@ export interface AppConfig {
   logging: {
     level: string;
   };
+}
+
+// Auth types for middleware
+export interface User {
+  id: string;
+  email: string;
+  role?: 'free' | 'pro' | 'enterprise' | 'admin';
+  tier?: UserTier;
+}
+
+export interface AuthenticatedRequest extends Request {
+  user?: User;
+  startTime?: number;
+  body: any;
+  params: any;
+  query: any;
+  headers: any;
 }
 
 // Utility types
@@ -309,3 +415,54 @@ export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
 
 export type OptionalFields<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 
+// Scoring related types
+export interface ScoringWeights {
+  strategic: number;
+  tactical: number;
+  cognitive: number;
+  innovation: number;
+}
+
+export interface ScoringOptions {
+  useClaudeAnalysis?: boolean;
+  analysisDepth?: 'quick' | 'standard' | 'deep';
+  projectContext?: string;
+  sessionGoal?: string;
+}
+
+// Export all types as default for convenience
+export default {
+  Message,
+  ChessScore,
+  ConversationContext,
+  Pattern,
+  SessionSummary,
+  Insight,
+  Platform,
+  UserTier,
+  SessionMetadata,
+  AnalysisPattern,
+  AnalyzeRequest,
+  AnalyzeResponse,
+  QuickAnalyzeRequest,
+  QuickAnalyzeResponse,
+  SessionsQuery,
+  SessionsResponse,
+  SessionDetailResponse,
+  AnalyticsQuery,
+  AnalyticsData,
+  AnalyticsResponse,
+  SessionData,
+  ApiError,
+  RateLimitError,
+  ValidationError,
+  AuthenticationError,
+  AuthorizationError,
+  WebSocketEvents,
+  AppConfig,
+  User,
+  AuthenticatedRequest,
+  ScoringWeights,
+  ScoringOptions
+};
+```

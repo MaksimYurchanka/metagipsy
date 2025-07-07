@@ -220,100 +220,27 @@ export class ConversationParser {
       }
     };
   }
-  
-  /**
-   * Validate parsed messages
-   */
-  static validateMessages(messages: Message[]): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
-    
-    if (messages.length === 0) {
-      errors.push('No messages found');
-    }
-    
-    if (messages.length < 2) {
-      errors.push('Conversation too short (minimum 2 messages required)');
-    }
-    
-    // Check for alternating roles (good practice)
-    let hasAlternating = true;
-    for (let i = 1; i < messages.length; i++) {
-      if (messages[i].role === messages[i - 1].role) {
-        hasAlternating = false;
-        break;
-      }
-    }
-    
-    if (!hasAlternating) {
-      errors.push('Warning: Non-alternating conversation detected');
-    }
-    
-    // Check message lengths
-    const tooShort = messages.filter(m => m.content.length < 10);
-    if (tooShort.length > messages.length * 0.3) {
-      errors.push('Warning: Many messages are very short');
-    }
-    
-    const tooLong = messages.filter(m => m.content.length > 5000);
-    if (tooLong.length > 0) {
-      errors.push('Warning: Some messages are very long');
-    }
-    
-    return {
-      valid: errors.filter(e => !e.startsWith('Warning:')).length === 0,
-      errors
-    };
+}
+
+// Function-based export that the routes expect
+export function parseConversation(
+  messages: any[],
+  platform: string = 'auto'
+): Message[] {
+  // Handle array of messages (direct API input)
+  if (Array.isArray(messages)) {
+    return messages.map((msg, index) => ({
+      role: msg.role || 'user',
+      content: msg.content || '',
+      index,
+      timestamp: msg.timestamp || new Date().toISOString()
+    }));
   }
   
-  /**
-   * Clean and normalize message content
-   */
-  static cleanMessage(content: string): string {
-    return content
-      .trim()
-      .replace(/\r\n/g, '\n')  // Normalize line endings
-      .replace(/\n{3,}/g, '\n\n')  // Collapse multiple newlines
-      .replace(/\s+$/gm, '')  // Remove trailing whitespace
-      .replace(/^\s+/gm, '')  // Remove leading whitespace
-      .trim();
-  }
-  
-  /**
-   * Extract metadata from conversation
-   */
-  static extractMetadata(text: string, messages: Message[]): Record<string, any> {
-    const metadata: Record<string, any> = {
-      originalLength: text.length,
-      messageCount: messages.length,
-      averageMessageLength: messages.reduce((sum, m) => sum + m.content.length, 0) / messages.length,
-      userMessages: messages.filter(m => m.role === 'user').length,
-      assistantMessages: messages.filter(m => m.role === 'assistant').length,
-      longestMessage: Math.max(...messages.map(m => m.content.length)),
-      shortestMessage: Math.min(...messages.map(m => m.content.length))
-    };
-    
-    // Detect language (simple heuristic)
-    const englishWords = /\b(the|and|or|but|in|on|at|to|for|of|with|by)\b/gi;
-    const englishMatches = (text.match(englishWords) || []).length;
-    metadata.likelyLanguage = englishMatches > 10 ? 'en' : 'unknown';
-    
-    // Detect conversation topics (simple keyword extraction)
-    const words = text.toLowerCase().match(/\b\w{4,}\b/g) || [];
-    const wordFreq: Record<string, number> = {};
-    words.forEach(word => {
-      wordFreq[word] = (wordFreq[word] || 0) + 1;
-    });
-    
-    const topWords = Object.entries(wordFreq)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 10)
-      .map(([word]) => word);
-    
-    metadata.topKeywords = topWords;
-    
-    return metadata;
-  }
+  // Handle text parsing
+  const text = typeof messages === 'string' ? messages : '';
+  const result = ConversationParser.parseConversation(text);
+  return result.messages;
 }
 
 export default ConversationParser;
-

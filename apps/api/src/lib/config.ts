@@ -1,5 +1,4 @@
 import dotenv from 'dotenv';
-import { AppConfig } from '@/types';
 
 // Load environment variables
 dotenv.config();
@@ -26,7 +25,7 @@ function getEnvArray(name: string, defaultValue: string[] = []): string[] {
   return value.split(',').map(item => item.trim());
 }
 
-export const config: AppConfig = {
+export const config = {
   port: getEnvNumber('PORT', 3001),
   host: getEnvVar('HOST', '0.0.0.0'),
   nodeEnv: getEnvVar('NODE_ENV', 'development') as 'development' | 'production' | 'test',
@@ -39,23 +38,29 @@ export const config: AppConfig = {
     url: getEnvVar('REDIS_URL', 'redis://localhost:6379')
   },
   
-  auth: {
-    jwtSecret: getEnvVar('JWT_SECRET'),
-    jwtExpiresIn: getEnvVar('JWT_EXPIRES_IN', '7d')
-  },
-  
   supabase: {
     url: getEnvVar('SUPABASE_URL'),
     anonKey: getEnvVar('SUPABASE_ANON_KEY'),
-    serviceRoleKey: getEnvVar('SUPABASE_SERVICE_ROLE_KEY')
+    serviceRoleKey: getEnvVar('SUPABASE_SERVICE_KEY'),
+    serviceKey: getEnvVar('SUPABASE_SERVICE_KEY') // Alias for compatibility
   },
   
-  anthropic: {
-    apiKey: getEnvVar('ANTHROPIC_API_KEY')
+  claude: {
+    apiKey: getEnvVar('CLAUDE_API_KEY', '')
+  },
+  
+  jwt: {
+    secret: getEnvVar('JWT_SECRET')
   },
   
   cors: {
-    origin: getEnvArray('ALLOWED_ORIGINS', ['http://localhost:5173', 'http://localhost:3000'])
+    allowedOrigins: getEnvArray('CORS_ORIGINS', ['http://localhost:5173', 'http://localhost:3000'])
+  },
+  
+  limits: {
+    maxMessagesPerAnalysis: getEnvNumber('MAX_MESSAGES_PER_ANALYSIS', 50),
+    maxSessionsPerMonth: getEnvNumber('MAX_SESSIONS_PER_MONTH', 100),
+    maxMessagesPerMonth: getEnvNumber('MAX_MESSAGES_PER_MONTH', 1000)
   },
   
   rateLimit: {
@@ -74,8 +79,7 @@ export function validateConfig(): void {
     'DATABASE_URL',
     'JWT_SECRET',
     'SUPABASE_URL',
-    'SUPABASE_ANON_KEY',
-    'ANTHROPIC_API_KEY'
+    'SUPABASE_ANON_KEY'
   ];
   
   const missing = requiredVars.filter(varName => !process.env[varName]);
@@ -88,7 +92,9 @@ export function validateConfig(): void {
   try {
     new URL(config.supabase.url);
     new URL(config.database.url);
-    new URL(config.redis.url);
+    if (config.redis.url.startsWith('redis://')) {
+      new URL(config.redis.url);
+    }
   } catch (error) {
     throw new Error('Invalid URL in configuration');
   }
@@ -99,5 +105,5 @@ export function validateConfig(): void {
   }
 }
 
+export type AppConfig = typeof config;
 export default config;
-
