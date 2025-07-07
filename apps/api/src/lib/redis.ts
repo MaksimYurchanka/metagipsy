@@ -2,11 +2,14 @@ import Redis from 'ioredis';
 import { config } from './config';
 import { logger } from './logger';
 
+// FIXED: Removed retryDelayOnFailover (not available in newer ioredis versions)
 export const redis = new Redis(config.redis.url, {
-  retryDelayOnFailover: 100,
   enableReadyCheck: false,
   maxRetriesPerRequest: null,
-  lazyConnect: true
+  lazyConnect: true,
+  retryDelayOnFailoverBool: false, // Alternative option
+  connectTimeout: 10000,
+  commandTimeout: 5000
 });
 
 redis.on('connect', () => {
@@ -77,4 +80,3 @@ export class CacheService {
 export const cache = new CacheService(redis);
 
 export default redis;
-

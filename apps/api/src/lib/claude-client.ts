@@ -1,10 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { Message, ChessScore, ConversationContext } from '@/types';
+// FIXED: Changed import path from @/types to ../types
+import { Message, ChessScore, ConversationContext } from '../types';
 import { config } from './config';
 import { cache } from './redis';
 import { logger } from './logger';
 import { RateLimiter } from './rate-limiter';
-import LocalScoringEngine from './scoring-engine';
+import { LocalScoringEngine } from './scoring-engine';
 
 export class ClaudeClient {
   private anthropic: Anthropic;
@@ -13,7 +14,7 @@ export class ClaudeClient {
   
   constructor() {
     this.anthropic = new Anthropic({
-      apiKey: config.anthropic.apiKey
+      apiKey: config.anthropic?.apiKey || ''
     });
     this.rateLimiter = new RateLimiter();
     this.localEngine = new LocalScoringEngine();
@@ -56,7 +57,8 @@ export class ClaudeClient {
         }]
       });
       
-      const score = this.parseScoreFromResponse(response.content[0].text);
+      // FIXED: Handle new Anthropic SDK response structure
+      const score = this.parseScoreFromResponse(response);
       
       // Cache the result for 1 hour
       await cache.set(cacheKey, score, 3600);
@@ -68,7 +70,7 @@ export class ClaudeClient {
       logger.error('Claude API error, falling back to local scoring:', error);
       
       // Fallback to local scoring
-      const localScore = this.localEngine.scoreMessage(message, context);
+      const localScore = await this.localEngine.scoreMessage(message, context);
       
       // Cache the fallback result for shorter time (15 minutes)
       await cache.set(cacheKey, localScore, 900);
@@ -228,11 +230,27 @@ Analyze the message now:`;
   
   /**
    * Parse Claude's response to extract score
+   * FIXED: Handle new Anthropic SDK response structure
    */
-  private parseScoreFromResponse(text: string): ChessScore {
+  private parseScoreFromResponse(response: any): ChessScore {
     try {
+      // Handle new response structure
+      let textContent = '';
+      
+      if (response.content && Array.isArray(response.content)) {
+        // Find text content block
+        const textBlock = response.content.find((block: any) => block.type === 'text');
+        if (textBlock && textBlock.text) {
+          textContent = textBlock.text;
+        }
+      } else if (typeof response.content === 'string') {
+        textContent = response.content;
+      } else {
+        throw new Error('Unexpected response format from Claude');
+      }
+      
       // Extract JSON from response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const jsonMatch = textContent.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error('No JSON found in Claude response');
       }
@@ -352,4 +370,3 @@ Analyze the message now:`;
 }
 
 export default ClaudeClient;
-

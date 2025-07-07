@@ -19,6 +19,9 @@ router.post('/',
   optionalAuth,
   rateLimiter.createLimiter('analyze', 10, 60), // 10 requests per minute
   async (req: AuthenticatedRequest, res) => {
+    const startTime = Date.now();
+    req.startTime = startTime;
+    
     try {
       const { conversation, options = {} }: AnalyzeRequest = req.body;
 
@@ -58,8 +61,9 @@ router.post('/',
 
       // Score messages
       const scores = [];
+      // FIXED: Changed config.claude.apiKey to config.anthropic.apiKey
       const useClaudeAnalysis = options.useClaudeAnalysis && 
-        config.claude.apiKey && 
+        config.anthropic?.apiKey && 
         (req.user?.role === 'premium' || req.user?.role === 'admin');
 
       for (let i = 0; i < messages.length; i++) {
@@ -72,20 +76,25 @@ router.post('/',
             // Use Claude for enhanced analysis
             score = await claudeClient.analyzeMessage(
               message,
-              messages.slice(0, i), // Previous context
               {
+                userId: req.user?.id,
+                previousMessages: messages.slice(0, i),
+                messagePosition: i,
                 analysisDepth: options.analysisDepth || 'standard',
-                projectContext: options.projectContext
+                projectContext: options.projectContext,
+                sessionGoal: options.sessionGoal
               }
             );
           } else {
             // Use local scoring engine
             score = await scoringEngine.scoreMessage(
               message,
-              messages.slice(0, i), // Previous context
               {
+                previousMessages: messages.slice(0, i),
+                messagePosition: i,
                 analysisDepth: options.analysisDepth || 'standard',
-                projectContext: options.projectContext
+                projectContext: options.projectContext,
+                sessionGoal: options.sessionGoal
               }
             );
           }
@@ -108,8 +117,10 @@ router.post('/',
           // Fallback to basic scoring
           const fallbackScore = await scoringEngine.scoreMessage(
             message,
-            messages.slice(0, i),
-            { analysisDepth: 'quick' }
+            { 
+              previousMessages: messages.slice(0, i),
+              analysisDepth: 'quick' 
+            }
           );
           scores.push(fallbackScore);
         }
@@ -165,13 +176,19 @@ router.post('/',
       const response: AnalyzeResponse = {
         sessionId,
         messages,
-        scores,
+        scores: scores.map((score, index) => ({
+          messageIndex: index,
+          role: messages[index].role,
+          score
+        })),
         summary: sessionSummary,
         metadata: {
           analysisMethod: useClaudeAnalysis ? 'claude' : 'local',
           analysisDepth: options.analysisDepth || 'standard',
-          processingTime: Date.now() - req.startTime,
-          version: '1.0.0'
+          processingTime: Date.now() - startTime,
+          version: '1.0.0',
+          claudeAnalysisUsed: useClaudeAnalysis,
+          cacheHit: false
         }
       };
 
@@ -238,8 +255,8 @@ function detectPatterns(scores: any[]) {
   const firstQuarter = scores.slice(0, Math.ceil(scores.length / 4));
   
   if (lastQuarter.length > 0 && firstQuarter.length > 0) {
-    const lastAvg = lastQuarter.reduce((sum, s) => sum + s.overall, 0) / lastQuarter.length;
-    const firstAvg = firstQuarter.reduce((sum, s) => sum + s.overall, 0) / firstQuarter.length;
+    const lastAvg = lastQuarter.reduce((sum: number, s: any) => sum + s.overall, 0) / lastQuarter.length;
+    const firstAvg = firstQuarter.reduce((sum: number, s: any) => sum + s.overall, 0) / firstQuarter.length;
     
     if (firstAvg - lastAvg > 10) {
       patterns.push({
@@ -279,7 +296,7 @@ function generateInsights(scores: any[], messages: any[], dimensionAverages: any
 
   // Dimension-specific insights
   const weakestDimension = Object.entries(dimensionAverages)
-    .sort(([,a], [,b]) => a - b)[0];
+    .sort(([,a], [,b]) => (a as number) - (b as number))[0];
 
   if (weakestDimension[1] < 60) {
     const suggestions = {
@@ -302,4 +319,3 @@ function generateInsights(scores: any[], messages: any[], dimensionAverages: any
 }
 
 export default router;
-
