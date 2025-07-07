@@ -1,12 +1,31 @@
 import React from 'react';
-import ConversationInput from '@/components/analysis/ConversationInput';
+import MessageAnalysis from '@/components/analysis/MessageAnalysis';
 
-// 🧪 TEST: Only ConversationInput import and usage
+// 🧪 TEST: Only MessageAnalysis import and usage
 const AnalysisPage: React.FC = () => {
-  console.log('🧪 TESTING: ConversationInput only...');
+  console.log('🧪 TESTING: MessageAnalysis only...');
 
-  const handleAnalyze = (messages: any[]) => {
-    console.log('📥 Analysis requested:', messages);
+  // Mock data for MessageAnalysis
+  const mockMessage = {
+    role: 'user' as const,
+    content: 'This is a test message to see if MessageAnalysis causes the infinite loop.',
+    index: 0,
+    timestamp: new Date().toISOString()
+  };
+
+  const mockScore = {
+    overall: 75,
+    dimensions: {
+      strategic: 80,
+      tactical: 70,
+      cognitive: 75,
+      innovation: 70
+    },
+    classification: 'good' as const,
+    chessNotation: '+' as const,
+    confidence: 0.85,
+    explanation: 'This is a test explanation to check component rendering.',
+    betterMove: undefined
   };
 
   return (
@@ -14,27 +33,30 @@ const AnalysisPage: React.FC = () => {
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-4">
-            🧪 Testing ConversationInput Only
+            🧪 Testing MessageAnalysis Only
           </h1>
           <p className="text-xl text-slate-400">
-            If this loads without errors, ConversationInput is safe
+            If this loads without errors, MessageAnalysis is safe
           </p>
         </div>
         
-        <div className="bg-blue-600 p-6 rounded-lg">
+        <div className="bg-green-600 p-6 rounded-lg">
           <h2 className="text-xl font-bold mb-4">
-            🔍 ConversationInput Test
+            🔍 MessageAnalysis Test
           </h2>
-          <ConversationInput 
-            onAnalyze={handleAnalyze}
-            isAnalyzing={false}
+          <MessageAnalysis 
+            message={mockMessage}
+            score={mockScore}
+            index={0}
+            isExpanded={false}
+            onToggle={() => console.log('Toggle clicked')}
           />
         </div>
 
         <div className="bg-yellow-600 p-4 rounded-lg text-center">
           <p><strong>Expected Result:</strong></p>
-          <p>✅ Page loads → ConversationInput is NOT the problem</p>
-          <p>❌ Still crashes → ConversationInput contains the infinite loop</p>
+          <p>✅ Page loads → MessageAnalysis is NOT the problem</p>
+          <p>❌ Still crashes → MessageAnalysis contains the infinite loop</p>
         </div>
       </div>
     </div>
