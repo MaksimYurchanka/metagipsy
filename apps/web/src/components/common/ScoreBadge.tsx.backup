@@ -2,10 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { cn, getScoreColor, getScoreBgColor, getChessNotation } from '@/lib/utils';
 import { ScoreBadgeProps } from '@/types';
-import { 
-  useShowChessNotation, 
-  useAnimationsEnabled 
-} from '@/stores/settingsStore';
+import { useDisplaySettings } from '@/stores/settingsStore';
 
 const ScoreBadge: React.FC<ScoreBadgeProps> = ({
   score,
@@ -15,11 +12,7 @@ const ScoreBadge: React.FC<ScoreBadgeProps> = ({
   showNotation = true,
   className
 }) => {
-  // ✅ FIXED: Use individual selectors instead of useDisplaySettings
-  const showChessNotation = useShowChessNotation();
-  const animationsEnabled = useAnimationsEnabled();
-  
-  // ✅ PRESERVE: Exact same logic as before
+  const { showChessNotation, animationsEnabled } = useDisplaySettings();
   const { symbol, name } = getChessNotation(score);
   
   const sizeClasses = {
@@ -83,3 +76,4 @@ const ScoreBadge: React.FC<ScoreBadgeProps> = ({
 };
 
 export default ScoreBadge;
+
