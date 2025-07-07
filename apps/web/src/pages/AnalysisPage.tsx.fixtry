@@ -14,9 +14,19 @@ const AnalysisPage: React.FC = () => {
   console.log('🔥 MINIMAL v8: Messages count:', messages.length);
   
   // ✅ SIMPLE: No complex callbacks, just direct function
-  const handleAnalyze = (newMessages: any[]) => {
-    console.log('🔥 MINIMAL v8: handleAnalyze called with', newMessages.length, 'messages');
-    
+  const handleAnalyze = async (analysisRequest: any) => {
+    setIsAnalyzing(true);
+    try {
+      // Call your API with the full request
+      const response = await api.post('/analyze', analysisRequest);
+      // Handle response...
+    } catch (error) {
+      console.error('Analysis failed:', error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
     // Simple mock scoring - no async, no complex logic
     const mockScores = newMessages.map((_, index) => ({
       overall: Math.floor(Math.random() * 40) + 60, // 60-100 range
