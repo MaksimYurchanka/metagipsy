@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart3, TrendingUp, Eye, Download, Share2, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,39 +12,124 @@ import { useAnalysisStore } from '@/stores/analysisStore';
 import { useDisplaySettings } from '@/stores/settingsStore';
 import { cn, getTrendIcon, getTrendColor, getDimensionIcon } from '@/lib/utils';
 
-// ✅ ARCHITECTURAL FIX 1: Types for component state
+// ✅ DEBUG HELPER: Track render count and causes
+let renderCount = 0;
+const DEBUG_MODE = true; // Set to false in production
+
+const debugLog = (message: string, data?: any) => {
+  if (DEBUG_MODE) {
+    console.log(`🔍 [AnalysisResults] ${message}`, data || '');
+  }
+};
+
+const debugWarn = (message: string, data?: any) => {
+  if (DEBUG_MODE) {
+    console.warn(`⚠️ [AnalysisResults] ${message}`, data || '');
+  }
+};
+
 type FilterType = 'all' | 'low' | 'high';
 type SortType = 'index' | 'score';
 
 const AnalysisResults: React.FC = () => {
-  // ✅ ARCHITECTURAL FIX 2: Single store subscription - batched data access
-  const analysisData = useAnalysisStore((state) => ({
-    messages: state.messages,
-    scores: state.scores,
-    patterns: state.patterns,
-    insights: state.insights,
-    sessionSummary: state.sessionSummary,
-    computedStats: state.computedStats, // ← This is now stable reference
-    isAnalyzing: state.isAnalyzing,
-    error: state.error
-  }));
+  const renderNumber = ++renderCount;
+  debugLog(`RENDER #${renderNumber} - Component starting`);
   
-  // ✅ ARCHITECTURAL FIX 3: Separate subscription for settings (different update frequency)
-  const displaySettings = useDisplaySettings((state) => ({
-    compactMode: state.compactMode,
-    animationsEnabled: state.animationsEnabled
-  }));
+  // ✅ DEBUG: Track what causes re-renders
+  const previousProps = useRef<any>({});
   
-  // ✅ ARCHITECTURAL FIX 4: Local state with stable initial values
-  const [expandedMessages, setExpandedMessages] = useState<Set<number>>(() => new Set());
+  // ✅ DEBUG: Single store subscription with logging
+  const analysisData = useAnalysisStore((state) => {
+    const data = {
+      messages: state.messages,
+      scores: state.scores,
+      patterns: state.patterns,
+      insights: state.insights,
+      sessionSummary: state.sessionSummary,
+      computedStats: state.computedStats,
+      isAnalyzing: state.isAnalyzing,
+      error: state.error
+    };
+    
+    debugLog(`Store subscription fired - Render #${renderNumber}`, {
+      messagesLength: data.messages.length,
+      scoresLength: data.scores.length,
+      computedStatsRef: data.computedStats === previousProps.current.computedStats ? 'SAME' : 'DIFFERENT',
+      averageScore: data.computedStats.averageScore
+    });
+    
+    return data;
+  });
+  
+  // ✅ DEBUG: Settings subscription with logging
+  const displaySettings = useDisplaySettings((state) => {
+    const settings = {
+      compactMode: state.compactMode,
+      animationsEnabled: state.animationsEnabled
+    };
+    
+    debugLog(`Settings subscription fired - Render #${renderNumber}`, settings);
+    return settings;
+  });
+  
+  // ✅ DEBUG: Local state with logging
+  const [expandedMessages, setExpandedMessages] = useState<Set<number>>(() => {
+    debugLog(`Initialize expandedMessages - Render #${renderNumber}`);
+    return new Set();
+  });
+  
   const [filterBy, setFilterBy] = useState<FilterType>('all');
   const [sortBy, setSortBy] = useState<SortType>('index');
+  
+  // ✅ DEBUG: Check for reference changes
+  useEffect(() => {
+    const current = {
+      messages: analysisData.messages,
+      scores: analysisData.scores,
+      computedStats: analysisData.computedStats,
+      compactMode: displaySettings.compactMode,
+      animationsEnabled: displaySettings.animationsEnabled
+    };
+    
+    if (previousProps.current.messages !== current.messages) {
+      debugLog(`REFERENCE CHANGE: messages`, {
+        previous: previousProps.current.messages?.length || 0,
+        current: current.messages.length,
+        sameReference: previousProps.current.messages === current.messages
+      });
+    }
+    
+    if (previousProps.current.scores !== current.scores) {
+      debugLog(`REFERENCE CHANGE: scores`, {
+        previous: previousProps.current.scores?.length || 0,
+        current: current.scores.length,
+        sameReference: previousProps.current.scores === current.scores
+      });
+    }
+    
+    if (previousProps.current.computedStats !== current.computedStats) {
+      debugWarn(`REFERENCE CHANGE: computedStats - THIS COULD CAUSE INFINITE LOOP!`, {
+        previousAvg: previousProps.current.computedStats?.averageScore || 0,
+        currentAvg: current.computedStats.averageScore,
+        sameReference: previousProps.current.computedStats === current.computedStats
+      });
+    }
+    
+    previousProps.current = current;
+  });
   
   const { messages, scores, computedStats } = analysisData;
   const { compactMode, animationsEnabled } = displaySettings;
   
-  // Early return if no data - prevents unnecessary computation
+  debugLog(`Data extracted - Render #${renderNumber}`, {
+    messagesLength: messages.length,
+    scoresLength: scores.length,
+    computedStatsKeys: Object.keys(computedStats)
+  });
+  
+  // Early return if no data
   if (messages.length === 0 || scores.length === 0) {
+    debugLog(`Early return - no data - Render #${renderNumber}`);
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -55,40 +140,60 @@ const AnalysisResults: React.FC = () => {
     );
   }
   
-  // ✅ ARCHITECTURAL FIX 5: Stable callback functions with proper dependencies
+  // ✅ DEBUG: Stable callbacks with logging
   const toggleExpanded = useCallback((index: number) => {
+    debugLog(`toggleExpanded called for index ${index}`);
     setExpandedMessages(prev => {
       const newSet = new Set(prev);
       if (newSet.has(index)) {
         newSet.delete(index);
+        debugLog(`Collapsed message ${index}`);
       } else {
         newSet.add(index);
+        debugLog(`Expanded message ${index}`);
       }
       return newSet;
     });
-  }, []); // ← Empty deps - function is stable
+  }, []); // Empty deps - should be stable
   
   const expandAll = useCallback(() => {
+    debugLog(`expandAll called - messages.length: ${messages.length}`);
     setExpandedMessages(new Set(Array.from({ length: messages.length }, (_, i) => i)));
-  }, [messages.length]); // ← Only depends on length, not messages array
+  }, [messages.length]);
   
   const collapseAll = useCallback(() => {
+    debugLog(`collapseAll called`);
     setExpandedMessages(new Set());
   }, []);
   
   const handleFilterChange = useCallback((value: FilterType) => {
+    debugLog(`Filter changed to: ${value}`);
     setFilterBy(value);
   }, []);
   
   const handleSortChange = useCallback((value: SortType) => {
+    debugLog(`Sort changed to: ${value}`);
     setSortBy(value);
   }, []);
   
-  // ✅ ARCHITECTURAL FIX 6: Memoized filtered messages with stable dependencies
+  // ✅ DEBUG: Memoized filtered messages with extensive logging
   const filteredMessages = useMemo(() => {
-    return messages.filter((_, index) => {
+    debugLog(`Computing filteredMessages - Render #${renderNumber}`, {
+      totalMessages: messages.length,
+      filterBy,
+      scoreCount: scores.length
+    });
+    
+    if (messages.length !== scores.length) {
+      debugWarn(`MISMATCH: messages.length (${messages.length}) !== scores.length (${scores.length})`);
+    }
+    
+    const filtered = messages.filter((_, index) => {
       const score = scores[index];
-      if (!score) return false;
+      if (!score) {
+        debugWarn(`Missing score for message index ${index}`);
+        return false;
+      }
       
       switch (filterBy) {
         case 'low':
@@ -99,37 +204,100 @@ const AnalysisResults: React.FC = () => {
           return true;
       }
     });
-  }, [messages, scores, filterBy]); // ← Stable dependencies
+    
+    debugLog(`Filtered ${filtered.length} messages from ${messages.length} total`);
+    return filtered;
+  }, [messages, scores, filterBy]);
   
-  // ✅ ARCHITECTURAL FIX 7: Memoized sorted messages 
+  // ✅ DEBUG: Memoized sorted messages with logging
   const sortedMessages = useMemo(() => {
+    debugLog(`Computing sortedMessages - Render #${renderNumber}`, {
+      filteredCount: filteredMessages.length,
+      sortBy
+    });
+    
     if (sortBy === 'index') {
-      return filteredMessages; // No sorting needed, return same reference
+      debugLog(`Returning filteredMessages unchanged (sortBy: index)`);
+      return filteredMessages;
     }
     
-    // Only create new array when actually sorting by score
-    return [...filteredMessages].sort((a, b) => {
+    debugLog(`Sorting by score...`);
+    const sorted = [...filteredMessages].sort((a, b) => {
       const aIndex = messages.indexOf(a);
       const bIndex = messages.indexOf(b);
       const aScore = scores[aIndex];
       const bScore = scores[bIndex];
+      
+      if (!aScore || !bScore) {
+        debugWarn(`Missing scores during sort: aScore=${!!aScore}, bScore=${!!bScore}`);
+        return 0;
+      }
+      
       return bScore.overall - aScore.overall;
     });
+    
+    debugLog(`Sorted ${sorted.length} messages by score`);
+    return sorted;
   }, [filteredMessages, sortBy, messages, scores]);
   
-  // ✅ ARCHITECTURAL FIX 8: Memoized dimensions array using stable computedStats
-  const dimensions = useMemo(() => [
-    { key: 'strategic', label: 'Strategic', value: computedStats.dimensionAverages.strategic },
-    { key: 'tactical', label: 'Tactical', value: computedStats.dimensionAverages.tactical },
-    { key: 'cognitive', label: 'Cognitive', value: computedStats.dimensionAverages.cognitive },
-    { key: 'innovation', label: 'Innovation', value: computedStats.dimensionAverages.innovation }
-  ], [computedStats.dimensionAverages]); // ← Stable reference from store
+  // ✅ DEBUG: Memoized dimensions with logging
+  const dimensions = useMemo(() => {
+    debugLog(`Computing dimensions - Render #${renderNumber}`, {
+      computedStatsRef: typeof computedStats,
+      hasAverages: !!computedStats.dimensionAverages
+    });
+    
+    if (!computedStats.dimensionAverages) {
+      debugWarn(`Missing dimensionAverages in computedStats!`, computedStats);
+      return [];
+    }
+    
+    const dims = [
+      { key: 'strategic', label: 'Strategic', value: computedStats.dimensionAverages.strategic },
+      { key: 'tactical', label: 'Tactical', value: computedStats.dimensionAverages.tactical },
+      { key: 'cognitive', label: 'Cognitive', value: computedStats.dimensionAverages.cognitive },
+      { key: 'innovation', label: 'Innovation', value: computedStats.dimensionAverages.innovation }
+    ];
+    
+    debugLog(`Created dimensions array`, dims.map(d => ({ key: d.key, value: d.value })));
+    return dims;
+  }, [computedStats.dimensionAverages]);
   
-  // ✅ ARCHITECTURAL FIX 9: Memoized message components list
+  // ✅ DEBUG: Message components with extensive logging
   const messageComponents = useMemo(() => {
-    return sortedMessages.map((message) => {
+    debugLog(`Computing messageComponents - Render #${renderNumber}`, {
+      sortedMessagesLength: sortedMessages.length,
+      expandedCount: expandedMessages.size
+    });
+    
+    // ✅ CRITICAL DEBUG: Check if toggleExpanded is changing
+    debugLog(`toggleExpanded function reference check`, {
+      functionType: typeof toggleExpanded,
+      functionString: toggleExpanded.toString().substring(0, 50) + '...'
+    });
+    
+    const components = sortedMessages.map((message, sortedIndex) => {
       const originalIndex = messages.indexOf(message);
       const score = scores[originalIndex];
+      
+      if (originalIndex === -1) {
+        debugWarn(`Message not found in original messages array!`, { 
+          sortedIndex, 
+          messageContent: message.content.substring(0, 50) 
+        });
+        return null;
+      }
+      
+      if (!score) {
+        debugWarn(`Missing score for originalIndex ${originalIndex}`);
+        return null;
+      }
+      
+      debugLog(`Creating MessageAnalysis ${sortedIndex} (original: ${originalIndex})`, {
+        messageRole: message.role,
+        scoreOverall: score.overall,
+        isExpanded: expandedMessages.has(originalIndex)
+      });
       
       return (
         <MessageAnalysis
@@ -141,11 +309,41 @@ const AnalysisResults: React.FC = () => {
           onToggle={toggleExpanded}
         />
       );
-    });
+    }).filter(Boolean); // Remove nulls
+    
+    debugLog(`Created ${components.length} MessageAnalysis components`);
+    return components;
   }, [sortedMessages, messages, scores, expandedMessages, toggleExpanded]);
+  
+  // ✅ DEBUG: Performance monitoring
+  useEffect(() => {
+    const endTime = performance.now();
+    debugLog(`Render #${renderNumber} completed in ${endTime - (window as any).renderStartTime || 0}ms`);
+  });
+  
+  // ✅ DEBUG: Start timing for next render
+  useEffect(() => {
+    (window as any).renderStartTime = performance.now();
+  });
+  
+  debugLog(`About to return JSX - Render #${renderNumber}`, {
+    totalComponents: messageComponents.length,
+    renderTime: performance.now()
+  });
   
   return (
     <div className="space-y-6">
+      {/* Debug info */}
+      {DEBUG_MODE && (
+        <div className="bg-yellow-50 border border-yellow-200 p-3 rounded text-sm">
+          <strong>DEBUG INFO:</strong> Render #{renderNumber} | 
+          Messages: {messages.length} | 
+          Scores: {scores.length} | 
+          Components: {messageComponents.length} |
+          Avg Score: {Math.round(computedStats.averageScore || 0)}
+        </div>
+      )}
+      
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
@@ -292,7 +490,6 @@ const AnalysisResults: React.FC = () => {
                       <ScoreBadge score={value} dimension={key as any} size="lg" />
                     </div>
                     
-                    {/* Individual message scores for this dimension */}
                     <div className="space-y-2">
                       <h4 className="text-sm font-medium">Message Breakdown</h4>
                       <div className="grid grid-cols-5 gap-1">
