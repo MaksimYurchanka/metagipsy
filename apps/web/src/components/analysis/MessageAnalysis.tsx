@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, User, Bot, Lightbulb, AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
