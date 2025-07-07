@@ -16,9 +16,9 @@ export class ConversationParser {
     const detectedPlatform = this.detectPlatform(text);
     
     switch (detectedPlatform) {
-      case 'claude':
+      case 'CLAUDE':
         return this.parseClaudeConversation(text);
-      case 'chatgpt':
+      case 'CHATGPT':
         return this.parseChatGPTConversation(text);
       default:
         return this.parseGenericConversation(text);
@@ -59,10 +59,11 @@ export class ConversationParser {
       if (pattern.test(text)) chatgptScore++;
     });
     
-    if (claudeScore > chatgptScore && claudeScore > 0) return 'claude';
-    if (chatgptScore > claudeScore && chatgptScore > 0) return 'chatgpt';
+    // FIXED: Return uppercase Platform values
+    if (claudeScore > chatgptScore && claudeScore > 0) return 'CLAUDE';
+    if (chatgptScore > claudeScore && chatgptScore > 0) return 'CHATGPT';
     
-    return 'other';
+    return 'OTHER';
   }
   
   /**
@@ -107,7 +108,7 @@ export class ConversationParser {
     
     return {
       messages,
-      platform: 'claude',
+      platform: 'CLAUDE', // FIXED: Return uppercase
       confidence: Math.max(0.1, confidence),
       metadata: {
         originalLength: text.length,
@@ -176,7 +177,7 @@ export class ConversationParser {
     
     return {
       messages,
-      platform: 'chatgpt',
+      platform: 'CHATGPT', // FIXED: Return uppercase
       confidence: Math.max(0.1, confidence),
       metadata: {
         originalLength: text.length,
@@ -211,7 +212,7 @@ export class ConversationParser {
     
     return {
       messages,
-      platform: 'other',
+      platform: 'OTHER', // FIXED: Return uppercase
       confidence: 0.3, // Low confidence for generic parsing
       metadata: {
         originalLength: text.length,
@@ -225,7 +226,7 @@ export class ConversationParser {
 // Function-based export that the routes expect
 export function parseConversation(
   messages: any[],
-  platform: string = 'auto'
+  platform: string = 'AUTO' // FIXED: Default to uppercase
 ): Message[] {
   // Handle array of messages (direct API input)
   if (Array.isArray(messages)) {

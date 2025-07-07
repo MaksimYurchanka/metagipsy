@@ -75,7 +75,7 @@ export interface Insight {
   metadata?: Record<string, any>;
 }
 
-export type Platform = 'claude' | 'chatgpt' | 'other' | 'auto';
+export type Platform = 'CLAUDE' | 'CHATGPT' | 'OTHER' | 'AUTO';
 
 export type UserTier = 'free' | 'pro' | 'enterprise';
 

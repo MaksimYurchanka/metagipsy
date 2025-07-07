@@ -4,14 +4,36 @@ import { logger } from '../lib/logger';
 import { SessionSummary, SessionMetadata, AnalysisPattern, Platform } from '../types';
 
 export class SessionService {
+  /**
+   * Helper method to normalize platform values to match Prisma enum
+   */
+  private normalizePlatform(platform?: string): Platform {
+    if (!platform) return 'OTHER';
+    
+    const platformMap: Record<string, Platform> = {
+      // Handle lowercase input (from frontend/parser)
+      'claude': 'CLAUDE',
+      'chatgpt': 'CHATGPT', 
+      'other': 'OTHER',
+      'auto': 'AUTO',
+      // Handle uppercase input (already correct)
+      'CLAUDE': 'CLAUDE',
+      'CHATGPT': 'CHATGPT',
+      'OTHER': 'OTHER',
+      'AUTO': 'AUTO'
+    };
+    
+    return platformMap[platform.toLowerCase()] || 'OTHER';
+  }
+
   async createSession(userId: string, metadata: SessionMetadata): Promise<string> {
     try {
       const session = await prisma.session.create({
         data: {
           userId,
-          // FIXED: Type cast platform and remove non-existent fields
-          platform: (metadata.platform as Platform) || 'other',
-          // FIXED: Store everything in metadata JSON field
+          // FIXED: Use helper function to normalize platform
+          platform: this.normalizePlatform(metadata.platform),
+          // Store all metadata in the JSON field
           metadata: {
             ...metadata,
             createdAt: new Date().toISOString()
@@ -28,12 +50,12 @@ export class SessionService {
   }
 
   async updateSession(
+    userId: string,
     sessionId: string, 
-    userId: string, 
     summary: SessionSummary
   ): Promise<void> {
     try {
-      // FIXED: Store everything in metadata instead of non-existent fields
+      // Store everything in metadata instead of non-existent fields
       const updatedMetadata = {
         messageCount: summary.messageCount,
         overallScore: summary.overallScore,
@@ -53,7 +75,7 @@ export class SessionService {
           userId // Ensure user owns the session
         },
         data: {
-          // FIXED: Only update existing fields
+          // Only update existing fields
           status: 'COMPLETED' as any,
           metadata: updatedMetadata as any
         }
@@ -83,7 +105,7 @@ export class SessionService {
         include: {
           messages: {
             include: {
-              // FIXED: Changed 'scores' to 'score' (singular, matches schema)
+              // Changed 'scores' to 'score' (singular, matches schema)
               score: true
             },
             orderBy: {
@@ -97,7 +119,7 @@ export class SessionService {
         throw new Error('Session not found');
       }
 
-      // FIXED: Enhance session object with metadata properties for backward compatibility
+      // Enhance session object with metadata properties for backward compatibility
       const metadata = (session.metadata as any) || {};
       
       return {
@@ -135,7 +157,7 @@ export class SessionService {
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
-        // FIXED: Only select existing fields
+        // Only select existing fields
         select: {
           id: true,
           platform: true,
@@ -150,7 +172,7 @@ export class SessionService {
         where: { userId }
       });
 
-      // FIXED: Transform sessions to include metadata properties
+      // Transform sessions to include metadata properties
       const transformedSessions = sessions.map(session => {
         const metadata = (session.metadata as any) || {};
         return {
@@ -205,10 +227,8 @@ export class SessionService {
           createdAt: {
             gte: since
           },
-          // FIXED: Remove non-existent completedAt field check
           status: 'COMPLETED'
         },
-        // FIXED: Only select existing fields
         select: {
           createdAt: true,
           platform: true,
@@ -234,7 +254,7 @@ export class SessionService {
         };
       }
 
-      // FIXED: Extract data from metadata
+      // Extract data from metadata
       const sessionsWithMetadata = sessions.map(session => {
         const metadata = (session.metadata as any) || {};
         return {

@@ -40,7 +40,7 @@ router.post('/',
       // Parse and validate messages
       const messages = parseConversation(
         conversation.messages,
-        conversation.platform || 'auto'
+        conversation.platform || 'AUTO'
       );
 
       if (messages.length === 0) {
@@ -53,7 +53,7 @@ router.post('/',
       let sessionId: string | undefined;
       if (req.user) {
         sessionId = await sessionService.createSession(req.user.id, {
-          platform: conversation.platform || 'auto',
+          platform: conversation.platform || 'AUTO',
           projectContext: options.projectContext,
           sessionGoal: options.sessionGoal
         });
