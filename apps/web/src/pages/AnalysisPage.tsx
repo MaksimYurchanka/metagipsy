@@ -1,61 +1,40 @@
 import React from 'react';
+import ConversationInput from '@/components/analysis/ConversationInput';
 
-// 🚨 ULTRA MINIMAL - NO COMPONENT IMPORTS AT ALL
+// 🧪 TEST: Only ConversationInput import and usage
 const AnalysisPage: React.FC = () => {
-  console.log('🔥 ULTRA MINIMAL ANALYSIS PAGE: Starting render...');
+  console.log('🧪 TESTING: ConversationInput only...');
+
+  const handleAnalyze = (messages: any[]) => {
+    console.log('📥 Analysis requested:', messages);
+  };
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-8">
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="text-center">
           <h1 className="text-4xl font-bold mb-4">
-            🎯 MetaGipsy OWL Chess Engine
+            🧪 Testing ConversationInput Only
           </h1>
           <p className="text-xl text-slate-400">
-            Ultra Minimal Test - No Component Imports
+            If this loads without errors, ConversationInput is safe
           </p>
         </div>
         
-        <div className="bg-red-600 p-8 rounded-lg text-center">
-          <h2 className="text-2xl font-bold mb-4">
-            🚨 ULTRA MINIMAL ANALYSIS PAGE
-          </h2>
-          <p className="text-lg mb-4">
-            If you see this RED box, AnalysisPage itself works.
-          </p>
-          <div className="text-sm space-y-2">
-            <p>✅ No ConversationInput import</p>
-            <p>✅ No AnalysisResults import</p>
-            <p>✅ No MessageAnalysis import</p>
-            <p>✅ No store access</p>
-            <p>✅ No complex logic</p>
-            <p>✅ No array operations</p>
-          </div>
-        </div>
-
-        <div className="bg-slate-800 p-6 rounded-lg">
-          <h3 className="text-lg font-semibold mb-4">🔍 Debug Analysis:</h3>
-          <div className="space-y-2 text-sm">
-            <p><strong>If RED box appears:</strong> AnalysisPage works, issue is in imported components</p>
-            <p><strong>If still crashes:</strong> Issue is in routing, Layout, or App.tsx</p>
-            <p><strong>Most Likely Culprits:</strong></p>
-            <ul className="list-disc list-inside ml-4 space-y-1">
-              <li>MessageAnalysis.tsx (has .map() calls)</li>
-              <li>ConversationInput.tsx (might have arrays)</li>
-              <li>Layout.tsx navigation (might have inline arrays)</li>
-              <li>Store subscription causing loops</li>
-            </ul>
-          </div>
-        </div>
-
         <div className="bg-blue-600 p-6 rounded-lg">
-          <h3 className="text-lg font-semibold mb-2">📋 Next Steps:</h3>
-          <ol className="list-decimal list-inside space-y-1 text-sm">
-            <li>Deploy this ultra minimal version</li>
-            <li>Report if you see RED box or still get error</li>
-            <li>If RED box works, we'll add components one by one</li>
-            <li>If still crashes, we'll check Layout/routing</li>
-          </ol>
+          <h2 className="text-xl font-bold mb-4">
+            🔍 ConversationInput Test
+          </h2>
+          <ConversationInput 
+            onAnalyze={handleAnalyze}
+            isAnalyzing={false}
+          />
+        </div>
+
+        <div className="bg-yellow-600 p-4 rounded-lg text-center">
+          <p><strong>Expected Result:</strong></p>
+          <p>✅ Page loads → ConversationInput is NOT the problem</p>
+          <p>❌ Still crashes → ConversationInput contains the infinite loop</p>
         </div>
       </div>
     </div>
