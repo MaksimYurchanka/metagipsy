@@ -1,65 +1,99 @@
 import React from 'react';
+import { useDisplaySettings } from '@/stores/settingsStore';
+import { useAnalysisSettings } from '@/stores/settingsStore';
 
-// 🚨 ULTRA MINIMAL - NO COMPONENT IMPORTS AT ALL
+// 🔍 STORE ISOLATION TEST - Test if store subscriptions cause crashes
 const AnalysisPage: React.FC = () => {
-  console.log('🔥 ULTRA MINIMAL ANALYSIS PAGE: Starting render...');
+  console.log('🔍 STORE TEST: Starting store subscription test...');
 
-  return (
-    <div className="min-h-screen bg-slate-900 text-white p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold mb-4">
-            🎯 MetaGipsy OWL Chess Engine
-          </h1>
-          <p className="text-xl text-slate-400">
-            Ultra Minimal Test - No Component Imports
-          </p>
-        </div>
-        
-        <div className="bg-red-600 p-8 rounded-lg text-center">
-          <h2 className="text-2xl font-bold mb-4">
-            🚨 ULTRA MINIMAL ANALYSIS PAGE
-          </h2>
-          <p className="text-lg mb-4">
-            If you see this RED box, AnalysisPage itself works.
-          </p>
-          <div className="text-sm space-y-2">
-            <p>✅ No ConversationInput import</p>
-            <p>✅ No AnalysisResults import</p>
-            <p>✅ No MessageAnalysis import</p>
-            <p>✅ No store access</p>
-            <p>✅ No complex logic</p>
-            <p>✅ No array operations</p>
+  try {
+    console.log('🔍 STORE TEST: About to subscribe to useDisplaySettings...');
+    const displaySettings = useDisplaySettings();
+    console.log('✅ STORE TEST: useDisplaySettings successful:', displaySettings);
+
+    console.log('🔍 STORE TEST: About to subscribe to useAnalysisSettings...');
+    const analysisSettings = useAnalysisSettings();
+    console.log('✅ STORE TEST: useAnalysisSettings successful:', analysisSettings);
+
+    console.log('🔍 STORE TEST: Both store subscriptions completed successfully');
+
+    return (
+      <div className="min-h-screen bg-slate-900 text-white p-8">
+        <div className="max-w-4xl mx-auto space-y-8">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold mb-4">
+              🔍 Store Subscription Test
+            </h1>
+            <p className="text-xl text-slate-400">
+              Testing if Zustand store subscriptions cause infinite loops
+            </p>
           </div>
-        </div>
-
-        <div className="bg-slate-800 p-6 rounded-lg">
-          <h3 className="text-lg font-semibold mb-4">🔍 Debug Analysis:</h3>
-          <div className="space-y-2 text-sm">
-            <p><strong>If RED box appears:</strong> AnalysisPage works, issue is in imported components</p>
-            <p><strong>If still crashes:</strong> Issue is in routing, Layout, or App.tsx</p>
-            <p><strong>Most Likely Culprits:</strong></p>
-            <ul className="list-disc list-inside ml-4 space-y-1">
-              <li>MessageAnalysis.tsx (has .map() calls)</li>
-              <li>ConversationInput.tsx (might have arrays)</li>
-              <li>Layout.tsx navigation (might have inline arrays)</li>
-              <li>Store subscription causing loops</li>
-            </ul>
+          
+          <div className="bg-green-600 p-6 rounded-lg">
+            <h2 className="text-2xl font-bold mb-4">
+              ✅ STORE TEST SUCCESSFUL
+            </h2>
+            <p className="text-lg mb-4">
+              Both store subscriptions work without crashing!
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-green-700 p-4 rounded">
+                <h3 className="font-bold mb-2">Display Settings:</h3>
+                <pre className="text-sm overflow-auto">
+                  {JSON.stringify(displaySettings, null, 2)}
+                </pre>
+              </div>
+              
+              <div className="bg-green-700 p-4 rounded">
+                <h3 className="font-bold mb-2">Analysis Settings:</h3>
+                <pre className="text-sm overflow-auto">
+                  {JSON.stringify(analysisSettings, null, 2)}
+                </pre>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="bg-blue-600 p-6 rounded-lg">
-          <h3 className="text-lg font-semibold mb-2">📋 Next Steps:</h3>
-          <ol className="list-decimal list-inside space-y-1 text-sm">
-            <li>Deploy this ultra minimal version</li>
-            <li>Report if you see RED box or still get error</li>
-            <li>If RED box works, we'll add components one by one</li>
-            <li>If still crashes, we'll check Layout/routing</li>
-          </ol>
+          <div className="bg-blue-600 p-4 rounded-lg text-center">
+            <h3 className="text-lg font-semibold mb-2">🎯 Test Conclusion:</h3>
+            <p><strong>✅ SUCCESS:</strong> Store subscriptions are NOT the problem</p>
+            <p><strong>Next Test:</strong> ScoreBadge component isolation</p>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+    
+  } catch (error) {
+    console.error('🚨 STORE TEST: Store subscription failed:', error);
+    
+    return (
+      <div className="min-h-screen bg-red-900 text-white p-8">
+        <div className="max-w-4xl mx-auto space-y-8">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold mb-4">
+              🚨 Store Test Failed
+            </h1>
+            <p className="text-xl">
+              Store subscriptions are causing the infinite loop!
+            </p>
+          </div>
+          
+          <div className="bg-red-800 p-6 rounded-lg">
+            <h2 className="text-xl font-bold mb-4">Error Details:</h2>
+            <pre className="text-sm bg-red-900 p-4 rounded overflow-auto">
+              {error?.toString()}
+            </pre>
+          </div>
+
+          <div className="bg-yellow-600 p-4 rounded-lg text-center">
+            <h3 className="text-lg font-semibold mb-2">🎯 Root Cause Found:</h3>
+            <p><strong>STORE SUBSCRIPTIONS</strong> are causing React Error #185</p>
+            <p><strong>Next Action:</strong> Fix Zustand store configuration</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 };
 
 export default AnalysisPage;
