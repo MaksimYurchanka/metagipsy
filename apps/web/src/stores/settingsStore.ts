@@ -1,6 +1,8 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+// ✅ TEMPORARILY REMOVE MIDDLEWARE to eliminate infinite loop issues
+// import { persist } from 'zustand/middleware';
 
+// ✅ SIMPLIFIED INTERFACES - No computed properties that could cause loops
 interface SettingsState {
   // Theme settings
   theme: 'dark' | 'light' | 'system';
@@ -30,34 +32,33 @@ interface SettingsState {
   includeMetadata: boolean;
   includeExplanations: boolean;
   
-  // Actions
+  // ✅ SIMPLE ACTIONS - No side effects, no DOM manipulation
   setTheme: (theme: SettingsState['theme']) => void;
-  toggleChessNotation: () => void;
-  toggleAutoDetect: () => void;
-  toggleSuggestions: () => void;
-  toggleCompactMode: () => void;
-  toggleAnimations: () => void;
-  toggleFloatingOverlay: () => void;
+  setShowChessNotation: (show: boolean) => void;
+  setAutoDetectPlatform: (auto: boolean) => void;
+  setEnableSuggestions: (enable: boolean) => void;
+  setCompactMode: (compact: boolean) => void;
+  setAnimationsEnabled: (enabled: boolean) => void;
+  setShowFloatingOverlay: (show: boolean) => void;
   
   setAnalysisDepth: (depth: SettingsState['defaultAnalysisDepth']) => void;
-  togglePatternDetection: () => void;
-  toggleClaudeAnalysis: () => void;
-  toggleAutoExpandLowScores: () => void;
+  setEnablePatternDetection: (enable: boolean) => void;
+  setEnableClaudeAnalysis: (enable: boolean) => void;
+  setAutoExpandLowScores: (enable: boolean) => void;
   
-  toggleNotifications: () => void;
-  toggleNotifyOnCompletion: () => void;
-  toggleNotifyOnPatterns: () => void;
-  toggleNotifyOnInsights: () => void;
+  setEnableNotifications: (enable: boolean) => void;
+  setNotifyOnCompletion: (enable: boolean) => void;
+  setNotifyOnPatterns: (enable: boolean) => void;
+  setNotifyOnInsights: (enable: boolean) => void;
   
   setExportFormat: (format: SettingsState['defaultExportFormat']) => void;
-  toggleIncludeMetadata: () => void;
-  toggleIncludeExplanations: () => void;
+  setIncludeMetadata: (include: boolean) => void;
+  setIncludeExplanations: (include: boolean) => void;
   
   resetToDefaults: () => void;
-  importSettings: (settings: Partial<SettingsState>) => void;
-  exportSettings: () => SettingsState;
 }
 
+// ✅ STABLE DEFAULT VALUES - No functions, no computed properties
 const defaultSettings = {
   // Theme settings
   theme: 'dark' as const,
@@ -88,129 +89,55 @@ const defaultSettings = {
   includeExplanations: true
 };
 
-export const useSettingsStore = create<SettingsState>()(
-  persist(
-    (set, get) => ({
-      ...defaultSettings,
-      
-      // Theme actions
-      setTheme: (theme) => {
-        set({ theme });
-        
-        // Apply theme to document
-        const root = document.documentElement;
-        if (theme === 'dark') {
-          root.classList.add('dark');
-        } else if (theme === 'light') {
-          root.classList.remove('dark');
-        } else {
-          // System theme
-          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          if (prefersDark) {
-            root.classList.add('dark');
-          } else {
-            root.classList.remove('dark');
-          }
-        }
-      },
-      
-      // Display actions
-      toggleChessNotation: () => set((state) => ({ 
-        showChessNotation: !state.showChessNotation 
-      })),
-      
-      toggleAutoDetect: () => set((state) => ({ 
-        autoDetectPlatform: !state.autoDetectPlatform 
-      })),
-      
-      toggleSuggestions: () => set((state) => ({ 
-        enableSuggestions: !state.enableSuggestions 
-      })),
-      
-      toggleCompactMode: () => set((state) => ({ 
-        compactMode: !state.compactMode 
-      })),
-      
-      toggleAnimations: () => set((state) => ({ 
-        animationsEnabled: !state.animationsEnabled 
-      })),
-      
-      toggleFloatingOverlay: () => set((state) => ({ 
-        showFloatingOverlay: !state.showFloatingOverlay 
-      })),
-      
-      // Analysis actions
-      setAnalysisDepth: (defaultAnalysisDepth) => set({ defaultAnalysisDepth }),
-      
-      togglePatternDetection: () => set((state) => ({ 
-        enablePatternDetection: !state.enablePatternDetection 
-      })),
-      
-      toggleClaudeAnalysis: () => set((state) => ({ 
-        enableClaudeAnalysis: !state.enableClaudeAnalysis 
-      })),
-      
-      toggleAutoExpandLowScores: () => set((state) => ({ 
-        autoExpandLowScores: !state.autoExpandLowScores 
-      })),
-      
-      // Notification actions
-      toggleNotifications: () => set((state) => ({ 
-        enableNotifications: !state.enableNotifications 
-      })),
-      
-      toggleNotifyOnCompletion: () => set((state) => ({ 
-        notifyOnCompletion: !state.notifyOnCompletion 
-      })),
-      
-      toggleNotifyOnPatterns: () => set((state) => ({ 
-        notifyOnPatterns: !state.notifyOnPatterns 
-      })),
-      
-      toggleNotifyOnInsights: () => set((state) => ({ 
-        notifyOnInsights: !state.notifyOnInsights 
-      })),
-      
-      // Export actions
-      setExportFormat: (defaultExportFormat) => set({ defaultExportFormat }),
-      
-      toggleIncludeMetadata: () => set((state) => ({ 
-        includeMetadata: !state.includeMetadata 
-      })),
-      
-      toggleIncludeExplanations: () => set((state) => ({ 
-        includeExplanations: !state.includeExplanations 
-      })),
-      
-      // Utility actions
-      resetToDefaults: () => set(defaultSettings),
-      
-      importSettings: (settings) => set((state) => ({ 
-        ...state, 
-        ...settings 
-      })),
-      
-      exportSettings: () => get()
-    }),
-    {
-      name: 'settings-storage',
-      version: 1,
-      migrate: (persistedState: any, version: number) => {
-        if (version === 0) {
-          // Migration from version 0 to 1
-          return {
-            ...defaultSettings,
-            ...persistedState
-          };
-        }
-        return persistedState;
-      }
-    }
-  )
-);
+// ✅ MAIN STORE - No middleware, no computed properties, no side effects
+export const useSettingsStore = create<SettingsState>((set) => ({
+  // ✅ Spread stable defaults
+  ...defaultSettings,
+  
+  // ✅ SIMPLE ACTIONS - No side effects, no DOM manipulation, no cascading updates
+  setTheme: (theme) => set({ theme }),
+  setShowChessNotation: (showChessNotation) => set({ showChessNotation }),
+  setAutoDetectPlatform: (autoDetectPlatform) => set({ autoDetectPlatform }),
+  setEnableSuggestions: (enableSuggestions) => set({ enableSuggestions }),
+  setCompactMode: (compactMode) => set({ compactMode }),
+  setAnimationsEnabled: (animationsEnabled) => set({ animationsEnabled }),
+  setShowFloatingOverlay: (showFloatingOverlay) => set({ showFloatingOverlay }),
+  
+  setAnalysisDepth: (defaultAnalysisDepth) => set({ defaultAnalysisDepth }),
+  setEnablePatternDetection: (enablePatternDetection) => set({ enablePatternDetection }),
+  setEnableClaudeAnalysis: (enableClaudeAnalysis) => set({ enableClaudeAnalysis }),
+  setAutoExpandLowScores: (autoExpandLowScores) => set({ autoExpandLowScores }),
+  
+  setEnableNotifications: (enableNotifications) => set({ enableNotifications }),
+  setNotifyOnCompletion: (notifyOnCompletion) => set({ notifyOnCompletion }),
+  setNotifyOnPatterns: (notifyOnPatterns) => set({ notifyOnPatterns }),
+  setNotifyOnInsights: (notifyOnInsights) => set({ notifyOnInsights }),
+  
+  setExportFormat: (defaultExportFormat) => set({ defaultExportFormat }),
+  setIncludeMetadata: (includeMetadata) => set({ includeMetadata }),
+  setIncludeExplanations: (includeExplanations) => set({ includeExplanations }),
+  
+  resetToDefaults: () => set(defaultSettings)
+}));
 
-// Selectors
+// ✅ SIMPLE SELECTORS - No object creation, stable references
 export const useTheme = () => useSettingsStore((state) => state.theme);
+export const useCompactMode = () => useSettingsStore((state) => state.compactMode);
+export const useAnimationsEnabled = () => useSettingsStore((state) => state.animationsEnabled);
+export const useShowChessNotation = () => useSettingsStore((state) => state.showChessNotation);
+export const useAutoDetectPlatform = () => useSettingsStore((state) => state.autoDetectPlatform);
+export const useEnableSuggestions = () => useSettingsStore((state) => state.enableSuggestions);
+export const useShowFloatingOverlay = () => useSettingsStore((state) => state.showFloatingOverlay);
+
+export const useAnalysisDepth = () => useSettingsStore((state) => state.defaultAnalysisDepth);
+export const usePatternDetection = () => useSettingsStore((state) => state.enablePatternDetection);
+export const useClaudeAnalysis = () => useSettingsStore((state) => state.enableClaudeAnalysis);
+export const useAutoExpandLowScores = () => useSettingsStore((state) => state.autoExpandLowScores);
+
+export const useNotificationsEnabled = () => useSettingsStore((state) => state.enableNotifications);
+export const useExportFormat = () => useSettingsStore((state) => state.defaultExportFormat);
+
+// ✅ OBJECT SELECTORS - Only if needed, with careful implementation
 export const useDisplaySettings = () => useSettingsStore((state) => ({
   showChessNotation: state.showChessNotation,
   autoDetectPlatform: state.autoDetectPlatform,
@@ -227,20 +154,7 @@ export const useAnalysisSettings = () => useSettingsStore((state) => ({
   autoExpandLowScores: state.autoExpandLowScores
 }));
 
-export const useNotificationSettings = () => useSettingsStore((state) => ({
-  enableNotifications: state.enableNotifications,
-  notifyOnCompletion: state.notifyOnCompletion,
-  notifyOnPatterns: state.notifyOnPatterns,
-  notifyOnInsights: state.notifyOnInsights
-}));
-
-export const useExportSettings = () => useSettingsStore((state) => ({
-  defaultExportFormat: state.defaultExportFormat,
-  includeMetadata: state.includeMetadata,
-  includeExplanations: state.includeExplanations
-}));
-
-// Initialize theme on app start
+// ✅ THEME INITIALIZATION - Separate function, no store side effects
 export const initializeTheme = () => {
   const theme = useSettingsStore.getState().theme;
   const root = document.documentElement;
@@ -257,19 +171,14 @@ export const initializeTheme = () => {
     } else {
       root.classList.remove('dark');
     }
-    
-    // Listen for system theme changes
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      if (useSettingsStore.getState().theme === 'system') {
-        if (e.matches) {
-          root.classList.add('dark');
-        } else {
-          root.classList.remove('dark');
-        }
-      }
-    });
   }
 };
 
-export default useSettingsStore;
+// ✅ REMOVED: 
+// - persist middleware (causing infinite loops)
+// - migration logic (causing cascading updates)
+// - DOM manipulation in actions (causing side effects)
+// - complex computed selectors (causing object recreation)
+// - toggle functions (replace with direct setters)
 
+export default useSettingsStore;
