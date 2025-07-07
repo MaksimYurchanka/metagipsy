@@ -8,11 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import ScoreBadge from '@/components/common/ScoreBadge';
 import { MessageAnalysisProps } from '@/types';
 import { cn, getDimensionIcon, getDimensionColor, formatTimestamp } from '@/lib/utils';
-import { 
-  useCompactMode, 
-  useAnimationsEnabled, 
-  useAutoExpandLowScores 
-} from '@/stores/settingsStore';
+import { useDisplaySettings } from '@/stores/settingsStore';
 
 const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
   message,
@@ -24,10 +20,14 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
   // ✅ ARCHITECTURAL FIX 1: Simplified local state (only when no parent control)
   const [localExpanded, setLocalExpanded] = useState(isExpanded);
   
-  // ✅ FIXED: Use individual selectors instead of useDisplaySettings
-  const compactMode = useCompactMode();
-  const animationsEnabled = useAnimationsEnabled();
-  const autoExpandLowScores = useAutoExpandLowScores();
+  // ✅ ARCHITECTURAL FIX 2: Single, stable settings subscription
+  const displaySettings = useDisplaySettings((state) => ({
+    compactMode: state.compactMode,
+    animationsEnabled: state.animationsEnabled,
+    autoExpandLowScores: state.autoExpandLowScores
+  }));
+  
+  const { compactMode, animationsEnabled, autoExpandLowScores } = displaySettings;
   
   // ✅ ARCHITECTURAL FIX 3: Determine final expanded state with auto-expand logic
   const shouldAutoExpand = autoExpandLowScores && score.overall < 60;
