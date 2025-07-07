@@ -62,13 +62,14 @@ const AnalysisPage: React.FC = () => {
     }
   };
 
-  // Simulate analysis for demo purposes
+  // FIXED: Simulate analysis without infinite loop
   const simulateAnalysis = async (messages: Message[]) => {
     const scores = [];
     
+    // Generate all scores first
     for (let i = 0; i < messages.length; i++) {
       // Simulate processing delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       // Generate mock score
       const baseScore = 50 + Math.random() * 40; // 50-90 range
@@ -88,11 +89,13 @@ const AnalysisPage: React.FC = () => {
       };
       
       scores.push(score);
-      setProgress({ current: i + 1, total: messages.length });
       
-      // Update scores incrementally for real-time feel
-      setScores([...scores]);
+      // Update progress only
+      setProgress({ current: i + 1, total: messages.length });
     }
+
+    // FIXED: Set all scores at once to prevent infinite loop
+    setScores(scores);
 
     // Set session metadata
     setSessionMetadata({
@@ -115,12 +118,12 @@ const AnalysisPage: React.FC = () => {
         cognitive: Math.round(scores.reduce((sum, s) => sum + s.dimensions.cognitive, 0) / scores.length),
         innovation: Math.round(scores.reduce((sum, s) => sum + s.dimensions.innovation, 0) / scores.length)
       },
-      patterns: [],
-      insights: []
+      patterns: generateMockPatterns(scores),
+      insights: generateMockInsights(scores, messages)
     };
 
     setSessionSummary(summary);
-    toast.success('Analysis completed successfully!');
+    toast.success('Analysis completed successfully! 🎯');
   };
 
   const getClassification = (score: number): any => {
@@ -147,19 +150,25 @@ const AnalysisPage: React.FC = () => {
         "Excellent strategic thinking with clear goal alignment.",
         "Strong tactical approach with specific examples.",
         "Well-structured request with appropriate context.",
-        "Creative problem-solving with innovative perspective."
+        "Creative problem-solving with innovative perspective.",
+        "Clear communication with actionable specificity.",
+        "Optimal use of AI capabilities and context."
       ],
       medium: [
         "Good approach but could be more specific.",
         "Solid foundation with room for improvement.",
         "Clear intent but lacks some tactical details.",
-        "Reasonable request with adequate context."
+        "Reasonable request with adequate context.",
+        "Decent communication with minor optimization opportunities.",
+        "Functional but not maximizing potential effectiveness."
       ],
       low: [
         "Lacks clarity and specific direction.",
         "Too vague to provide effective assistance.",
         "Missing important context for optimal response.",
-        "Could benefit from more strategic thinking."
+        "Could benefit from more strategic thinking.",
+        "Unclear goals and desired outcomes.",
+        "Needs better structure and specificity."
       ]
     };
 
@@ -177,10 +186,104 @@ const AnalysisPage: React.FC = () => {
       "Provide more context about your project or situation.",
       "Break down complex requests into smaller, focused questions.",
       "Include examples or specific use cases to clarify your needs.",
-      "State your experience level to get appropriately tailored advice."
+      "State your experience level to get appropriately tailored advice.",
+      "Define success criteria for what you want to achieve.",
+      "Specify the format or structure you want in the response.",
+      "Include relevant background information or previous attempts."
     ];
 
     return suggestions[Math.floor(Math.random() * suggestions.length)];
+  };
+
+  // Generate mock patterns based on scores
+  const generateMockPatterns = (scores: any[]) => {
+    const patterns = [];
+    
+    // Check for momentum pattern
+    let consecutive = 0;
+    for (let i = 1; i < scores.length; i++) {
+      if (scores[i].overall > scores[i-1].overall) {
+        consecutive++;
+      } else {
+        if (consecutive >= 2) {
+          patterns.push({
+            type: 'momentum',
+            name: 'Building Momentum',
+            startIndex: i - consecutive - 1,
+            endIndex: i - 1,
+            confidence: 0.85,
+            description: `Detected ${consecutive + 1} consecutive improvements showing positive momentum`
+          });
+        }
+        consecutive = 0;
+      }
+    }
+    
+    // Check for high performance pattern
+    const highScores = scores.filter(s => s.overall >= 75).length;
+    if (highScores / scores.length > 0.6) {
+      patterns.push({
+        type: 'excellence',
+        name: 'Consistent Excellence',
+        startIndex: 0,
+        endIndex: scores.length - 1,
+        confidence: 0.9,
+        description: `${Math.round(highScores / scores.length * 100)}% of messages scored above 75 points`
+      });
+    }
+    
+    return patterns;
+  };
+
+  // Generate mock insights based on analysis
+  const generateMockInsights = (scores: any[], messages: Message[]) => {
+    const insights = [];
+    const avgScore = scores.reduce((sum, s) => sum + s.overall, 0) / scores.length;
+    
+    // Overall performance insight
+    if (avgScore >= 75) {
+      insights.push({
+        type: 'celebration',
+        title: 'Excellent Communication Quality',
+        description: 'Your conversation demonstrates strong strategic thinking and clear communication patterns.',
+        priority: 'medium',
+        actionable: false
+      });
+    } else if (avgScore < 50) {
+      insights.push({
+        type: 'improvement',
+        title: 'Communication Enhancement Opportunity',
+        description: 'Consider being more specific and providing clearer context in your requests.',
+        priority: 'high',
+        actionable: true
+      });
+    }
+    
+    // Pattern-based insights
+    const lowScores = scores.filter(s => s.overall < 40).length;
+    if (lowScores > 0) {
+      insights.push({
+        type: 'warning',
+        title: 'Optimization Opportunities Detected',
+        description: `${lowScores} messages could benefit from improved structure and clarity.`,
+        priority: 'medium',
+        actionable: true
+      });
+    }
+    
+    // Positive feedback
+    const brilliantMoves = scores.filter(s => s.overall >= 80).length;
+    if (brilliantMoves > 0) {
+      insights.push({
+        type: 'celebration',
+        title: 'Brilliant Moves Identified',
+        description: `${brilliantMoves} messages demonstrated exceptional strategic thinking!`,
+        priority: 'low',
+        actionable: false
+      });
+    }
+    
+    return insights;
   };
 
   return (
@@ -281,4 +384,3 @@ const AnalysisPage: React.FC = () => {
 };
 
 export default AnalysisPage;
-
