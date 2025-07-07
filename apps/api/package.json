@@ -5,18 +5,24 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "npx prisma generate && npx prisma migrate deploy && tsc",
     "start": "node dist/index.js",
+    "postinstall": "npx prisma generate",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "type-check": "tsc --noEmit",
+    "clean": "rimraf dist",
+    "prebuild": "npm run clean"
   },
-  "keywords": ["ai", "conversation", "analysis", "chess", "scoring"],
+  "keywords": ["ai", "conversation", "analysis", "chess", "scoring", "metagipsy", "anthropic", "claude"],
   "author": "MetaGipsy Team",
   "license": "MIT",
   "dependencies": {
@@ -36,7 +42,10 @@
     "morgan": "^1.10.0",
     "socket.io": "^4.7.4",
     "winston": "^3.11.0",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "uuid": "^9.0.1",
+    "lodash": "^4.17.21",
+    "date-fns": "^3.0.6"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -47,6 +56,8 @@
     "@types/jsonwebtoken": "^9.0.5",
     "@types/morgan": "^1.9.9",
     "@types/node": "^20.10.0",
+    "@types/uuid": "^9.0.7",
+    "@types/lodash": "^4.14.202",
     "@typescript-eslint/eslint-plugin": "^6.13.1",
     "@typescript-eslint/parser": "^6.13.1",
     "eslint": "^8.54.0",
@@ -54,9 +65,26 @@
     "prisma": "^5.7.1",
     "ts-jest": "^29.1.1",
     "tsx": "^4.6.0",
-    "typescript": "^5.3.2"
+    "typescript": "^5.3.2",
+    "rimraf": "^5.0.5"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "roots": ["<rootDir>/src", "<rootDir>/tests"],
+    "testMatch": ["**/__tests__/**/*.ts", "**/?(*.)+(spec|test).ts"],
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/**/*.d.ts",
+      "!src/index.ts"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["text", "lcov", "html"]
   }
 }
