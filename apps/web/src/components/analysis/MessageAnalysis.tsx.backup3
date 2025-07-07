@@ -10,14 +10,6 @@ import { MessageAnalysisProps } from '@/types';
 import { cn, getDimensionIcon, getDimensionColor, formatTimestamp } from '@/lib/utils';
 import { useDisplaySettings } from '@/stores/settingsStore';
 
-// ✅ MOVE DIMENSIONS TEMPLATE OUTSIDE COMPONENT - Prevent recreation
-const DIMENSION_TEMPLATE = [
-  { key: 'strategic', label: 'Strategic' },
-  { key: 'tactical', label: 'Tactical' },
-  { key: 'cognitive', label: 'Cognitive' },
-  { key: 'innovation', label: 'Innovation' }
-] as const;
-
 const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
   message,
   score,
@@ -25,10 +17,10 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
   isExpanded = false,
   onToggle
 }) => {
-  // ✅ Simplified local state
+  // ✅ ARCHITECTURAL FIX 1: Simplified local state (only when no parent control)
   const [localExpanded, setLocalExpanded] = useState(isExpanded);
   
-  // ✅ Single, stable settings subscription
+  // ✅ ARCHITECTURAL FIX 2: Single, stable settings subscription
   const displaySettings = useDisplaySettings((state) => ({
     compactMode: state.compactMode,
     animationsEnabled: state.animationsEnabled,
@@ -37,11 +29,11 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
   
   const { compactMode, animationsEnabled, autoExpandLowScores } = displaySettings;
   
-  // ✅ Determine final expanded state
+  // ✅ ARCHITECTURAL FIX 3: Determine final expanded state with auto-expand logic
   const shouldAutoExpand = autoExpandLowScores && score.overall < 60;
   const finalExpanded = onToggle ? isExpanded : (shouldAutoExpand || localExpanded);
   
-  // ✅ Stable toggle function
+  // ✅ ARCHITECTURAL FIX 4: Stable toggle function
   const handleToggle = useCallback(() => {
     if (onToggle) {
       onToggle(index);
@@ -50,7 +42,7 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
     }
   }, [onToggle, index]);
   
-  // ✅ Memoized role styling - prevent recalculation
+  // ✅ ARCHITECTURAL FIX 5: Memoized role styling (prevent recalculation)
   const roleStyles = useMemo(() => {
     const isUser = message.role === 'user';
     return {
@@ -60,44 +52,15 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
     };
   }, [message.role]);
   
-  // ✅ FIXED: Memoized dimensions using template + stable dependencies
-  const dimensions = useMemo(() => {
-    return DIMENSION_TEMPLATE.map(template => ({
-      ...template,
-      value: score.dimensions[template.key]
-    }));
-  }, [
-    score.dimensions.strategic,
-    score.dimensions.tactical,
-    score.dimensions.cognitive,
-    score.dimensions.innovation
-  ]); // ✅ Explicit dependencies instead of entire object
+  // ✅ ARCHITECTURAL FIX 6: Memoized dimensions array (stable reference)
+  const dimensions = useMemo(() => [
+    { key: 'strategic', label: 'Strategic', value: score.dimensions.strategic },
+    { key: 'tactical', label: 'Tactical', value: score.dimensions.tactical },
+    { key: 'cognitive', label: 'Cognitive', value: score.dimensions.cognitive },
+    { key: 'innovation', label: 'Innovation', value: score.dimensions.innovation }
+  ], [score.dimensions]);
   
-  // ✅ FIXED: Render dimensions without inline .map() in JSX
-  const dimensionElements = useMemo(() => {
-    return dimensions.map(({ key, label, value }) => (
-      <div key={key} className="space-y-1">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <span className="text-sm">{getDimensionIcon(key)}</span>
-            <span className="text-sm font-medium">{label}</span>
-          </div>
-          <ScoreBadge 
-            score={value} 
-            dimension={key as any}
-            size="sm"
-            animated={false}
-          />
-        </div>
-        <Progress 
-          value={value} 
-          className="h-2"
-        />
-      </div>
-    ));
-  }, [dimensions]);
-  
-  // ✅ Memoized expanded content
+  // ✅ ARCHITECTURAL FIX 7: Memoized expanded content (expensive computation)
   const expandedContent = useMemo(() => {
     if (!finalExpanded) return null;
     
@@ -113,7 +76,26 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
         <div className="space-y-3">
           <h4 className="text-sm font-medium">Dimension Breakdown</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {dimensionElements}
+            {dimensions.map(({ key, label, value }) => (
+              <div key={key} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm">{getDimensionIcon(key)}</span>
+                    <span className="text-sm font-medium">{label}</span>
+                  </div>
+                  <ScoreBadge 
+                    score={value} 
+                    dimension={key as any}
+                    size="sm"
+                    animated={false}
+                  />
+                </div>
+                <Progress 
+                  value={value} 
+                  className="h-2"
+                />
+              </div>
+            ))}
           </div>
         </div>
         
@@ -165,9 +147,9 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
         </div>
       </motion.div>
     );
-  }, [finalExpanded, dimensionElements, score, animationsEnabled, message.content.length]);
+  }, [finalExpanded, dimensions, score, animationsEnabled, message.content.length]);
   
-  // ✅ Memoized card content
+  // ✅ ARCHITECTURAL FIX 8: Memoized card content (prevent unnecessary re-renders)
   const cardContent = useMemo(() => (
     <Card className={cn(
       "transition-all duration-200",
@@ -249,7 +231,7 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
     expandedContent
   ]);
   
-  // ✅ Conditional animation wrapper
+  // ✅ ARCHITECTURAL FIX 9: Conditional animation wrapper (stable logic)
   if (animationsEnabled) {
     return (
       <motion.div
