@@ -29,7 +29,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [detectedPlatform, setDetectedPlatform] = useState<Platform | null>(null);
   const [messageCount, setMessageCount] = useState(0);
-  const [localClaudeEnabled, setLocalClaudeEnabled] = useState(true);
+  const [localClaudeEnabled, setLocalClaudeEnabled] = useState(true); // Local override for Claude
   
   // Settings from store
   const defaultAnalysisDepth = useAnalysisDepth();
@@ -38,7 +38,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
   const autoDetectPlatform = useAutoDetectPlatform();
   const animationsEnabled = useAnimationsEnabled();
   
-  // ✅ УЛУЧШЕННАЯ platform detection - добавили AI: recognition
+  // Auto-detect platform and count messages
   const analyzeText = useCallback((text: string) => {
     if (!text.trim()) {
       setDetectedPlatform(null);
@@ -46,25 +46,24 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       return;
     }
     
+    // Enhanced platform detection
     let detected: Platform = 'other';
     const content = text.toLowerCase();
     
     if (content.includes('human:') && content.includes('assistant:')) {
       detected = 'claude';
-    } else if (content.includes('human:') && content.includes('ai:')) {
-      detected = 'other'; // ✅ Human: + AI: = other platform
     } else if (content.includes('user:') && (content.includes('chatgpt:') || content.includes('openai'))) {
       detected = 'chatgpt';
     } else if (content.includes('**user**') || content.includes('**assistant**')) {
       detected = 'chatgpt';
-    } else if (content.match(/^(you|me|user|assistant|ai):/mi)) {
+    } else if (content.match(/^(you|me|user|assistant):/mi)) {
       detected = 'other';
     }
     
     setDetectedPlatform(detected);
     
-    // ✅ УЛУЧШЕННЫЙ message counting - добавили AI:
-    const messageMarkers = text.match(/(Human:|Assistant:|User:|ChatGPT:|AI:|\*\*User\*\*|\*\*Assistant\*\*|^You:|^Me:|^User:|^Assistant:)/gmi);
+    // More accurate message counting
+    const messageMarkers = text.match(/(Human:|Assistant:|User:|ChatGPT:|\*\*User\*\*|\*\*Assistant\*\*|^You:|^Me:|^User:|^Assistant:)/gmi);
     const alternatingBlocks = text.split(/\n\s*\n/).filter(block => block.trim().length > 10);
     
     const estimatedMessages = messageMarkers ? messageMarkers.length : Math.min(alternatingBlocks.length, Math.ceil(text.length / 200));
@@ -76,7 +75,6 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     analyzeText(value);
   };
   
-  // ✅ CRITICAL FIX: Убрали onAnalyze из dependencies для устранения React Error #310
   const handleAnalyze = useCallback(async () => {
     if (!conversationText.trim()) return;
     
@@ -98,7 +96,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
         platform: platform === 'auto' ? detectedPlatform || 'other' : platform
       },
       options: {
-        useClaudeAnalysis: localClaudeEnabled && enableClaudeAnalysis,
+        useClaudeAnalysis: localClaudeEnabled && enableClaudeAnalysis, // ✅ Enable Claude!
         analysisDepth: defaultAnalysisDepth || 'standard',
         enablePatternDetection,
         generateSuggestions: true,
@@ -130,11 +128,10 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     localClaudeEnabled,
     enableClaudeAnalysis,
     defaultAnalysisDepth,
-    enablePatternDetection
-    // ✅ УБРАЛИ onAnalyze из dependencies!!! ЭТО КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
+    enablePatternDetection,
+    onAnalyze
   ]);
   
-  // ✅ ИСПРАВЛЕННАЯ ЛОГИКА ПАРСИНГА - добавляем поддержку "AI:" префикса
   const parseConversation = (text: string, detectedPlatform: Platform) => {
     const messages: any[] = [];
     let parts: string[] = [];
@@ -145,14 +142,8 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     } else if (detectedPlatform === 'chatgpt') {
       parts = text.split(/(?=(?:User:|ChatGPT:|\*\*User\*\*|\*\*Assistant\*\*))/i).filter(p => p.trim());
     } else {
-      // ✅ УЛУЧШЕННЫЙ ПАРСИНГ для 'other' platform
-      // Поддержка AI:, Human:, User:, Assistant: префиксов
-      parts = text.split(/(?=(?:Human:|Assistant:|User:|AI:|You:|Me:))/i).filter(p => p.trim());
-      
-      // Если нет явных маркеров, разделяем по двойным переносам
-      if (parts.length <= 1) {
-        parts = text.split(/\n\s*\n/).filter(p => p.trim().length > 10);
-      }
+      // For 'other' platform, try to split by double newlines or detect patterns
+      parts = text.split(/\n\s*\n/).filter(p => p.trim().length > 10);
     }
     
     parts.forEach((part, index) => {
@@ -162,13 +153,13 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       let role: 'user' | 'assistant' = 'user';
       let content = trimmed;
       
-      // ✅ РАСШИРЕННАЯ роль detection - добавили AI:
+      // Role detection based on prefixes
       if (trimmed.match(/^(Human:|User:|\*\*User\*\*|You:)/i)) {
         role = 'user';
         content = trimmed.replace(/^(Human:|User:|\*\*User\*\*|You:)\s*/i, '').trim();
-      } else if (trimmed.match(/^(Assistant:|ChatGPT:|AI:|\*\*Assistant\*\*|Me:)/i)) {
+      } else if (trimmed.match(/^(Assistant:|ChatGPT:|\*\*Assistant\*\*|Me:)/i)) {
         role = 'assistant';
-        content = trimmed.replace(/^(Assistant:|ChatGPT:|AI:|\*\*Assistant\*\*|Me:)\s*/i, '').trim();
+        content = trimmed.replace(/^(Assistant:|ChatGPT:|\*\*Assistant\*\*|Me:)\s*/i, '').trim();
       } else {
         // For untagged content, alternate roles starting with user
         role = index % 2 === 0 ? 'user' : 'assistant';
