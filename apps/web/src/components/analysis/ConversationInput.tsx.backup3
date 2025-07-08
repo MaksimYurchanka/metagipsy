@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Upload, Zap, Settings, AlertCircle, CheckCircle, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,40 +31,14 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
   const [messageCount, setMessageCount] = useState(0);
   const [localClaudeEnabled, setLocalClaudeEnabled] = useState(true);
   
-  // Settings from store - these are stable now
+  // Settings from store
   const defaultAnalysisDepth = useAnalysisDepth();
   const enablePatternDetection = usePatternDetection();
   const enableClaudeAnalysis = useClaudeAnalysis();
   const autoDetectPlatform = useAutoDetectPlatform();
   const animationsEnabled = useAnimationsEnabled();
   
-  // ✅ CRITICAL FIX 1: Use refs to avoid dependencies in useCallback
-  const currentDataRef = useRef({
-    conversationText: '',
-    platform: 'auto' as Platform,
-    detectedPlatform: null as Platform | null,
-    sessionGoal: '',
-    projectContext: '',
-    localClaudeEnabled: true,
-    enableClaudeAnalysis: true,
-    defaultAnalysisDepth: 'standard' as const,
-    enablePatternDetection: true
-  });
-  
-  // ✅ CRITICAL FIX 2: Update refs when state changes (no re-renders)
-  currentDataRef.current = {
-    conversationText,
-    platform,
-    detectedPlatform,
-    sessionGoal,
-    projectContext,
-    localClaudeEnabled,
-    enableClaudeAnalysis,
-    defaultAnalysisDepth,
-    enablePatternDetection
-  };
-  
-  // ✅ PLATFORM DETECTION - unchanged, stable
+  // ✅ УЛУЧШЕННАЯ platform detection - добавили AI: recognition
   const analyzeText = useCallback((text: string) => {
     if (!text.trim()) {
       setDetectedPlatform(null);
@@ -78,7 +52,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     if (content.includes('human:') && content.includes('assistant:')) {
       detected = 'claude';
     } else if (content.includes('human:') && content.includes('ai:')) {
-      detected = 'other';
+      detected = 'other'; // ✅ Human: + AI: = other platform
     } else if (content.includes('user:') && (content.includes('chatgpt:') || content.includes('openai'))) {
       detected = 'chatgpt';
     } else if (content.includes('**user**') || content.includes('**assistant**')) {
@@ -89,6 +63,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     
     setDetectedPlatform(detected);
     
+    // ✅ УЛУЧШЕННЫЙ message counting - добавили AI:
     const messageMarkers = text.match(/(Human:|Assistant:|User:|ChatGPT:|AI:|\*\*User\*\*|\*\*Assistant\*\*|^You:|^Me:|^User:|^Assistant:)/gmi);
     const alternatingBlocks = text.split(/\n\s*\n/).filter(block => block.trim().length > 10);
     
@@ -101,23 +76,14 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     analyzeText(value);
   };
   
-  // ✅ CRITICAL FIX 3: STABLE handleAnalyze with ZERO dependencies!
+  // ✅ CRITICAL FIX: Убрали onAnalyze из dependencies для устранения React Error #310
   const handleAnalyze = useCallback(async () => {
-    // ✅ Get current values from ref (no dependencies needed!)
-    const data = currentDataRef.current;
-    
-    if (!data.conversationText.trim()) return;
-    
-    console.log('🚀 STABLE handleAnalyze: Using ref data:', {
-      textLength: data.conversationText.length,
-      platform: data.platform,
-      claudeEnabled: data.localClaudeEnabled && data.enableClaudeAnalysis
-    });
+    if (!conversationText.trim()) return;
     
     // Parse conversation into messages
     const messages = parseConversation(
-      data.conversationText, 
-      data.platform === 'auto' ? data.detectedPlatform || 'other' : data.platform
+      conversationText, 
+      platform === 'auto' ? detectedPlatform || 'other' : platform
     );
     
     if (messages.length < 2) {
@@ -125,46 +91,65 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       return;
     }
     
-    // ✅ Build analysis request using ref data
+    // Prepare analysis request with Claude API enabled
     const analysisRequest = {
       conversation: {
         messages,
-        platform: data.platform === 'auto' ? data.detectedPlatform || 'other' : data.platform
+        platform: platform === 'auto' ? detectedPlatform || 'other' : platform
       },
       options: {
-        useClaudeAnalysis: data.localClaudeEnabled && data.enableClaudeAnalysis,
-        analysisDepth: data.defaultAnalysisDepth,
-        enablePatternDetection: data.enablePatternDetection,
+        useClaudeAnalysis: localClaudeEnabled && enableClaudeAnalysis,
+        analysisDepth: defaultAnalysisDepth || 'standard',
+        enablePatternDetection,
         generateSuggestions: true,
-        detectPatterns: data.enablePatternDetection
+        detectPatterns: enablePatternDetection
       },
       metadata: {
-        projectContext: data.projectContext.trim() || undefined,
-        sessionGoal: data.sessionGoal.trim() || undefined,
+        projectContext: projectContext.trim() || undefined,
+        sessionGoal: sessionGoal.trim() || undefined,
         messageCount: messages.length,
-        detectedPlatform: data.detectedPlatform,
+        detectedPlatform,
         timestamp: new Date().toISOString()
       }
     };
     
-    console.log('🚀 STABLE handleAnalyze: Analysis request prepared, calling onAnalyze');
+    console.log('🚀 Analyzing with Claude API:', {
+      messageCount: messages.length,
+      claudeEnabled: localClaudeEnabled && enableClaudeAnalysis,
+      platform: platform === 'auto' ? detectedPlatform : platform
+    });
     
-    // ✅ Call the parent function (this reference is stable from props)
+    // Call the analysis function
     onAnalyze(analysisRequest);
-  }, []); // ← ZERO DEPENDENCIES = STABLE FUNCTION REFERENCE!
+  }, [
+    conversationText, 
+    platform, 
+    detectedPlatform, 
+    sessionGoal, 
+    projectContext, 
+    localClaudeEnabled,
+    enableClaudeAnalysis,
+    defaultAnalysisDepth,
+    enablePatternDetection
+    // ✅ УБРАЛИ onAnalyze из dependencies!!! ЭТО КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
+  ]);
   
-  // ✅ PARSING LOGIC - extracted to separate function (no re-creation)
+  // ✅ ИСПРАВЛЕННАЯ ЛОГИКА ПАРСИНГА - добавляем поддержку "AI:" префикса
   const parseConversation = (text: string, detectedPlatform: Platform) => {
     const messages: any[] = [];
     let parts: string[] = [];
     
+    // Enhanced parsing for different platforms
     if (detectedPlatform === 'claude') {
       parts = text.split(/(?=(?:Human:|Assistant:))/i).filter(p => p.trim());
     } else if (detectedPlatform === 'chatgpt') {
       parts = text.split(/(?=(?:User:|ChatGPT:|\*\*User\*\*|\*\*Assistant\*\*))/i).filter(p => p.trim());
     } else {
+      // ✅ УЛУЧШЕННЫЙ ПАРСИНГ для 'other' platform
+      // Поддержка AI:, Human:, User:, Assistant: префиксов
       parts = text.split(/(?=(?:Human:|Assistant:|User:|AI:|You:|Me:))/i).filter(p => p.trim());
       
+      // Если нет явных маркеров, разделяем по двойным переносам
       if (parts.length <= 1) {
         parts = text.split(/\n\s*\n/).filter(p => p.trim().length > 10);
       }
@@ -177,6 +162,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       let role: 'user' | 'assistant' = 'user';
       let content = trimmed;
       
+      // ✅ РАСШИРЕННАЯ роль detection - добавили AI:
       if (trimmed.match(/^(Human:|User:|\*\*User\*\*|You:)/i)) {
         role = 'user';
         content = trimmed.replace(/^(Human:|User:|\*\*User\*\*|You:)\s*/i, '').trim();
@@ -184,6 +170,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
         role = 'assistant';
         content = trimmed.replace(/^(Assistant:|ChatGPT:|AI:|\*\*Assistant\*\*|Me:)\s*/i, '').trim();
       } else {
+        // For untagged content, alternate roles starting with user
         role = index % 2 === 0 ? 'user' : 'assistant';
       }
       
