@@ -21,33 +21,28 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
   isExpanded = false,
   onToggle
 }) => {
-  console.log(`🔍 MESSAGE ANALYSIS ${index}: Starting render...`);
-  
-  // ✅ CRITICAL FIX 1: Local state for when no parent control
+  // ✅ ARCHITECTURAL FIX 1: Simplified local state (only when no parent control)
   const [localExpanded, setLocalExpanded] = useState(isExpanded);
   
-  // ✅ CRITICAL FIX 2: Individual stable selectors
+  // ✅ FIXED: Use individual selectors instead of useDisplaySettings
   const compactMode = useCompactMode();
   const animationsEnabled = useAnimationsEnabled();
   const autoExpandLowScores = useAutoExpandLowScores();
   
-  // ✅ CRITICAL FIX 3: Determine final expanded state
+  // ✅ ARCHITECTURAL FIX 3: Determine final expanded state with auto-expand logic
   const shouldAutoExpand = autoExpandLowScores && score.overall < 60;
   const finalExpanded = onToggle ? isExpanded : (shouldAutoExpand || localExpanded);
   
-  console.log(`✅ MESSAGE ANALYSIS ${index}: State determined, expanded:`, finalExpanded);
-  
-  // ✅ CRITICAL FIX 4: STABLE toggle function with ZERO dependencies on onToggle!
+  // ✅ ARCHITECTURAL FIX 4: Stable toggle function
   const handleToggle = useCallback(() => {
-    console.log(`🔄 MESSAGE ANALYSIS ${index}: Toggle clicked`);
     if (onToggle) {
       onToggle(index);
     } else {
       setLocalExpanded(prev => !prev);
     }
-  }, [index]); // ← REMOVED onToggle from dependencies! CRITICAL FIX!
+  }, [onToggle, index]);
   
-  // ✅ CRITICAL FIX 5: Memoized role styling (prevent recalculation)
+  // ✅ ARCHITECTURAL FIX 5: Memoized role styling (prevent recalculation)
   const roleStyles = useMemo(() => {
     const isUser = message.role === 'user';
     return {
@@ -57,21 +52,16 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
     };
   }, [message.role]);
   
-  // ✅ CRITICAL FIX 6: Memoized dimensions array (stable reference)
-  const dimensions = useMemo(() => {
-    console.log(`📊 MESSAGE ANALYSIS ${index}: Computing dimensions`);
-    return [
-      { key: 'strategic', label: 'Strategic', value: score.dimensions?.strategic || 0 },
-      { key: 'tactical', label: 'Tactical', value: score.dimensions?.tactical || 0 },
-      { key: 'cognitive', label: 'Cognitive', value: score.dimensions?.cognitive || 0 },
-      { key: 'innovation', label: 'Innovation', value: score.dimensions?.innovation || 0 }
-    ];
-  }, [score.dimensions, index]); // ← Stable dependencies
+  // ✅ ARCHITECTURAL FIX 6: Memoized dimensions array (stable reference)
+  const dimensions = useMemo(() => [
+    { key: 'strategic', label: 'Strategic', value: score.dimensions.strategic },
+    { key: 'tactical', label: 'Tactical', value: score.dimensions.tactical },
+    { key: 'cognitive', label: 'Cognitive', value: score.dimensions.cognitive },
+    { key: 'innovation', label: 'Innovation', value: score.dimensions.innovation }
+  ], [score.dimensions]);
   
-  // ✅ CRITICAL FIX 7: Memoized expanded content (expensive computation)
+  // ✅ ARCHITECTURAL FIX 7: Memoized expanded content (expensive computation)
   const expandedContent = useMemo(() => {
-    console.log(`🏗️ MESSAGE ANALYSIS ${index}: Building expanded content, show:`, finalExpanded);
-    
     if (!finalExpanded) return null;
     
     return (
@@ -148,7 +138,7 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
         {/* Metadata */}
         <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
           <div className="flex items-center gap-4">
-            <span>Confidence: {Math.round((score.confidence || 0) * 100)}%</span>
+            <span>Confidence: {Math.round(score.confidence * 100)}%</span>
             <span>Classification: {score.classification}</span>
           </div>
           <div>
@@ -157,83 +147,79 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
         </div>
       </motion.div>
     );
-  }, [finalExpanded, dimensions, score, animationsEnabled, message.content.length, index]);
+  }, [finalExpanded, dimensions, score, animationsEnabled, message.content.length]);
   
-  // ✅ CRITICAL FIX 8: Memoized card content (prevent unnecessary re-renders)
-  const cardContent = useMemo(() => {
-    console.log(`🏗️ MESSAGE ANALYSIS ${index}: Building card content`);
-    
-    return (
-      <Card className={cn(
-        "transition-all duration-200",
-        finalExpanded && "ring-2 ring-blue-200 dark:ring-blue-800",
-        compactMode && "p-2"
-      )}>
-        <CardContent className={cn("p-4", compactMode && "p-3")}>
-          {/* Header */}
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="flex items-start gap-3 flex-1 min-w-0">
-              <div className={cn(
-                "flex items-center justify-center w-8 h-8 rounded-full",
-                roleStyles.bg
-              )}>
-                {React.createElement(roleStyles.icon, { 
-                  className: cn("h-4 w-4", roleStyles.color) 
-                })}
-              </div>
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium capitalize">{message.role}</span>
-                  <Badge variant="outline" className="text-xs">
-                    #{index + 1}
-                  </Badge>
-                  {message.timestamp && (
-                    <span className="text-xs text-muted-foreground">
-                      {formatTimestamp(message.timestamp)}
-                    </span>
-                  )}
-                </div>
-                
-                <p className={cn(
-                  "text-sm text-muted-foreground line-clamp-2",
-                  finalExpanded && "line-clamp-none"
-                )}>
-                  {message.content}
-                </p>
-              </div>
+  // ✅ ARCHITECTURAL FIX 8: Memoized card content (prevent unnecessary re-renders)
+  const cardContent = useMemo(() => (
+    <Card className={cn(
+      "transition-all duration-200",
+      finalExpanded && "ring-2 ring-blue-200 dark:ring-blue-800",
+      compactMode && "p-2"
+    )}>
+      <CardContent className={cn("p-4", compactMode && "p-3")}>
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div className={cn(
+              "flex items-center justify-center w-8 h-8 rounded-full",
+              roleStyles.bg
+            )}>
+              {React.createElement(roleStyles.icon, { 
+                className: cn("h-4 w-4", roleStyles.color) 
+              })}
             </div>
             
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <ScoreBadge 
-                score={score.overall} 
-                size={compactMode ? "sm" : "md"}
-                animated={animationsEnabled}
-              />
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleToggle}
-                className="h-8 w-8 p-0"
-              >
-                {finalExpanded ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-medium capitalize">{message.role}</span>
+                <Badge variant="outline" className="text-xs">
+                  #{index + 1}
+                </Badge>
+                {message.timestamp && (
+                  <span className="text-xs text-muted-foreground">
+                    {formatTimestamp(message.timestamp)}
+                  </span>
                 )}
-              </Button>
+              </div>
+              
+              <p className={cn(
+                "text-sm text-muted-foreground line-clamp-2",
+                finalExpanded && "line-clamp-none"
+              )}>
+                {message.content}
+              </p>
             </div>
           </div>
           
-          {/* Expanded content */}
-          <AnimatePresence>
-            {expandedContent}
-          </AnimatePresence>
-        </CardContent>
-      </Card>
-    );
-  }, [
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <ScoreBadge 
+              score={score.overall} 
+              size={compactMode ? "sm" : "md"}
+              animated={animationsEnabled}
+            />
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleToggle}
+              className="h-8 w-8 p-0"
+            >
+              {finalExpanded ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </div>
+        
+        {/* Expanded content */}
+        <AnimatePresence>
+          {expandedContent}
+        </AnimatePresence>
+      </CardContent>
+    </Card>
+  ), [
     finalExpanded, 
     compactMode, 
     roleStyles, 
@@ -243,11 +229,9 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
     animationsEnabled, 
     handleToggle,
     expandedContent
-  ]); // ← All dependencies are stable now!
+  ]);
   
-  console.log(`✅ MESSAGE ANALYSIS ${index}: Render complete`);
-  
-  // ✅ CRITICAL FIX 9: Conditional animation wrapper (stable logic)
+  // ✅ ARCHITECTURAL FIX 9: Conditional animation wrapper (stable logic)
   if (animationsEnabled) {
     return (
       <motion.div

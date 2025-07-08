@@ -15,34 +15,32 @@ import {
 } from '@/stores/settingsStore';
 import { cn, getTrendIcon, getTrendColor, getDimensionIcon } from '@/lib/utils';
 
+// ✅ ARCHITECTURAL FIX: Types for component state
 type FilterType = 'all' | 'low' | 'high';
 type SortType = 'index' | 'score';
 
 const AnalysisResults: React.FC = () => {
-  console.log('🚀 ANALYSIS RESULTS: Starting render...');
-  
-  // ✅ CRITICAL FIX 1: Individual stable selectors ONLY
-  const messages = useAnalysisStore((state) => state.messages || []);
-  const scores = useAnalysisStore((state) => state.scores || []);
-  const patterns = useAnalysisStore((state) => state.patterns || []);
-  const insights = useAnalysisStore((state) => state.insights || []);
+  // ✅ ARCHITECTURAL FIX: Individual selectors from analysisStore
+  const messages = useAnalysisStore((state) => state.messages);
+  const scores = useAnalysisStore((state) => state.scores);
+  const patterns = useAnalysisStore((state) => state.patterns);
+  const insights = useAnalysisStore((state) => state.insights);
   const sessionSummary = useAnalysisStore((state) => state.sessionSummary);
   const computedStats = useAnalysisStore((state) => state.computedStats);
   const isAnalyzing = useAnalysisStore((state) => state.isAnalyzing);
   const error = useAnalysisStore((state) => state.error);
   
-  // ✅ CRITICAL FIX 2: Individual settings selectors  
+  // ✅ ARCHITECTURAL FIX: Individual selectors for settings
   const compactMode = useCompactMode();
   const animationsEnabled = useAnimationsEnabled();
   
-  // ✅ CRITICAL FIX 3: Local state with STABLE initial values
+  // ✅ ARCHITECTURAL FIX: Local state with stable initial values
   const [expandedMessages, setExpandedMessages] = useState<Set<number>>(() => new Set());
   const [filterBy, setFilterBy] = useState<FilterType>('all');
   const [sortBy, setSortBy] = useState<SortType>('index');
   
-  // Early return if no data
+  // Early return if no data - prevents unnecessary computation
   if (messages.length === 0 || scores.length === 0) {
-    console.log('📝 ANALYSIS RESULTS: No data, showing empty state');
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -56,11 +54,8 @@ const AnalysisResults: React.FC = () => {
     );
   }
   
-  console.log('✅ ANALYSIS RESULTS: Data available, messages:', messages.length, 'scores:', scores.length);
-  
-  // ✅ CRITICAL FIX 4: STABLE callbacks with minimal dependencies
+  // ✅ ARCHITECTURAL FIX: Stable callback functions with proper dependencies
   const toggleExpanded = useCallback((index: number) => {
-    console.log('🔄 Toggle expanded for message:', index);
     setExpandedMessages(prev => {
       const newSet = new Set(prev);
       if (newSet.has(index)) {
@@ -70,34 +65,26 @@ const AnalysisResults: React.FC = () => {
       }
       return newSet;
     });
-  }, []); // ← ZERO dependencies = stable function!
+  }, []); // ← Empty deps - function is stable
   
   const expandAll = useCallback(() => {
-    console.log('📂 Expand all messages');
-    setExpandedMessages(prev => {
-      const messageCount = messages.length; // Get length inside callback
-      return new Set(Array.from({ length: messageCount }, (_, i) => i));
-    });
-  }, []); // ← ZERO dependencies = stable function!
+    setExpandedMessages(new Set(Array.from({ length: messages.length }, (_, i) => i)));
+  }, [messages.length]); // ← Only depends on length, not messages array
   
   const collapseAll = useCallback(() => {
-    console.log('📁 Collapse all messages');
     setExpandedMessages(new Set());
-  }, []); // ← ZERO dependencies = stable function!
+  }, []);
   
   const handleFilterChange = useCallback((value: FilterType) => {
-    console.log('🔍 Filter changed to:', value);
     setFilterBy(value);
-  }, []); // ← ZERO dependencies = stable function!
+  }, []);
   
   const handleSortChange = useCallback((value: SortType) => {
-    console.log('📊 Sort changed to:', value);
     setSortBy(value);
-  }, []); // ← ZERO dependencies = stable function!
+  }, []);
   
-  // ✅ CRITICAL FIX 5: Memoized computations with STABLE dependencies
+  // ✅ ARCHITECTURAL FIX: Memoized filtered messages with stable dependencies
   const filteredMessages = useMemo(() => {
-    console.log('🔍 Computing filtered messages, filter:', filterBy);
     return messages.filter((_, index) => {
       const score = scores[index];
       if (!score) return false;
@@ -111,27 +98,26 @@ const AnalysisResults: React.FC = () => {
           return true;
       }
     });
-  }, [messages, scores, filterBy]); // ← Only filter dependencies
+  }, [messages, scores, filterBy]); // ← Stable dependencies
   
+  // ✅ ARCHITECTURAL FIX: Memoized sorted messages 
   const sortedMessages = useMemo(() => {
-    console.log('📊 Computing sorted messages, sort:', sortBy);
     if (sortBy === 'index') {
-      return filteredMessages; // Return same reference when no sorting
+      return filteredMessages; // No sorting needed, return same reference
     }
     
-    // Only create new array when actually sorting
+    // Only create new array when actually sorting by score
     return [...filteredMessages].sort((a, b) => {
       const aIndex = messages.indexOf(a);
       const bIndex = messages.indexOf(b);
       const aScore = scores[aIndex];
       const bScore = scores[bIndex];
-      return (bScore?.overall || 0) - (aScore?.overall || 0);
+      return bScore.overall - aScore.overall;
     });
-  }, [filteredMessages, sortBy, messages, scores]); // ← Minimal dependencies
+  }, [filteredMessages, sortBy, messages, scores]);
   
-  // ✅ CRITICAL FIX 6: Memoized dimensions with safe access
+  // ✅ ARCHITECTURAL FIX: Memoized dimensions array using stable computedStats
   const dimensions = useMemo(() => {
-    console.log('📈 Computing dimensions from computedStats');
     if (!computedStats?.dimensionAverages) {
       return [];
     }
@@ -142,43 +128,37 @@ const AnalysisResults: React.FC = () => {
       { key: 'cognitive', label: 'Cognitive', value: computedStats.dimensionAverages.cognitive },
       { key: 'innovation', label: 'Innovation', value: computedStats.dimensionAverages.innovation }
     ];
-  }, [computedStats?.dimensionAverages]); // ← Safe dependency
+  }, [computedStats?.dimensionAverages]); // ← Safe access with optional chaining
   
-  // ✅ CRITICAL FIX 7: Memoized message components with STABLE toggleExpanded
+  // ✅ ARCHITECTURAL FIX: Memoized message components list
   const messageComponents = useMemo(() => {
-    console.log('🏗️ Building message components, count:', sortedMessages.length);
     return sortedMessages.map((message) => {
       const originalIndex = messages.indexOf(message);
       const score = scores[originalIndex];
       
       if (originalIndex === -1 || !score) {
-        console.warn('⚠️ Invalid message or score for index:', originalIndex);
         return null;
       }
       
       return (
         <MessageAnalysis
-          key={`message-${originalIndex}`} // ← Stable key
+          key={originalIndex}
           message={message}
           score={score}
           index={originalIndex}
           isExpanded={expandedMessages.has(originalIndex)}
-          onToggle={toggleExpanded} // ← Now stable function!
+          onToggle={toggleExpanded}
         />
       );
-    }).filter(Boolean);
-  }, [sortedMessages, messages, scores, expandedMessages, toggleExpanded]); // ← toggleExpanded is now stable!
+    }).filter(Boolean); // Remove nulls
+  }, [sortedMessages, messages, scores, expandedMessages, toggleExpanded]);
   
-  // ✅ Safe computed stats access
+  // Safe access to computedStats
   const avgScore = computedStats?.averageScore || 0;
   const trend = computedStats?.trend || 'stable';
   const bestScore = computedStats?.bestScore || 0;
   const totalMessages = computedStats?.totalMessages || messages.length;
   const completedAnalysis = computedStats?.completedAnalysis || scores.length;
-  
-  console.log('✅ ANALYSIS RESULTS: Rendering with safe stats:', {
-    avgScore, trend, bestScore, totalMessages, completedAnalysis
-  });
   
   return (
     <div className="space-y-6">
@@ -333,7 +313,7 @@ const AnalysisResults: React.FC = () => {
                       <h4 className="text-sm font-medium">Message Breakdown</h4>
                       <div className="grid grid-cols-5 gap-1">
                         {scores.map((score, index) => {
-                          const dimValue = score.dimensions?.[key as keyof typeof score.dimensions] || 0;
+                          const dimValue = score.dimensions[key as keyof typeof score.dimensions];
                           return (
                             <div
                               key={index}
