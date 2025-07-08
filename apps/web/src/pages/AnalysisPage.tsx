@@ -114,29 +114,23 @@ const AnalysisPage: React.FC = () => {
       setIsAnalyzing(false);
       console.log('✅ ANALYSIS PAGE v8: Analysis completed');
     }
-  }, [
-    setIsAnalyzing, 
-    setError, 
-    setMessages, 
-    setProgress,
-    setSessionMetadata
-  ]);
+  }, []);
 
   // ✅ NEW: Real Claude API analysis
   const performClaudeAnalysis = useCallback(async (analysisRequest: any) => {
     console.log('🤖 CLAUDE API: Starting real analysis...');
     
     try {
-      // Call the real backend API
-      const response = await api.post('/analyze', analysisRequest);
-      console.log('🤖 CLAUDE API: Received response:', response.data);
+      // ✅ FIX: Use the correct API method
+      const response = await api.analyzeConversation(analysisRequest);
+      console.log('🤖 CLAUDE API: Received response:', response);
       
-      if (response.data?.scores) {
+      if (response?.scores) {
         // ✅ Handle real API response
-        setScores(response.data.scores);
+        setScores(response.scores);
         
-        if (response.data.summary) {
-          setSessionSummary(response.data.summary);
+        if (response.summary) {
+          setSessionSummary(response.summary);
         }
         
         toast.success('AI analysis completed successfully! 🧠✨');
@@ -151,7 +145,7 @@ const AnalysisPage: React.FC = () => {
       // Fallback to local analysis
       await performLocalAnalysis(analysisRequest.conversation.messages, analysisRequest.options);
     }
-  }, [setScores, setSessionSummary]);
+  }, []);
 
   // ✅ ENHANCED: Local analysis with better simulation
   const performLocalAnalysis = useCallback(async (messages: Message[], options: any) => {
@@ -225,7 +219,7 @@ const AnalysisPage: React.FC = () => {
 
     setSessionSummary(summary);
     toast.success('Local analysis completed successfully! 🎯');
-  }, [setProgress, setScores, setSessionSummary]);
+  }, []);
 
   // ✅ Helper functions
   const getClassification = (score: number): string => {
