@@ -24,17 +24,19 @@ interface AnalysisState {
     total: number;
   };
   
-  // ✅ CRITICAL FIX: Store raw stats to prevent object recreation
-  _rawStats: {
+  // ✅ Computed state stored in store
+  computedStats: {
     averageScore: number;
     bestScore: number;
     worstScore: number;
     totalMessages: number;
     completedAnalysis: number;
-    strategicAvg: number;
-    tacticalAvg: number;
-    cognitiveAvg: number;
-    innovationAvg: number;
+    dimensionAverages: {
+      strategic: number;
+      tactical: number;
+      cognitive: number;
+      innovation: number;
+    };
     trend: 'improving' | 'declining' | 'stable';
   };
   
@@ -67,10 +69,8 @@ interface AnalysisState {
   _recomputeStats: () => void;
 }
 
-// ✅ CRITICAL FIX: Calculate raw stats with stable values
-const calculateRawStats = (messages: Message[], scores: ChessScore[]) => {
-  console.log('📊 CALCULATE STATS: Computing for', messages.length, 'messages,', scores.length, 'scores');
-  
+// ✅ SAFE: Pure function to calculate stats with null checks
+const calculateStats = (messages: Message[], scores: ChessScore[]) => {
   if (!scores || scores.length === 0) {
     return {
       averageScore: 0,
@@ -78,15 +78,17 @@ const calculateRawStats = (messages: Message[], scores: ChessScore[]) => {
       worstScore: 0,
       totalMessages: messages?.length || 0,
       completedAnalysis: 0,
-      strategicAvg: 0,
-      tacticalAvg: 0,
-      cognitiveAvg: 0,
-      innovationAvg: 0,
+      dimensionAverages: {
+        strategic: 0,
+        tactical: 0,
+        cognitive: 0,
+        innovation: 0
+      },
       trend: 'stable' as const
     };
   }
   
-  // ✅ Filter valid scores
+  // ✅ SAFE: Filter out invalid scores and ensure overall exists
   const validScores = scores.filter(s => s && typeof s.overall === 'number');
   
   if (validScores.length === 0) {
@@ -96,30 +98,47 @@ const calculateRawStats = (messages: Message[], scores: ChessScore[]) => {
       worstScore: 0,
       totalMessages: messages?.length || 0,
       completedAnalysis: 0,
-      strategicAvg: 0,
-      tacticalAvg: 0,
-      cognitiveAvg: 0,
-      innovationAvg: 0,
+      dimensionAverages: {
+        strategic: 0,
+        tactical: 0,
+        cognitive: 0,
+        innovation: 0
+      },
       trend: 'stable' as const
     };
   }
   
   const overallScores = validScores.map(s => s.overall || 0);
   
-  // ✅ Calculate dimension totals safely
-  let strategicTotal = 0, tacticalTotal = 0, cognitiveTotal = 0, innovationTotal = 0;
-  
-  validScores.forEach(score => {
-    const dimensions = score?.dimensions || {};
-    strategicTotal += typeof dimensions.strategic === 'number' ? dimensions.strategic : 0;
-    tacticalTotal += typeof dimensions.tactical === 'number' ? dimensions.tactical : 0;
-    cognitiveTotal += typeof dimensions.cognitive === 'number' ? dimensions.cognitive : 0;
-    innovationTotal += typeof dimensions.innovation === 'number' ? dimensions.innovation : 0;
-  });
+  // ✅ SAFE: Calculate dimension averages with comprehensive null checks
+  const dimensionTotals = validScores.reduce(
+    (acc, score) => {
+      // ✅ CRITICAL: Ensure dimensions object exists and has all properties
+      const dimensions = score?.dimensions || {};
+      const strategic = typeof dimensions.strategic === 'number' ? dimensions.strategic : 0;
+      const tactical = typeof dimensions.tactical === 'number' ? dimensions.tactical : 0;
+      const cognitive = typeof dimensions.cognitive === 'number' ? dimensions.cognitive : 0;
+      const innovation = typeof dimensions.innovation === 'number' ? dimensions.innovation : 0;
+      
+      return {
+        strategic: acc.strategic + strategic,
+        tactical: acc.tactical + tactical,
+        cognitive: acc.cognitive + cognitive,
+        innovation: acc.innovation + innovation
+      };
+    },
+    { strategic: 0, tactical: 0, cognitive: 0, innovation: 0 }
+  );
   
   const count = validScores.length;
+  const dimensionAverages = {
+    strategic: count > 0 ? Math.round(dimensionTotals.strategic / count) : 0,
+    tactical: count > 0 ? Math.round(dimensionTotals.tactical / count) : 0,
+    cognitive: count > 0 ? Math.round(dimensionTotals.cognitive / count) : 0,
+    innovation: count > 0 ? Math.round(dimensionTotals.innovation / count) : 0
+  };
   
-  // ✅ Calculate trend safely
+  // ✅ SAFE: Calculate trend with bounds checking
   let trend: 'improving' | 'declining' | 'stable' = 'stable';
   if (validScores.length >= 2) {
     const recent = validScores.slice(-3);
@@ -133,22 +152,20 @@ const calculateRawStats = (messages: Message[], scores: ChessScore[]) => {
     }
   }
   
-  // ✅ Return flat object with stable values
-  const stats = {
-    averageScore: Math.round(overallScores.reduce((sum, score) => sum + score, 0) / overallScores.length),
-    bestScore: Math.max(...overallScores),
-    worstScore: Math.min(...overallScores),
+  // ✅ SAFE: All calculations with fallbacks
+  const validOverallScores = overallScores.filter(score => typeof score === 'number');
+  
+  return {
+    averageScore: validOverallScores.length > 0 
+      ? Math.round(validOverallScores.reduce((sum, score) => sum + score, 0) / validOverallScores.length)
+      : 0,
+    bestScore: validOverallScores.length > 0 ? Math.max(...validOverallScores) : 0,
+    worstScore: validOverallScores.length > 0 ? Math.min(...validOverallScores) : 0,
     totalMessages: messages?.length || 0,
     completedAnalysis: validScores.length,
-    strategicAvg: Math.round(strategicTotal / count),
-    tacticalAvg: Math.round(tacticalTotal / count),
-    cognitiveAvg: Math.round(cognitiveTotal / count),
-    innovationAvg: Math.round(innovationTotal / count),
+    dimensionAverages,
     trend
   };
-  
-  console.log('✅ CALCULATE STATS: Result:', stats);
-  return stats;
 };
 
 const initialState = {
@@ -161,7 +178,7 @@ const initialState = {
   isAnalyzing: false,
   error: null,
   progress: { current: 0, total: 0 },
-  _rawStats: calculateRawStats([], [])
+  computedStats: calculateStats([], [])
 };
 
 export const useAnalysisStore = create<AnalysisState>()(
@@ -170,53 +187,30 @@ export const useAnalysisStore = create<AnalysisState>()(
       (set, get) => ({
         ...initialState,
 
-        // ✅ CRITICAL FIX: Stable recompute with comparison
+        // Internal recompute method with error handling
         _recomputeStats: () => {
           try {
             const state = get();
-            const newStats = calculateRawStats(state.messages, state.scores);
-            const currentStats = state._rawStats;
-            
-            // ✅ CRITICAL: Only update if stats actually changed
-            const hasChanged = (
-              newStats.averageScore !== currentStats.averageScore ||
-              newStats.bestScore !== currentStats.bestScore ||
-              newStats.totalMessages !== currentStats.totalMessages ||
-              newStats.completedAnalysis !== currentStats.completedAnalysis ||
-              newStats.strategicAvg !== currentStats.strategicAvg ||
-              newStats.tacticalAvg !== currentStats.tacticalAvg ||
-              newStats.cognitiveAvg !== currentStats.cognitiveAvg ||
-              newStats.innovationAvg !== currentStats.innovationAvg ||
-              newStats.trend !== currentStats.trend
-            );
-            
-            if (hasChanged) {
-              console.log('📊 STATS CHANGED: Updating store');
-              set({ _rawStats: newStats });
-            } else {
-              console.log('📊 STATS UNCHANGED: Skipping update');
-            }
+            const newStats = calculateStats(state.messages, state.scores);
+            set({ computedStats: newStats });
           } catch (error) {
             console.error('❌ ANALYSIS STORE: Stats calculation failed:', error);
             // Set safe fallback stats
             set({
-              _rawStats: {
+              computedStats: {
                 averageScore: 0,
                 bestScore: 0,
                 worstScore: 0,
                 totalMessages: get().messages?.length || 0,
                 completedAnalysis: 0,
-                strategicAvg: 0,
-                tacticalAvg: 0,
-                cognitiveAvg: 0,
-                innovationAvg: 0,
+                dimensionAverages: { strategic: 0, tactical: 0, cognitive: 0, innovation: 0 },
                 trend: 'stable' as const
               }
             });
           }
         },
 
-        // ✅ All mutations trigger stats recomputation
+        // ✅ SAFE: All mutations trigger stats recomputation with error handling
         setMessages: (messages) => {
           console.log('📝 ANALYSIS STORE: Setting messages:', messages?.length || 0);
           set({ 
@@ -256,7 +250,7 @@ export const useAnalysisStore = create<AnalysisState>()(
           get()._recomputeStats();
         },
 
-        // ✅ Score actions with validation
+        // ✅ SAFE: Score actions with validation
         setScores: (scores) => {
           console.log('🎯 ANALYSIS STORE: Setting scores:', scores?.length || 0);
           if (!Array.isArray(scores)) {
@@ -264,7 +258,7 @@ export const useAnalysisStore = create<AnalysisState>()(
             return;
           }
           
-          // ✅ Normalize scores
+          // ✅ NORMALIZE: Ensure all scores have proper structure
           const normalizedScores = scores.map((score, index) => {
             if (!score || typeof score !== 'object') {
               console.warn(`⚠️ ANALYSIS STORE: Invalid score at index ${index}:`, score);
@@ -340,7 +334,7 @@ export const useAnalysisStore = create<AnalysisState>()(
           progress: progress || { current: 0, total: 0 }
         }),
 
-        // Reset actions
+        // ✅ ENHANCED: Reset actions with proper cleanup
         clearSession: () => {
           console.log('🧹 ANALYSIS STORE: Clearing session data');
           set({
@@ -373,7 +367,7 @@ export const useAnalysisStore = create<AnalysisState>()(
   )
 );
 
-// ✅ STABLE SELECTORS - Return primitive values to prevent object recreation
+// ✅ CLEAN SELECTORS - No side effects, stable references!
 export const useMessages = () => useAnalysisStore((state) => state.messages || []);
 export const useScores = () => useAnalysisStore((state) => state.scores || []);
 export const usePatterns = () => useAnalysisStore((state) => state.patterns || []);
@@ -384,23 +378,11 @@ export const useIsAnalyzing = () => useAnalysisStore((state) => state.isAnalyzin
 export const useAnalysisError = () => useAnalysisStore((state) => state.error);
 export const useAnalysisProgress = () => useAnalysisStore((state) => state.progress || { current: 0, total: 0 });
 
-// ✅ CRITICAL FIX: Individual primitive selectors instead of object selectors
-export const useAverageScore = () => useAnalysisStore((state) => state._rawStats.averageScore);
-export const useBestScore = () => useAnalysisStore((state) => state._rawStats.bestScore);
-export const useWorstScore = () => useAnalysisStore((state) => state._rawStats.worstScore);
-export const useTotalMessages = () => useAnalysisStore((state) => state._rawStats.totalMessages);
-export const useCompletedAnalysis = () => useAnalysisStore((state) => state._rawStats.completedAnalysis);
-export const useCurrentTrend = () => useAnalysisStore((state) => state._rawStats.trend);
-
-// ✅ CRITICAL FIX: Individual dimension selectors
-export const useStrategicAvg = () => useAnalysisStore((state) => state._rawStats.strategicAvg);
-export const useTacticalAvg = () => useAnalysisStore((state) => state._rawStats.tacticalAvg);
-export const useCognitiveAvg = () => useAnalysisStore((state) => state._rawStats.cognitiveAvg);
-export const useInnovationAvg = () => useAnalysisStore((state) => state._rawStats.innovationAvg);
-
-// ✅ REMOVED COMPLETELY:
-// - useAnalysisStats (returned objects)
-// - useDimensionAverages (returned objects)
-// All replaced with individual primitive selectors
+// ✅ CLEAN computed selectors - Pure functions only!
+export const useAnalysisStats = () => useAnalysisStore((state) => state.computedStats);
+export const useCurrentTrend = () => useAnalysisStore((state) => state.computedStats?.trend || 'stable');
+export const useDimensionAverages = () => useAnalysisStore((state) => 
+  state.computedStats?.dimensionAverages || { strategic: 0, tactical: 0, cognitive: 0, innovation: 0 }
+);
 
 export default useAnalysisStore;

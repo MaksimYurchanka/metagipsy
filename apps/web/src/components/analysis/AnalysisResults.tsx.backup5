@@ -8,25 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import MessageAnalysis from './MessageAnalysis';
 import ScoreBadge from '@/components/common/ScoreBadge';
-import { 
-  useMessages,
-  useScores,
-  usePatterns,
-  useInsights,
-  useSessionSummary,
-  useIsAnalyzing,
-  useAnalysisError,
-  // ✅ CRITICAL FIX: Use individual primitive selectors instead of computedStats object
-  useAverageScore,
-  useBestScore,
-  useTotalMessages,
-  useCompletedAnalysis,
-  useCurrentTrend,
-  useStrategicAvg,
-  useTacticalAvg,
-  useCognitiveAvg,
-  useInnovationAvg
-} from '@/stores/analysisStore';
+import { useAnalysisStore } from '@/stores/analysisStore';
 import { 
   useCompactMode, 
   useAnimationsEnabled 
@@ -37,35 +19,23 @@ type FilterType = 'all' | 'low' | 'high';
 type SortType = 'index' | 'score';
 
 const AnalysisResults: React.FC = () => {
-  console.log('🚀 ANALYSIS RESULTS: Starting FINAL STABLE render...');
+  console.log('🚀 ANALYSIS RESULTS: Starting render...');
   
-  // ✅ CRITICAL FIX: Individual stable selectors ONLY
-  const messages = useMessages();
-  const scores = useScores();
-  const patterns = usePatterns();
-  const insights = useInsights();
-  const sessionSummary = useSessionSummary();
-  const isAnalyzing = useIsAnalyzing();
-  const error = useAnalysisError();
+  // ✅ CRITICAL FIX 1: Individual stable selectors ONLY
+  const messages = useAnalysisStore((state) => state.messages || []);
+  const scores = useAnalysisStore((state) => state.scores || []);
+  const patterns = useAnalysisStore((state) => state.patterns || []);
+  const insights = useAnalysisStore((state) => state.insights || []);
+  const sessionSummary = useAnalysisStore((state) => state.sessionSummary);
+  const computedStats = useAnalysisStore((state) => state.computedStats);
+  const isAnalyzing = useAnalysisStore((state) => state.isAnalyzing);
+  const error = useAnalysisStore((state) => state.error);
   
-  // ✅ CRITICAL FIX: Individual primitive stats (NO objects!)
-  const avgScore = useAverageScore();
-  const bestScore = useBestScore();
-  const totalMessages = useTotalMessages();
-  const completedAnalysis = useCompletedAnalysis();
-  const trend = useCurrentTrend();
-  
-  // ✅ CRITICAL FIX: Individual dimension averages (NO objects!)
-  const strategicAvg = useStrategicAvg();
-  const tacticalAvg = useTacticalAvg();
-  const cognitiveAvg = useCognitiveAvg();
-  const innovationAvg = useInnovationAvg();
-  
-  // ✅ Individual settings selectors  
+  // ✅ CRITICAL FIX 2: Individual settings selectors  
   const compactMode = useCompactMode();
   const animationsEnabled = useAnimationsEnabled();
   
-  // ✅ Local state with STABLE initial values
+  // ✅ CRITICAL FIX 3: Local state with STABLE initial values
   const [expandedMessages, setExpandedMessages] = useState<Set<number>>(() => new Set());
   const [filterBy, setFilterBy] = useState<FilterType>('all');
   const [sortBy, setSortBy] = useState<SortType>('index');
@@ -87,9 +57,8 @@ const AnalysisResults: React.FC = () => {
   }
   
   console.log('✅ ANALYSIS RESULTS: Data available, messages:', messages.length, 'scores:', scores.length);
-  console.log('📊 ANALYSIS RESULTS: Stats:', { avgScore, bestScore, totalMessages, trend });
   
-  // ✅ CRITICAL FIX: ZERO dependencies callbacks
+  // ✅ CRITICAL FIX 4: STABLE callbacks with minimal dependencies
   const toggleExpanded = useCallback((index: number) => {
     console.log('🔄 Toggle expanded for message:', index);
     setExpandedMessages(prev => {
@@ -126,7 +95,7 @@ const AnalysisResults: React.FC = () => {
     setSortBy(value);
   }, []); // ← ZERO dependencies = stable function!
   
-  // ✅ CRITICAL FIX: Memoized computations with STABLE dependencies
+  // ✅ CRITICAL FIX 5: Memoized computations with STABLE dependencies
   const filteredMessages = useMemo(() => {
     console.log('🔍 Computing filtered messages, filter:', filterBy);
     return messages.filter((_, index) => {
@@ -160,18 +129,22 @@ const AnalysisResults: React.FC = () => {
     });
   }, [filteredMessages, sortBy, messages, scores]); // ← Minimal dependencies
   
-  // ✅ CRITICAL FIX: Memoized dimensions using individual primitive values
+  // ✅ CRITICAL FIX 6: Memoized dimensions with safe access
   const dimensions = useMemo(() => {
-    console.log('📈 Computing dimensions from individual values');
+    console.log('📈 Computing dimensions from computedStats');
+    if (!computedStats?.dimensionAverages) {
+      return [];
+    }
+    
     return [
-      { key: 'strategic', label: 'Strategic', value: strategicAvg },
-      { key: 'tactical', label: 'Tactical', value: tacticalAvg },
-      { key: 'cognitive', label: 'Cognitive', value: cognitiveAvg },
-      { key: 'innovation', label: 'Innovation', value: innovationAvg }
+      { key: 'strategic', label: 'Strategic', value: computedStats.dimensionAverages.strategic },
+      { key: 'tactical', label: 'Tactical', value: computedStats.dimensionAverages.tactical },
+      { key: 'cognitive', label: 'Cognitive', value: computedStats.dimensionAverages.cognitive },
+      { key: 'innovation', label: 'Innovation', value: computedStats.dimensionAverages.innovation }
     ];
-  }, [strategicAvg, tacticalAvg, cognitiveAvg, innovationAvg]); // ← Primitive dependencies!
+  }, [computedStats?.dimensionAverages]); // ← Safe dependency
   
-  // ✅ CRITICAL FIX: Memoized message components with STABLE toggleExpanded
+  // ✅ CRITICAL FIX 7: Memoized message components with STABLE toggleExpanded
   const messageComponents = useMemo(() => {
     console.log('🏗️ Building message components, count:', sortedMessages.length);
     return sortedMessages.map((message) => {
@@ -196,7 +169,14 @@ const AnalysisResults: React.FC = () => {
     }).filter(Boolean);
   }, [sortedMessages, messages, scores, expandedMessages, toggleExpanded]); // ← toggleExpanded is now stable!
   
-  console.log('✅ ANALYSIS RESULTS: Rendering with primitive stats:', {
+  // ✅ Safe computed stats access
+  const avgScore = computedStats?.averageScore || 0;
+  const trend = computedStats?.trend || 'stable';
+  const bestScore = computedStats?.bestScore || 0;
+  const totalMessages = computedStats?.totalMessages || messages.length;
+  const completedAnalysis = computedStats?.completedAnalysis || scores.length;
+  
+  console.log('✅ ANALYSIS RESULTS: Rendering with safe stats:', {
     avgScore, trend, bestScore, totalMessages, completedAnalysis
   });
   
