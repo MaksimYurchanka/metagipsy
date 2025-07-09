@@ -9,15 +9,11 @@ import {
   Menu,
   X,
   Github,
-  Twitter,
-  User,
-  LogOut
+  Twitter
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/stores/settingsStore';
-import { useAuth } from '@/hooks/useAuth';
-import { AuthModal } from '@/components/auth/AuthModal';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -25,10 +21,8 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
-  const [showAuthModal, setShowAuthModal] = React.useState(false);
   const location = useLocation();
   const theme = useTheme();
-  const { user, loading, signOut, isAuthenticated } = useAuth();
 
   const navigation = [
     { name: 'Home', href: '/', icon: Home },
@@ -43,15 +37,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
     return location.pathname.startsWith(href);
   };
-
-  // Show loading during auth check
-  if (loading) {
-    return (
-      <div className="flex h-screen bg-background items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-screen bg-background">
@@ -96,18 +81,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </Button>
         </div>
 
-        {/* User info (if authenticated) */}
-        {isAuthenticated && (
-          <div className="px-6 py-3 border-b border-border">
-            <div className="flex items-center space-x-2">
-              <User className="w-4 h-4" />
-              <span className="text-sm font-medium">
-                {user?.email?.split('@')[0] || 'User'}
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Navigation */}
         <nav className="flex-1 px-4 py-6 space-y-2">
           {navigation.map((item) => {
@@ -130,29 +103,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             );
           })}
         </nav>
-
-        {/* Auth section */}
-        <div className="p-4 border-t border-border">
-          {isAuthenticated ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={signOut}
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Sign Out
-            </Button>
-          ) : (
-            <Button
-              className="w-full"
-              onClick={() => setShowAuthModal(true)}
-            >
-              <User className="w-4 h-4 mr-2" />
-              Sign In
-            </Button>
-          )}
-        </div>
 
         {/* Footer */}
         <div className="p-4 border-t border-border">
@@ -207,28 +157,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
 
           <div className="flex items-center space-x-4">
-            {isAuthenticated ? (
-              <>
-                <span className="text-sm text-muted-foreground">
-                  {user?.email?.split('@')[0]}
-                </span>
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                  <User className="w-4 h-4 text-white" />
-                </div>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" size="sm">
-                  Upgrade to Pro
-                </Button>
-                <Button 
-                  size="sm"
-                  onClick={() => setShowAuthModal(true)}
-                >
-                  Sign In
-                </Button>
-              </>
-            )}
+            <Button variant="outline" size="sm">
+              Upgrade to Pro
+            </Button>
+            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full" />
           </div>
         </header>
 
@@ -239,15 +171,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </main>
       </div>
-
-      {/* Auth Modal */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        onSuccess={() => setShowAuthModal(false)}
-      />
     </div>
   );
 };
 
 export default Layout;
+
