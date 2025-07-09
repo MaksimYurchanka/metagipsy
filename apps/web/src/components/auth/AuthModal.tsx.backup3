@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { X, Eye, EyeOff, Mail, Lock, Loader2, CheckCircle, ArrowRight } from 'lucide-react'
+import { X, Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -19,14 +19,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
-  const [messageType, setMessageType] = useState<'success' | 'error' | 'info'>('info')
 
   if (!isOpen) return null
-
-  const showMessage = (text: string, type: 'success' | 'error' | 'info') => {
-    setMessage(text)
-    setMessageType(type)
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,52 +31,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) {
-          if (error.message.includes('Email not confirmed')) {
-            showMessage(
-              '📧 Please check your email and click the confirmation link before signing in.',
-              'info'
-            )
-          } else if (error.message.includes('Invalid login credentials')) {
-            showMessage('❌ Invalid email or password. Please check your credentials.', 'error')
-          } else {
-            showMessage(error.message, 'error')
-          }
+          setMessage(error.message)
         } else {
-          showMessage('✅ Welcome back! Redirecting...', 'success')
+          setMessage('✅ Welcome back!')
           setTimeout(() => {
             onSuccess()
             onClose()
           }, 1000)
         }
       } else {
-        // REGISTRATION
-        const { error } = await supabase.auth.signUp({ 
-          email, 
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`
-          }
-        })
-        
+        const { error } = await supabase.auth.signUp({ email, password })
         if (error) {
-          if (error.message.includes('User already registered')) {
-            showMessage(
-              '👤 This email is already registered. Try signing in instead, or check your email for a confirmation link.',
-              'info'
-            )
-          } else {
-            showMessage(error.message, 'error')
-          }
+          setMessage(error.message)
         } else {
-          showMessage(
-            '🎉 Account created! Please check your email and click the confirmation link to activate your account.',
-            'success'
-          )
-          // Не закрываем модал сразу - пусть пользователь прочитает инструкции
+          setMessage('📧 Check your email for confirmation!')
         }
       }
     } catch (error) {
-      showMessage('❌ Something went wrong. Please try again.', 'error')
+      setMessage('❌ Something went wrong')
     } finally {
       setLoading(false)
     }
@@ -94,35 +60,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     }
   }
 
-  const getMessageStyle = () => {
-    switch (messageType) {
-      case 'success':
-        return 'bg-green-500/10 text-green-500 border-green-500/20'
-      case 'error':
-        return 'bg-red-500/10 text-red-500 border-red-500/20'
-      case 'info':
-        return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-    }
-  }
-
-  const getMessageIcon = () => {
-    switch (messageType) {
-      case 'success':
-        return <CheckCircle className="w-4 h-4 mr-2 flex-shrink-0" />
-      case 'error':
-        return <X className="w-4 h-4 mr-2 flex-shrink-0" />
-      case 'info':
-        return <Mail className="w-4 h-4 mr-2 flex-shrink-0" />
-    }
-  }
-
   return (
+    // ИСПРАВЛЕНО: Более высокий z-index и правильный backdrop для тёмной темы
     <div 
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       onClick={handleBackdropClick}
     >
+      {/* ИСПРАВЛЕНО: Более плотный фон для тёмной темы */}
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
       
+      {/* ИСПРАВЛЕНО: Модальное окно с правильными стилями для тёмной темы */}
       <Card className="relative w-full max-w-md border-border bg-card shadow-2xl">
         <CardHeader className="space-y-1">
           <CardTitle className="text-center flex items-center justify-between text-2xl">
@@ -211,18 +158,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
                   {isLogin ? 'Signing In...' : 'Creating Account...'}
                 </>
               ) : (
-                <>
-                  {isLogin ? 'Sign In' : 'Create Account'}
-                  {!isLogin && <ArrowRight className="w-4 h-4 ml-2" />}
-                </>
+                isLogin ? 'Sign In' : 'Create Account'
               )}
             </Button>
 
-            {/* Сообщение об ошибке/успехе/инфо */}
+            {/* Сообщение об ошибке/успехе */}
             {message && (
-              <div className={`text-sm p-3 rounded-lg border flex items-start ${getMessageStyle()}`}>
-                {getMessageIcon()}
-                <span className="flex-1">{message}</span>
+              <div className={`text-sm text-center p-3 rounded-lg border ${
+                message.includes('✅') || message.includes('📧') 
+                  ? 'bg-green-500/10 text-green-500 border-green-500/20' 
+                  : 'bg-red-500/10 text-red-500 border-red-500/20'
+              }`}>
+                {message}
               </div>
             )}
 
@@ -232,12 +179,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
                 type="button"
                 variant="link"
                 className="text-primary hover:text-primary/80"
-                onClick={() => {
-                  setIsLogin(!isLogin)
-                  setMessage('')
-                  setEmail('')
-                  setPassword('')
-                }}
+                onClick={() => setIsLogin(!isLogin)}
                 disabled={loading}
               >
                 {isLogin 
@@ -256,23 +198,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
               <p>📊 Track your AI collaboration progress</p>
             </div>
           </div>
-
-          {/* Помощь для новых пользователей */}
-          {!isLogin && (
-            <div className="pt-2 border-t border-border">
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                <h4 className="text-sm font-medium text-blue-600 mb-1">
-                  📧 After registration:
-                </h4>
-                <ol className="text-xs text-blue-600 space-y-1">
-                  <li>1. Check your email inbox</li>
-                  <li>2. Click the confirmation link</li>
-                  <li>3. You'll be redirected back here automatically</li>
-                  <li>4. Start analyzing your conversations!</li>
-                </ol>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

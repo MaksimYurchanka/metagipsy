@@ -9,6 +9,7 @@ import HomePage from '@/pages/HomePage';
 import AnalysisPage from '@/pages/AnalysisPage';
 import DashboardPage from '@/pages/DashboardPage';
 import SettingsPage from '@/pages/SettingsPage';
+import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
 
 function App() {
   useEffect(() => {
@@ -19,38 +20,46 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-background text-foreground">
-        <Layout>
-          <Routes>
-            {/* Публичная страница - доступна всем */}
-            <Route path="/" element={<HomePage />} />
-            
-            {/* ЗАЩИЩЕННЫЕ МАРШРУТЫ - требуют авторизации */}
-            <Route 
-              path="/analyze" 
-              element={
-                <ProtectedRoute>
-                  <AnalysisPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                  <DashboardPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/settings" 
-              element={
-                <ProtectedRoute>
-                  <SettingsPage />
-                </ProtectedRoute>
-              } 
-            />
-          </Routes>
-        </Layout>
+        <Routes>
+          {/* СПЕЦИАЛЬНЫЙ МАРШРУТ: Auth Callback - БЕЗ Layout */}
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          
+          {/* ОБЫЧНЫЕ МАРШРУТЫ: С Layout */}
+          <Route path="/*" element={
+            <Layout>
+              <Routes>
+                {/* Публичная страница - доступна всем */}
+                <Route path="/" element={<HomePage />} />
+                
+                {/* ЗАЩИЩЕННЫЕ МАРШРУТЫ - требуют авторизации */}
+                <Route 
+                  path="/analyze" 
+                  element={
+                    <ProtectedRoute>
+                      <AnalysisPage />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/dashboard" 
+                  element={
+                    <ProtectedRoute>
+                      <DashboardPage />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/settings" 
+                  element={
+                    <ProtectedRoute>
+                      <SettingsPage />
+                    </ProtectedRoute>
+                  } 
+                />
+              </Routes>
+            </Layout>
+          } />
+        </Routes>
         
         <Toaster 
           position="bottom-right"
