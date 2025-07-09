@@ -1,6 +1,6 @@
 // apps/web/src/pages/AuthCallbackPage.tsx
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { CheckCircle, XCircle, Loader2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,99 +13,67 @@ export const AuthCallbackPage: React.FC = () => {
   const [message, setMessage] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        console.log('🔐 Processing auth callback...');
-        console.log('Full URL:', window.location.href);
-        console.log('Hash:', window.location.hash);
-        console.log('Search:', window.location.search);
+        // Получаем токены из URL
+        const accessToken = searchParams.get('access_token');
+        const refreshToken = searchParams.get('refresh_token');
+        const type = searchParams.get('type');
+        const error = searchParams.get('error');
+        const errorCode = searchParams.get('error_code');
+        const errorDescription = searchParams.get('error_description');
 
-        // ИСПРАВЛЕНО: Используем встроенный Supabase метод для обработки callback
-        const { data, error } = await supabase.auth.getSession();
-        
-        console.log('Session data:', data);
-        console.log('Session error:', error);
+        console.log('🔐 Auth Callback received:', { type, error, errorCode });
 
+        // Проверяем на ошибки
         if (error) {
-          console.error('❌ Session error:', error);
+          console.error('❌ Auth error:', { error, errorCode, errorDescription });
           
-          if (error.message.includes('expired')) {
+          if (errorCode === 'otp_expired') {
             setStatus('expired');
             setMessage('Your confirmation link has expired. Please sign up again to get a new link.');
           } else {
             setStatus('error');
-            setMessage(error.message || 'Authentication failed. Please try again.');
+            setMessage(errorDescription || 'Authentication failed. Please try again.');
           }
           return;
         }
 
-        // Проверяем есть ли активная сессия
-        if (data.session?.user) {
-          console.log('✅ User session found:', data.session.user.email);
-          console.log('Email confirmed:', data.session.user.email_confirmed_at);
+        // Проверяем тип подтверждения
+        if (type === 'signup') {
+          console.log('📧 Processing email confirmation...');
           
-          setUserEmail(data.session.user.email || '');
-          setStatus('success');
-          setMessage('Your email has been confirmed successfully! You can now access all features.');
+          // Получаем сессию после подтверждения email
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
           
-          // Автоматический редирект через 3 секунды
-          setTimeout(() => {
-            navigate('/analyze', { replace: true });
-          }, 3000);
-          
-        } else {
-          // НЕТ сессии - возможно email еще не подтвержден или ссылка невалидна
-          console.log('❌ No session found, checking URL for auth tokens...');
-          
-          // Проверяем URL на наличие токенов (для случаев когда getSession не работает сразу)
-          const urlParams = new URLSearchParams(window.location.search);
-          const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
-          
-          const accessToken = urlParams.get('access_token') || hashParams.get('access_token');
-          const refreshToken = urlParams.get('refresh_token') || hashParams.get('refresh_token');
-          const errorParam = urlParams.get('error') || hashParams.get('error');
-          const errorDescription = urlParams.get('error_description') || hashParams.get('error_description');
-          
-          console.log('URL tokens:', { accessToken: !!accessToken, refreshToken: !!refreshToken, error: errorParam });
-          
-          if (errorParam) {
+          if (sessionError) {
+            console.error('❌ Session error:', sessionError);
             setStatus('error');
-            setMessage(errorDescription || 'Authentication failed. Please try again.');
+            setMessage('Failed to establish session. Please try signing in again.');
             return;
           }
-          
-          if (accessToken) {
-            // Есть токены, но нет сессии - попробуем установить сессию
-            console.log('🔄 Setting session with tokens...');
-            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken || ''
-            });
+
+          if (session?.user) {
+            console.log('✅ Email confirmed successfully for:', session.user.email);
+            setUserEmail(session.user.email || '');
+            setStatus('success');
+            setMessage('Your email has been confirmed successfully! You can now access all features.');
             
-            if (sessionError) {
-              console.error('❌ Error setting session:', sessionError);
-              setStatus('error');
-              setMessage('Failed to establish session. Please try signing in manually.');
-            } else if (sessionData.session?.user) {
-              console.log('✅ Session established for:', sessionData.session.user.email);
-              setUserEmail(sessionData.session.user.email || '');
-              setStatus('success');
-              setMessage('Your email has been confirmed successfully! You can now access all features.');
-              
-              setTimeout(() => {
-                navigate('/analyze', { replace: true });
-              }, 3000);
-            } else {
-              setStatus('error');
-              setMessage('Email confirmation failed. Please try signing in manually.');
-            }
+            // Автоматический редирект через 3 секунды
+            setTimeout(() => {
+              navigate('/analyze', { replace: true });
+            }, 3000);
           } else {
-            // Ни сессии, ни токенов нет
             setStatus('error');
-            setMessage('No authentication data found. Please try the confirmation link again or sign up again.');
+            setMessage('Email confirmation failed. Please try signing in manually.');
           }
+        } else {
+          // Другие типы аутентификации
+          setStatus('error');
+          setMessage('Invalid authentication type.');
         }
 
       } catch (error) {
@@ -115,33 +83,8 @@ export const AuthCallbackPage: React.FC = () => {
       }
     };
 
-    // Даем время на загрузку
-    const timer = setTimeout(handleAuthCallback, 500);
-    
-    return () => clearTimeout(timer);
-  }, [navigate]);
-
-  // ДОБАВЛЕНО: Слушаем изменения состояния auth
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('🔄 Auth state changed:', event, session?.user?.email);
-        
-        if (event === 'SIGNED_IN' && session?.user && status === 'loading') {
-          console.log('✅ User signed in via state change');
-          setUserEmail(session.user.email || '');
-          setStatus('success');
-          setMessage('Your email has been confirmed successfully! You can now access all features.');
-          
-          setTimeout(() => {
-            navigate('/analyze', { replace: true });
-          }, 3000);
-        }
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, [navigate, status]);
+    handleAuthCallback();
+  }, [searchParams, navigate]);
 
   const handleContinue = () => {
     if (status === 'success') {
@@ -238,14 +181,6 @@ export const AuthCallbackPage: React.FC = () => {
               <p className="text-xs text-center text-muted-foreground">
                 Processing your confirmation...
               </p>
-            </div>
-          )}
-
-          {/* Debug Info (только в development) */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="text-xs bg-muted p-2 rounded">
-              <p>Debug URL: {window.location.href}</p>
-              <p>Status: {status}</p>
             </div>
           )}
 
