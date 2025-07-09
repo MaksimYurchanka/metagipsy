@@ -32,10 +32,7 @@ const FEATURES = [
 ];
 
 const AnalysisPage: React.FC = () => {
-  console.log('🚀 ANALYSIS PAGE: Starting PROTECTED render...');
-  
-  // ✅ ЗАЩИЩЕНО: Эта страница теперь доступна только авторизованным пользователям
-  // Логика auth проверки перенесена в ProtectedRoute компонент
+  console.log('🚀 ANALYSIS PAGE: Starting ULTRA STABLE render...');
   
   // ✅ ULTRA STABLE: Direct store access without complex subscriptions
   const messages = useAnalysisStore((state) => state.messages || []);
@@ -111,18 +108,12 @@ const AnalysisPage: React.FC = () => {
         className="text-center space-y-4"
       >
         <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-          MetaGipsy Chess Engine
+          MetaGipsy Chess Engine - ULTRA STABLE
         </h1>
         <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
           Advanced AI conversation analysis with chess-style scoring. 
           Paste your conversation and get strategic insights with Claude AI or local analysis.
         </p>
-        
-        {/* ✅ ДОБАВЛЕНО: Приветствие для авторизованных пользователей */}
-        <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-600 text-sm">
-          <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
-          You're signed in and ready to analyze!
-        </div>
       </motion.div>
 
       {/* Analysis Interface */}
@@ -184,9 +175,6 @@ const AnalysisPage: React.FC = () => {
   );
 };
 
-// [Все остальные функции остаются без изменений]
-// performClaudeAnalysis, performLocalAnalysis, и helper функции...
-
 // ✅ CRITICAL FIX: Completely rewritten Claude analysis function
 async function performClaudeAnalysis(analysisRequest: any, store: any) {
   console.log('🤖 CLAUDE API: Starting real analysis...');
@@ -195,10 +183,12 @@ async function performClaudeAnalysis(analysisRequest: any, store: any) {
     const response = await api.analyzeConversation(analysisRequest);
     console.log('🤖 CLAUDE API: Received response:', response);
     
+    // ✅ CRITICAL FIX: Handle the actual API response structure
     if (!response || typeof response !== 'object') {
       throw new Error('Invalid API response format');
     }
     
+    // ✅ FIXED: Extract scores from the correct location
     let scoresData = [];
     
     if (response.scores && Array.isArray(response.scores)) {
@@ -211,8 +201,13 @@ async function performClaudeAnalysis(analysisRequest: any, store: any) {
     
     console.log('🤖 CLAUDE API: Processing scores:', scoresData.length);
     
+    // ✅ CRITICAL FIX: Extract actual score data from the nested structure
     const processedScores = scoresData.map((scoreItem, index) => {
-      const actualScore = scoreItem?.score || scoreItem;
+      console.log(`🔍 RAW SCORE ITEM ${index}:`, scoreItem);
+      
+      // ✅ MAIN FIX: API returns { messageIndex: 0, role: "user", score: {...} }
+      // We need to extract the "score" object!
+      const actualScore = scoreItem?.score || scoreItem; // Fallback for different formats
       
       if (!actualScore || typeof actualScore !== 'object') {
         console.warn(`⚠️ Invalid score at index ${index}, using fallback`);
@@ -234,18 +229,23 @@ async function performClaudeAnalysis(analysisRequest: any, store: any) {
         betterMove: actualScore.betterMove || undefined
       };
       
+      console.log(`🎯 CLAUDE API: Normalized score ${index}:`, normalizedScore);
       return normalizedScore;
     });
     
+    // ✅ CRITICAL: Set scores first
     store.setScores(processedScores);
     
+    // ✅ IMPROVED: Handle session summary from API or create from scores
     let sessionSummary = response.summary;
     
     if (!sessionSummary && processedScores.length > 0) {
+      // Create summary from processed scores
       sessionSummary = createSessionSummaryFromScores(processedScores, analysisRequest.conversation.messages);
     }
     
     if (sessionSummary) {
+      console.log('📊 CLAUDE API: Setting session summary:', sessionSummary);
       store.setSessionSummary(sessionSummary);
     }
     
@@ -255,32 +255,39 @@ async function performClaudeAnalysis(analysisRequest: any, store: any) {
     console.error('❌ CLAUDE API: Analysis failed:', error);
     toast.warning('AI analysis failed, falling back to local analysis...');
     
+    // ✅ IMPROVED: Better fallback handling
     await performLocalAnalysis(analysisRequest.conversation.messages, store);
   }
 }
 
+// ✅ IMPROVED: More sophisticated local analysis
 async function performLocalAnalysis(messages: Message[], store: any) {
   console.log('⚡ LOCAL ANALYSIS: Starting analysis for', messages.length, 'messages');
   
   const scores = [];
   
   for (let i = 0; i < messages.length; i++) {
+    // Simulate processing delay
     await new Promise(resolve => setTimeout(resolve, 200));
     
     const score = generateSmartScore(messages[i], i, messages);
     scores.push(score);
     
+    // Update progress
     store.setProgress({ current: i + 1, total: messages.length });
   }
 
+  // Set all scores
   store.setScores(scores);
 
+  // Create session summary
   const summary = createSessionSummaryFromScores(scores, messages);
   store.setSessionSummary(summary);
   
   toast.success(`✅ Local analysis completed! ${scores.length} messages analyzed.`);
 }
 
+// ✅ NEW: Helper functions for better reliability
 function safeNumber(value: any, fallback: number): number {
   const num = Number(value);
   return !isNaN(num) && isFinite(num) ? Math.round(num) : fallback;
@@ -378,6 +385,7 @@ function createSessionSummaryFromScores(scores: any[], messages: Message[]) {
   };
 }
 
+// ✅ IMPROVED: Helper functions
 function getClassification(score: number): string {
   if (score >= 80) return 'brilliant';
   if (score >= 70) return 'excellent';

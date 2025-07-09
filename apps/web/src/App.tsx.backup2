@@ -1,10 +1,8 @@
-// apps/web/src/App.tsx
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { initializeTheme } from '@/stores/settingsStore';
 import Layout from '@/components/layout/Layout';
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import HomePage from '@/pages/HomePage';
 import AnalysisPage from '@/pages/AnalysisPage';
 import DashboardPage from '@/pages/DashboardPage';
@@ -21,34 +19,10 @@ function App() {
       <div className="min-h-screen bg-background text-foreground">
         <Layout>
           <Routes>
-            {/* Публичная страница - доступна всем */}
             <Route path="/" element={<HomePage />} />
-            
-            {/* ЗАЩИЩЕННЫЕ МАРШРУТЫ - требуют авторизации */}
-            <Route 
-              path="/analyze" 
-              element={
-                <ProtectedRoute>
-                  <AnalysisPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                  <DashboardPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/settings" 
-              element={
-                <ProtectedRoute>
-                  <SettingsPage />
-                </ProtectedRoute>
-              } 
-            />
+            <Route path="/analyze" element={<AnalysisPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </Layout>
         
@@ -69,3 +43,4 @@ function App() {
 }
 
 export default App;
+
