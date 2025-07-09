@@ -1,4 +1,4 @@
-// ULTRA-SAFE apps/api/src/lib/claude-client.ts
+// FIXED apps/api/src/lib/claude-client.ts
 
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from './logger';
@@ -42,7 +42,7 @@ export class ClaudeClient {
   }
 
   /**
-   * 🎯 CLAUDE SONNET 4 ANALYSIS - ULTRA-SAFE VERSION
+   * 🎯 CLAUDE SONNET 4 ANALYSIS - LATEST MODEL (claude-sonnet-4-20250514)
    */
   async analyzeMessage(
     message: any,
@@ -72,33 +72,21 @@ export class ClaudeClient {
 
       console.log('✅ CLAUDE ANALYSIS COMPLETE');
       
-      // ✅ ULTRA-SAFE: Handle content with proper type checking
+      // ✅ FIXED: Proper type checking for content
+      const content = response.content[0];
       let analysisText = '';
       
-      try {
-        if (response.content && Array.isArray(response.content) && response.content.length > 0) {
-          const firstContent = response.content[0];
-          if (firstContent && typeof firstContent === 'object' && 'text' in firstContent) {
-            analysisText = String(firstContent.text || '');
-          }
-        }
-      } catch (contentError) {
-        console.log('Content parsing error, using fallback');
-        return this.localFallbackScoring(message, context);
+      if (content && 'text' in content) {
+        analysisText = content.text;
       }
       
       return this.parseAnalysisResponse(analysisText);
 
-    } catch (error) {
-      // ✅ ULTRA-SAFE: Error handling without type assumptions
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const messageRole = message?.role || 'unknown';
-      const messageLength = message?.content?.length || 0;
-      
+    } catch (error: any) {
       logger.error('Claude analysis failed', { 
-        error: errorMessage,
-        messageRole,
-        messageLength 
+        error: error?.message || 'Unknown error',
+        messageRole: message.role,
+        messageLength: message.content?.length 
       });
       
       // Fallback to local scoring instead of failing
@@ -173,56 +161,37 @@ SPECIAL INSTRUCTIONS for benchmark analysis:
   }
 
   /**
-   * Parse Claude's analysis response - ULTRA-SAFE
+   * Parse Claude's analysis response
    */
   private parseAnalysisResponse(text: string): ChessScore {
     try {
       // Extract JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch && jsonMatch[0]) {
+      if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         
-        // Validate and normalize scores with safe fallbacks
-        const overall = this.safeNumber(parsed.overall, 50);
-        const strategic = this.safeNumber(parsed.strategic, 50);
-        const tactical = this.safeNumber(parsed.tactical, 50);
-        const cognitive = this.safeNumber(parsed.cognitive, 50);
-        const innovation = this.safeNumber(parsed.innovation, 50);
-        
+        // Validate and normalize scores
         return {
-          overall: Math.round(overall),
+          overall: Math.round(Math.max(0, Math.min(100, parsed.overall || 50))),
           dimensions: {
-            strategic: Math.round(strategic),
-            tactical: Math.round(tactical),
-            cognitive: Math.round(cognitive),
-            innovation: Math.round(innovation)
+            strategic: Math.round(Math.max(0, Math.min(100, parsed.strategic || 50))),
+            tactical: Math.round(Math.max(0, Math.min(100, parsed.tactical || 50))),
+            cognitive: Math.round(Math.max(0, Math.min(100, parsed.cognitive || 50))),
+            innovation: Math.round(Math.max(0, Math.min(100, parsed.innovation || 50)))
           },
-          classification: String(parsed.classification || 'Average'),
-          chessNotation: String(parsed.chessNotation || '='),
-          confidence: this.safeNumber(parsed.confidence, 0.8),
-          explanation: String(parsed.explanation || 'Analysis completed'),
-          betterMove: parsed.betterMove ? String(parsed.betterMove) : undefined
+          classification: parsed.classification || 'Average',
+          chessNotation: parsed.chessNotation || '=',
+          confidence: Math.max(0, Math.min(1, parsed.confidence || 0.8)),
+          explanation: parsed.explanation || 'Analysis completed',
+          betterMove: parsed.betterMove
         };
       }
-    } catch (parseError) {
-      const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parse error';
-      logger.error('Failed to parse Claude response', { 
-        error: errorMessage, 
-        text: text.substring(0, 200) 
-      });
+    } catch (error) {
+      logger.error('Failed to parse Claude response', { error: error?.message, text: text.substring(0, 200) });
     }
 
     // Fallback scoring if parsing fails
     return this.generateFallbackScore();
-  }
-
-  /**
-   * Safe number conversion with bounds checking
-   */
-  private safeNumber(value: any, fallback: number): number {
-    const num = Number(value);
-    if (isNaN(num)) return fallback;
-    return Math.max(0, Math.min(100, num));
   }
 
   /**
@@ -232,7 +201,7 @@ SPECIAL INSTRUCTIONS for benchmark analysis:
     console.log('🔧 USING LOCAL FALLBACK SCORING');
     
     // Simple heuristic scoring
-    const content = String(message?.content || '');
+    const content = message.content || '';
     const length = content.length;
     
     let strategic = 50;
@@ -240,38 +209,24 @@ SPECIAL INSTRUCTIONS for benchmark analysis:
     let cognitive = 50;
     let innovation = 50;
 
-    // Strategic scoring - safe regex matching
-    try {
-      if (/goal|objective|target|achieve|result/i.test(content)) strategic += 15;
-      if (/because|therefore|so that|in order to/i.test(content)) strategic += 10;
-      const questionMatches = content.match(/\?/g);
-      if (questionMatches && questionMatches.length > 0) strategic += 5;
-    } catch (regexError) {
-      console.log('Regex error in strategic scoring, using base score');
-    }
+    // Strategic scoring
+    if (content.match(/goal|objective|target|achieve|result/i)) strategic += 15;
+    if (content.match(/because|therefore|so that|in order to/i)) strategic += 10;
+    if ((content.match(/\?/g) || []).length > 0) strategic += 5;
 
-    // Tactical scoring - safe regex matching
-    try {
-      if (length > 100) tactical += 10;
-      const numberMatches = content.match(/\d+/g);
-      if (numberMatches && numberMatches.length > 0) tactical += 15;
-      if (/for example|such as|specifically/i.test(content)) tactical += 10;
-      if (content.includes('\n')) tactical += 5;
-    } catch (regexError) {
-      console.log('Regex error in tactical scoring, using base score');
-    }
+    // Tactical scoring  
+    if (length > 100) tactical += 10;
+    if ((content.match(/\d+/g) || []).length > 0) tactical += 15; // Has numbers
+    if (content.match(/for example|such as|specifically/i)) tactical += 10;
+    if (content.includes('\n')) tactical += 5; // Structured
 
     // Cognitive scoring
-    if (length > 50 && length < 500) cognitive += 10;
-    if (context.messagePosition === 0) cognitive += 5;
+    if (length > 50 && length < 500) cognitive += 10; // Good length
+    if (context.messagePosition === 0) cognitive += 5; // Good start
     
-    // Innovation scoring - safe regex matching
-    try {
-      if (/creative|innovative|alternative|different/i.test(content)) innovation += 15;
-      if (/what if|how about|consider/i.test(content)) innovation += 10;
-    } catch (regexError) {
-      console.log('Regex error in innovation scoring, using base score');
-    }
+    // Innovation scoring
+    if (content.match(/creative|innovative|alternative|different/i)) innovation += 15;
+    if (content.match(/what if|how about|consider/i)) innovation += 10;
 
     // Normalize scores
     strategic = Math.min(100, strategic);
