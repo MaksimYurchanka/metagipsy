@@ -1,4 +1,4 @@
-// FIXED apps/api/src/lib/claude-client.ts
+// ОБНОВИТЬ apps/api/src/lib/claude-client.ts
 
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from './logger';
@@ -42,7 +42,7 @@ export class ClaudeClient {
   }
 
   /**
-   * 🎯 CLAUDE SONNET 4 ANALYSIS - LATEST MODEL (claude-sonnet-4-20250514)
+   * 🎯 CLAUDE SONNET 4 ANALYSIS - UNLIMITED POWER
    */
   async analyzeMessage(
     message: any,
@@ -57,11 +57,11 @@ export class ClaudeClient {
       
       const prompt = this.buildAnalysisPrompt(message, context);
       
-      // 🚀 CLAUDE SONNET 4 - LATEST MODEL
+      // 🚀 CLAUDE SONNET 4 - NO LIMITS!
       const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', // ✅ LATEST CLAUDE SONNET 4
-        max_tokens: 4000,
-        temperature: 0.1,
+        model: 'claude-sonnet-4-20250514', // ✅ UPDATED TO CLAUDE 4
+        max_tokens: 4000, // Increased for detailed analysis
+        temperature: 0.1, // Low temperature for consistent scoring
         messages: [
           {
             role: 'user',
@@ -72,25 +72,105 @@ export class ClaudeClient {
 
       console.log('✅ CLAUDE ANALYSIS COMPLETE');
       
-      // ✅ FIXED: Proper type checking for content
-      const content = response.content[0];
-      let analysisText = '';
-      
-      if (content && 'text' in content) {
-        analysisText = content.text;
-      }
-      
+      const analysisText = response.content[0]?.text || '';
       return this.parseAnalysisResponse(analysisText);
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Claude analysis failed', { 
-        error: error?.message || 'Unknown error',
+        error: error.message,
         messageRole: message.role,
         messageLength: message.content?.length 
       });
       
       // Fallback to local scoring instead of failing
       return this.localFallbackScoring(message, context);
+    }
+  }
+
+  /**
+   * 💰 BATCH ANALYSIS FOR COST OPTIMIZATION (50% discount)
+   */
+  async analyzeBatch(
+    messages: any[],
+    context: AnalysisContext
+  ): Promise<ChessScore[]> {
+    if (!config.anthropic?.apiKey || messages.length < 5) {
+      // Use individual analysis for small batches
+      const scores = [];
+      for (const message of messages) {
+        scores.push(await this.analyzeMessage(message, context));
+      }
+      return scores;
+    }
+
+    try {
+      console.log(`💰 BATCH ANALYSIS: ${messages.length} messages (50% cost reduction)`);
+      
+      // Prepare batch requests
+      const batchRequests = messages.map((message, index) => ({
+        custom_id: `msg_${index}`,
+        params: {
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4000,
+          temperature: 0.1,
+          messages: [
+            {
+              role: 'user',
+              content: this.buildAnalysisPrompt(message, {
+                ...context,
+                messagePosition: index,
+                previousMessages: messages.slice(0, index)
+              })
+            }
+          ]
+        }
+      }));
+
+      // Submit batch job
+      const batch = await this.anthropic.batches.create({
+        requests: batchRequests
+      });
+
+      console.log(`📦 BATCH SUBMITTED: ${batch.id}`);
+      
+      // Wait for completion (with timeout)
+      let batchStatus = batch;
+      let attempts = 0;
+      const maxAttempts = 30; // 5 minutes max wait
+      
+      while (batchStatus.processing_status !== 'ended' && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10s
+        batchStatus = await this.anthropic.batches.retrieve(batch.id);
+        attempts++;
+        console.log(`⏳ BATCH STATUS: ${batchStatus.processing_status} (${attempts}/${maxAttempts})`);
+      }
+
+      if (batchStatus.processing_status !== 'ended') {
+        console.log('⚠️ BATCH TIMEOUT - falling back to individual analysis');
+        return this.analyzeIndividually(messages, context);
+      }
+
+      // Retrieve and parse results
+      const results = await this.anthropic.batches.results(batch.id);
+      const scores: ChessScore[] = [];
+
+      for (const result of results) {
+        if (result.result?.type === 'succeeded') {
+          const analysisText = result.result.message.content[0]?.text || '';
+          scores.push(this.parseAnalysisResponse(analysisText));
+        } else {
+          // Fallback for failed individual items
+          const messageIndex = parseInt(result.custom_id.replace('msg_', ''));
+          scores.push(await this.localFallbackScoring(messages[messageIndex], context));
+        }
+      }
+
+      console.log(`✅ BATCH COMPLETE: ${scores.length} scores generated`);
+      return scores;
+
+    } catch (error) {
+      logger.error('Batch analysis failed', { error: error.message });
+      return this.analyzeIndividually(messages, context);
     }
   }
 
@@ -187,7 +267,7 @@ SPECIAL INSTRUCTIONS for benchmark analysis:
         };
       }
     } catch (error) {
-      logger.error('Failed to parse Claude response', { error: error?.message, text: text.substring(0, 200) });
+      logger.error('Failed to parse Claude response', { error, text: text.substring(0, 200) });
     }
 
     // Fallback scoring if parsing fails
@@ -197,7 +277,7 @@ SPECIAL INSTRUCTIONS for benchmark analysis:
   /**
    * Fallback to local scoring when Claude is unavailable
    */
-  private localFallbackScoring(message: any, context: AnalysisContext): ChessScore {
+  private async localFallbackScoring(message: any, context: AnalysisContext): Promise<ChessScore> {
     console.log('🔧 USING LOCAL FALLBACK SCORING');
     
     // Simple heuristic scoring
@@ -212,11 +292,11 @@ SPECIAL INSTRUCTIONS for benchmark analysis:
     // Strategic scoring
     if (content.match(/goal|objective|target|achieve|result/i)) strategic += 15;
     if (content.match(/because|therefore|so that|in order to/i)) strategic += 10;
-    if ((content.match(/\?/g) || []).length > 0) strategic += 5;
+    if (content.match(/\?/g)?.length > 0) strategic += 5;
 
     // Tactical scoring  
     if (length > 100) tactical += 10;
-    if ((content.match(/\d+/g) || []).length > 0) tactical += 15; // Has numbers
+    if (content.match(/\d+/g)?.length > 0) tactical += 15; // Has numbers
     if (content.match(/for example|such as|specifically/i)) tactical += 10;
     if (content.includes('\n')) tactical += 5; // Structured
 
@@ -245,6 +325,21 @@ SPECIAL INSTRUCTIONS for benchmark analysis:
       explanation: `Local analysis: Strategic clarity and goal focus detected.`,
       betterMove: overall < 70 ? 'Consider being more specific about your goals and context.' : undefined
     };
+  }
+
+  /**
+   * Analyze messages individually (fallback for batch failures)
+   */
+  private async analyzeIndividually(messages: any[], context: AnalysisContext): Promise<ChessScore[]> {
+    const scores = [];
+    for (let i = 0; i < messages.length; i++) {
+      scores.push(await this.analyzeMessage(messages[i], {
+        ...context,
+        messagePosition: i,
+        previousMessages: messages.slice(0, i)
+      }));
+    }
+    return scores;
   }
 
   private generateFallbackScore(): ChessScore {

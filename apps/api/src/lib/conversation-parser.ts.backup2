@@ -1,4 +1,4 @@
-// FIXED apps/api/src/lib/conversation-parser.ts
+// ПОЛНАЯ ЗАМЕНА conversation-parser.ts
 
 import { Message, Platform } from '../types';
 
@@ -57,12 +57,12 @@ export class ConversationParser {
     
     patterns.claude.forEach(pattern => {
       const matches = text.match(pattern);
-      if (matches && matches.length) claudeScore += matches.length; // ✅ FIXED: Added length check
+      if (matches) claudeScore += matches.length;
     });
     
     patterns.chatgpt.forEach(pattern => {
       const matches = text.match(pattern);
-      if (matches && matches.length) chatgptScore += matches.length; // ✅ FIXED: Added length check
+      if (matches) chatgptScore += matches.length;
     });
     
     console.log(`📊 PLATFORM SCORES: Claude=${claudeScore}, ChatGPT=${chatgptScore}`);
