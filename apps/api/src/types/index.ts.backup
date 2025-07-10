@@ -79,9 +79,8 @@ export type Platform = 'CLAUDE' | 'CHATGPT' | 'OTHER' | 'AUTO';
 
 export type UserTier = 'free' | 'pro' | 'enterprise';
 
-// ✅ ИСПРАВЛЕНО: Добавлено поле title в SessionMetadata
+// Missing interfaces that caused build errors
 export interface SessionMetadata {
-  title?: string;           // ← ДОБАВЛЕНО!
   platform?: string;
   projectContext?: string;
   sessionGoal?: string;
