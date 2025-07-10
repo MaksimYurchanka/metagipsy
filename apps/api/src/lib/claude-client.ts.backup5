@@ -1,4 +1,4 @@
-// ВОССТАНОВЛЕН apps/api/src/lib/claude-client.ts
+// ULTRA-SAFE apps/api/src/lib/claude-client.ts
 
 import Anthropic from '@anthropic-ai/sdk';
 import { logger } from './logger';
@@ -46,7 +46,7 @@ export class ClaudeClient {
   }
 
   /**
-   * 🎯 CLAUDE SONNET 4 ANALYSIS - ВОССТАНОВЛЕНА ПРАВИЛЬНАЯ МОДЕЛЬ
+   * 🎯 CLAUDE 3.5 SONNET ANALYSIS - PRODUCTION READY
    */
   async analyzeMessage(
     message: any,
@@ -59,13 +59,13 @@ export class ClaudeClient {
         return this.localFallbackScoring(message, context);
       }
 
-      console.log('🧠 CLAUDE SONNET 4 ANALYSIS STARTING...');
+      console.log('🧠 CLAUDE 3.5 SONNET ANALYSIS STARTING...');
       
       const prompt = this.buildAnalysisPrompt(message, context);
       
-      // ✅ ВОССТАНОВЛЕНО: Claude Sonnet 4 (правильная модель из backup2)
+      // ✅ ИСПРАВЛЕНО: Используем Claude 3.5 Sonnet (проверенная модель)
       const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514', // ✅ ВОССТАНОВЛЕНА CLAUDE SONNET 4!
+        model: 'claude-3-5-sonnet-20241022', // ✅ АКТУАЛЬНАЯ РАБОЧАЯ МОДЕЛЬ
         max_tokens: 4000,
         temperature: 0.1,
         messages: [
@@ -76,7 +76,7 @@ export class ClaudeClient {
         ]
       });
 
-      console.log('✅ CLAUDE SONNET 4 ANALYSIS COMPLETE');
+      console.log('✅ CLAUDE ANALYSIS COMPLETE');
       
       // ✅ ULTRA-SAFE: Handle content with proper type checking
       let analysisText = '';
@@ -106,14 +106,12 @@ export class ClaudeClient {
       console.log('- Error message:', errorMessage);
       console.log('- API Key present:', !!config.anthropic?.apiKey);
       console.log('- API Key length:', config.anthropic?.apiKey?.length || 0);
-      console.log('- Model used: claude-sonnet-4-20250514');
       
       logger.error('Claude analysis failed', { 
         error: errorMessage,
         messageRole,
         messageLength,
-        hasApiKey: !!config.anthropic?.apiKey,
-        model: 'claude-sonnet-4-20250514'
+        hasApiKey: !!config.anthropic?.apiKey
       });
       
       // Fallback to local scoring instead of failing
