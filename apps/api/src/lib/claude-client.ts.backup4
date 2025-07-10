@@ -32,12 +32,8 @@ export class ClaudeClient {
   private anthropic: Anthropic;
 
   constructor() {
-    // ✅ УЛУЧШЕНА ДИАГНОСТИКА API KEY
-    if (!config.anthropic?.apiKey || config.anthropic.apiKey === '') {
-      logger.warn('ANTHROPIC_API_KEY not configured - using fallback scoring');
-      console.log('🔑 API Key status:', config.anthropic?.apiKey ? 'Present but empty' : 'Not present');
-    } else {
-      console.log('🔑 ANTHROPIC_API_KEY configured successfully');
+    if (!config.anthropic?.apiKey) {
+      logger.warn('Claude API key not configured - using fallback scoring');
     }
     
     this.anthropic = new Anthropic({
@@ -46,26 +42,24 @@ export class ClaudeClient {
   }
 
   /**
-   * 🎯 CLAUDE 3.5 SONNET ANALYSIS - PRODUCTION READY
+   * 🎯 CLAUDE SONNET 4 ANALYSIS - ULTRA-SAFE VERSION
    */
   async analyzeMessage(
     message: any,
     context: AnalysisContext
   ): Promise<ChessScore> {
     try {
-      // ✅ УЛУЧШЕНА ПРОВЕРКА API KEY
-      if (!config.anthropic?.apiKey || config.anthropic.apiKey === '') {
-        console.log('⚠️ No valid API key, using local fallback');
+      if (!config.anthropic?.apiKey) {
         return this.localFallbackScoring(message, context);
       }
 
-      console.log('🧠 CLAUDE 3.5 SONNET ANALYSIS STARTING...');
+      console.log('🧠 CLAUDE SONNET 4 ANALYSIS STARTING...');
       
       const prompt = this.buildAnalysisPrompt(message, context);
       
-      // ✅ ИСПРАВЛЕНО: Используем Claude 3.5 Sonnet (проверенная модель)
+      // 🚀 CLAUDE SONNET 4 - LATEST MODEL
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022', // ✅ АКТУАЛЬНАЯ РАБОЧАЯ МОДЕЛЬ
+        model: 'claude-sonnet-4-20250514', // ✅ LATEST CLAUDE SONNET 4
         max_tokens: 4000,
         temperature: 0.1,
         messages: [
@@ -96,22 +90,15 @@ export class ClaudeClient {
       return this.parseAnalysisResponse(analysisText);
 
     } catch (error) {
-      // ✅ УЛУЧШЕНА ДИАГНОСТИКА ОШИБОК
+      // ✅ ULTRA-SAFE: Error handling without type assumptions
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const messageRole = message?.role || 'unknown';
       const messageLength = message?.content?.length || 0;
       
-      // ✅ ДОБАВЛЕНА ДЕТАЛЬНАЯ ДИАГНОСТИКА
-      console.log('❌ CLAUDE API ERROR DETAILS:');
-      console.log('- Error message:', errorMessage);
-      console.log('- API Key present:', !!config.anthropic?.apiKey);
-      console.log('- API Key length:', config.anthropic?.apiKey?.length || 0);
-      
       logger.error('Claude analysis failed', { 
         error: errorMessage,
         messageRole,
-        messageLength,
-        hasApiKey: !!config.anthropic?.apiKey
+        messageLength 
       });
       
       // Fallback to local scoring instead of failing
