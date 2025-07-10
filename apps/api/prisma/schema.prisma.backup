@@ -32,21 +32,6 @@ model Session {
   title       String?
   platform    Platform    @default(OTHER)
   status      SessionStatus @default(ACTIVE)
-  
-  // ✅ ДОБАВЛЕНО: Агрегированные метрики для быстрого доступа
-  messageCount    Int         @default(0)
-  overallScore    Float       @default(0)
-  strategicAvg    Float       @default(0)
-  tacticalAvg     Float       @default(0)
-  cognitiveAvg    Float       @default(0)
-  innovationAvg   Float       @default(0)
-  
-  // ✅ ДОБАВЛЕНО: Дополнительные метрики
-  bestScore       Float?
-  worstScore      Float?
-  trend           String?     // 'improving' | 'declining' | 'stable' | 'volatile'
-  sessionDuration Int?        // minutes
-  
   metadata    Json?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -65,7 +50,7 @@ model Message {
   id        String   @id @default(cuid())
   sessionId String
   role      Role
-  content   String   @db.Text  // ✅ ИСПРАВЛЕНО: Text для длинного контента
+  content   String
   timestamp DateTime?
   index     Int
   metadata  Json?
@@ -91,8 +76,8 @@ model Score {
   classification String
   chessNotation  String
   confidence  Float
-  explanation String?  @db.Text  // ✅ ИСПРАВЛЕНО: Text для длинного контента
-  betterMove  String?  @db.Text  // ✅ ИСПРАВЛЕНО: Text для длинного контента
+  explanation String?
+  betterMove  String?
   createdAt   DateTime @default(now())
 
   // Relations
@@ -110,7 +95,7 @@ model Pattern {
   startIndex  Int
   endIndex    Int
   confidence  Float
-  description String      @db.Text  // ✅ ИСПРАВЛЕНО: Text для длинного контента
+  description String
   metadata    Json?
   createdAt   DateTime    @default(now())
 
@@ -125,7 +110,7 @@ model Insight {
   sessionId   String
   type        InsightType
   title       String
-  description String      @db.Text  // ✅ ИСПРАВЛЕНО: Text для длинного контента
+  description String
   priority    Priority    @default(MEDIUM)
   actionable  Boolean     @default(false)
   metadata    Json?
@@ -153,7 +138,7 @@ model ApiKey {
   @@map("api_keys")
 }
 
-// ✅ ДОБАВЛЕНО: Analytics tables для агрегированной статистики
+// Analytics tables
 model DailyStats {
   id              String   @id @default(cuid())
   date            DateTime @unique
@@ -231,3 +216,4 @@ enum Priority {
   HIGH
   CRITICAL
 }
+

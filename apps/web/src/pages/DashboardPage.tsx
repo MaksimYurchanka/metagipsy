@@ -1,306 +1,477 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, TrendingUp, Calendar, Download } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
+import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { 
+  BarChart3, 
+  TrendingUp, 
+  Calendar, 
+  Target, 
+  Trophy,
+  Download,
+  Trash2,
+  Eye,
+  Loader2
+} from 'lucide-react';
+
+interface SessionData {
+  id: string;
+  title?: string;
+  platform: string;
+  messageCount: number;
+  overallScore: number;
+  strategicAvg: number;
+  tacticalAvg: number;
+  cognitiveAvg: number;
+  innovationAvg: number;
+  trend?: 'improving' | 'declining' | 'stable' | 'volatile';
+  createdAt: string;
+  projectContext?: string;
+  sessionGoal?: string;
+}
+
+interface AnalyticsData {
+  totalSessions: number;
+  totalMessages: number;
+  averageScore: number;
+  improvementRate: number;
+  dimensionAverages: {
+    strategic: number;
+    tactical: number;
+    cognitive: number;
+    innovation: number;
+  };
+  trendDistribution: Record<string, number>;
+  platformDistribution: Record<string, number>;
+  scoreHistory: Array<{
+    date: string;
+    score: number;
+  }>;
+}
 
 const DashboardPage: React.FC = () => {
-  // Mock data for demonstration
-  const stats = {
-    totalSessions: 24,
-    totalMessages: 156,
-    averageScore: 73,
-    improvementRate: 12
+  const { user, isAuthenticated } = useAuth();
+  const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      fetchDashboardData();
+    }
+  }, [isAuthenticated, user]);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch user sessions and analytics in parallel
+      const [sessionsResponse, analyticsResponse] = await Promise.all([
+        api.getUserSessions(user?.id, 1, 20), // First 20 sessions
+        api.getUserAnalytics(30) // Last 30 days
+      ]);
+
+      setSessions(sessionsResponse.sessions || []);
+      setAnalytics(analyticsResponse);
+
+      console.log('✅ Dashboard data loaded:', {
+        sessionsCount: sessionsResponse.sessions?.length || 0,
+        analytics: analyticsResponse
+      });
+
+    } catch (error) {
+      console.error('❌ Failed to load dashboard data:', error);
+      setError('Failed to load dashboard data. Please try again.');
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const recentSessions = [
-    {
-      id: '1',
-      title: 'React Component Help',
-      platform: 'claude',
-      messageCount: 8,
-      averageScore: 78,
-      createdAt: '2024-01-15T10:30:00Z'
-    },
-    {
-      id: '2',
-      title: 'Python Debugging',
-      platform: 'chatgpt',
-      messageCount: 12,
-      averageScore: 65,
-      createdAt: '2024-01-14T15:45:00Z'
-    },
-    {
-      id: '3',
-      title: 'API Design Discussion',
-      platform: 'claude',
-      messageCount: 15,
-      averageScore: 82,
-      createdAt: '2024-01-13T09:20:00Z'
+  const deleteSession = async (sessionId: string) => {
+    try {
+      await api.deleteSession(sessionId);
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      toast.success('Session deleted successfully');
+      
+      // Refresh analytics after deletion
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+      toast.error('Failed to delete session');
     }
-  ];
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 80) return 'text-emerald-500';
-    if (score >= 70) return 'text-blue-500';
-    if (score >= 60) return 'text-sky-400';
-    if (score >= 40) return 'text-gray-400';
-    return 'text-orange-500';
+    if (score >= 80) return 'text-green-600 bg-green-50 border-green-200';
+    if (score >= 70) return 'text-blue-600 bg-blue-50 border-blue-200';
+    if (score >= 60) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+    if (score >= 40) return 'text-orange-600 bg-orange-50 border-orange-200';
+    return 'text-red-600 bg-red-50 border-red-200';
   };
 
-  const getPlatformBadge = (platform: string) => {
-    const colors = {
-      claude: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-      chatgpt: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-      other: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-    };
-    
-    return (
-      <Badge className={colors[platform as keyof typeof colors] || colors.other}>
-        {platform.charAt(0).toUpperCase() + platform.slice(1)}
-      </Badge>
-    );
+  const getScoreLabel = (score: number) => {
+    if (score >= 80) return 'Brilliant';
+    if (score >= 70) return 'Excellent';
+    if (score >= 60) return 'Good';
+    if (score >= 40) return 'Average';
+    return 'Needs Work';
   };
+
+  const getTrendIcon = (trend?: string) => {
+    switch (trend) {
+      case 'improving':
+        return <TrendingUp className="w-4 h-4 text-green-500" />;
+      case 'declining':
+        return <TrendingUp className="w-4 h-4 text-red-500 rotate-180" />;
+      case 'volatile':
+        return <BarChart3 className="w-4 h-4 text-orange-500" />;
+      default:
+        return <Target className="w-4 h-4 text-blue-500" />;
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="p-8 text-center">
+          <CardContent>
+            <h2 className="text-xl font-bold mb-4">Please log in to view your dashboard</h2>
+            <Button onClick={() => window.location.href = '/analyze'}>
+              Go to Analysis
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto" />
+          <p className="text-muted-foreground">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="p-8 text-center">
+          <CardContent>
+            <h2 className="text-xl font-bold mb-4 text-red-600">Error Loading Dashboard</h2>
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button onClick={fetchDashboardData}>Try Again</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="space-y-4"
       >
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Track your conversation analysis progress and insights
-          </p>
-        </div>
+        <h1 className="text-4xl font-bold">Your Analysis Dashboard</h1>
+        <p className="text-xl text-muted-foreground">
+          Track your AI conversation improvement journey
+        </p>
         
-        <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm">
-            <Calendar className="h-4 w-4 mr-2" />
-            Last 30 days
-          </Button>
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
+        <div className="flex items-center gap-2 text-sm text-green-600">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          Welcome back, {user?.email}!
         </div>
       </motion.div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          {
-            title: 'Total Sessions',
-            value: stats.totalSessions,
-            icon: BarChart3,
-            color: 'text-blue-500',
-            change: '+3 this week'
-          },
-          {
-            title: 'Messages Analyzed',
-            value: stats.totalMessages,
-            icon: TrendingUp,
-            color: 'text-green-500',
-            change: '+24 this week'
-          },
-          {
-            title: 'Average Score',
-            value: stats.averageScore,
-            icon: BarChart3,
-            color: 'text-purple-500',
-            change: '+5 points'
-          },
-          {
-            title: 'Improvement Rate',
-            value: `${stats.improvementRate}%`,
-            icon: TrendingUp,
-            color: 'text-emerald-500',
-            change: '+2% this month'
-          }
-        ].map((stat, index) => (
-          <motion.div
-            key={stat.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">{stat.title}</p>
-                    <p className="text-3xl font-bold">{stat.value}</p>
-                    <p className="text-xs text-green-600">{stat.change}</p>
-                  </div>
-                  <div className={`p-3 rounded-full bg-muted ${stat.color}`}>
-                    <stat.icon className="h-6 w-6" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Score Trend Chart */}
+      {/* Analytics Overview */}
+      {analytics && (
         <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
         >
           <Card>
-            <CardHeader>
-              <CardTitle>Score Trends</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Analyses</CardTitle>
+              <BarChart3 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="h-64 flex items-center justify-center bg-muted/50 rounded-lg">
-                <div className="text-center space-y-2">
-                  <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto" />
-                  <p className="text-muted-foreground">Chart visualization coming soon</p>
-                </div>
+              <div className="text-2xl font-bold">{analytics.totalSessions}</div>
+              <p className="text-xs text-muted-foreground">
+                {analytics.totalMessages} total messages analyzed
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Average Score</CardTitle>
+              <Target className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{analytics.averageScore}</div>
+              <p className="text-xs text-muted-foreground">
+                {getScoreLabel(analytics.averageScore)} performance
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Improvement Rate</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {analytics.improvementRate > 0 ? '+' : ''}{analytics.improvementRate}%
               </div>
+              <p className="text-xs text-muted-foreground">
+                vs previous period
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Best Dimension</CardTitle>
+              <Trophy className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {Object.entries(analytics.dimensionAverages)
+                  .sort(([,a], [,b]) => b - a)[0]?.[0]?.charAt(0).toUpperCase() + 
+                 Object.entries(analytics.dimensionAverages)
+                  .sort(([,a], [,b]) => b - a)[0]?.[0]?.slice(1) || 'Strategic'}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {Math.round(Math.max(...Object.values(analytics.dimensionAverages)))} average
+              </p>
             </CardContent>
           </Card>
         </motion.div>
+      )}
 
-        {/* Dimension Breakdown */}
+      {/* Dimension Breakdown */}
+      {analytics && (
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.5 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
         >
           <Card>
             <CardHeader>
-              <CardTitle>Dimension Breakdown</CardTitle>
+              <CardTitle>Skill Dimensions</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {[
-                  { name: 'Strategic', score: 75, color: 'bg-purple-500' },
-                  { name: 'Tactical', score: 78, color: 'bg-blue-500' },
-                  { name: 'Cognitive', score: 70, color: 'bg-green-500' },
-                  { name: 'Innovation', score: 68, color: 'bg-yellow-500' }
-                ].map((dimension) => (
-                  <div key={dimension.name} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{dimension.name}</span>
-                      <span className="text-sm text-muted-foreground">{dimension.score}</span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full ${dimension.color}`}
-                        style={{ width: `${dimension.score}%` }}
-                      />
-                    </div>
+            <CardContent className="space-y-4">
+              {Object.entries(analytics.dimensionAverages).map(([dimension, score]) => (
+                <div key={dimension} className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="capitalize font-medium">{dimension}</span>
+                    <span className="text-muted-foreground">{Math.round(score)}/100</span>
                   </div>
-                ))}
-              </div>
+                  <Progress value={score} className="h-2" />
+                </div>
+              ))}
             </CardContent>
           </Card>
         </motion.div>
-      </div>
+      )}
 
-      {/* Recent Sessions */}
+      {/* Session History */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6 }}
+        transition={{ delay: 0.3 }}
       >
         <Card>
           <CardHeader>
-            <CardTitle>Recent Sessions</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              Recent Analyses
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => window.location.href = '/analyze'}
+              >
+                New Analysis
+              </Button>
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentSessions.map((session, index) => (
-                <motion.div
-                  key={session.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.7 + index * 0.1 }}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-semibold">
-                      {session.title.charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="font-medium">{session.title}</h3>
-                      <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                        <span>{session.messageCount} messages</span>
-                        <span>•</span>
-                        <span>{formatDate(session.createdAt)}</span>
+            {sessions.length === 0 ? (
+              <div className="text-center py-12">
+                <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">No analyses yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  Start analyzing your AI conversations to see insights here
+                </p>
+                <Button onClick={() => window.location.href = '/analyze'}>
+                  Start Your First Analysis
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {sessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className="border rounded-lg p-4 hover:bg-accent/50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-medium truncate">
+                            {session.title || `${session.platform} Analysis`}
+                          </h3>
+                          <Badge variant="outline" className="text-xs">
+                            {session.platform}
+                          </Badge>
+                          {getTrendIcon(session.trend)}
+                        </div>
+                        
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span>{session.messageCount} messages</span>
+                          <span>•</span>
+                          <span>{new Date(session.createdAt).toLocaleDateString()}</span>
+                          {session.projectContext && (
+                            <>
+                              <span>•</span>
+                              <span className="truncate max-w-xs">{session.projectContext}</span>
+                            </>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-4">
+                          <Badge 
+                            className={`${getScoreColor(session.overallScore)} border`}
+                          >
+                            {session.overallScore}/100
+                          </Badge>
+                          <div className="text-xs text-muted-foreground">
+                            S:{Math.round(session.strategicAvg)} T:{Math.round(session.tacticalAvg)} C:{Math.round(session.cognitiveAvg)} I:{Math.round(session.innovationAvg)}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => window.open(`/sessions/${session.id}`, '_blank')}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const url = `${api.baseUrl}/sessions/${session.id}/export?format=json`;
+                            window.open(url, '_blank');
+                          }}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm('Are you sure you want to delete this session?')) {
+                              deleteSession(session.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center space-x-3">
-                    {getPlatformBadge(session.platform)}
-                    <div className="text-right">
-                      <div className={`text-lg font-semibold ${getScoreColor(session.averageScore)}`}>
-                        {session.averageScore}
-                      </div>
-                      <div className="text-xs text-muted-foreground">avg score</div>
-                    </div>
+                ))}
+                
+                {sessions.length >= 20 && (
+                  <div className="text-center pt-4">
+                    <Button 
+                      variant="outline"
+                      onClick={() => {
+                        // TODO: Implement pagination
+                        toast.info('Pagination coming soon!');
+                      }}
+                    >
+                      Load More Sessions
+                    </Button>
                   </div>
-                </motion.div>
-              ))}
-            </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
 
-      {/* Insights Section */}
+      {/* Quick Actions */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.9 }}
+        transition={{ delay: 0.4 }}
+        className="grid grid-cols-1 md:grid-cols-3 gap-6"
       >
-        <Card>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" 
+              onClick={() => window.location.href = '/analyze'}>
           <CardHeader>
-            <CardTitle>Insights & Recommendations</CardTitle>
+            <CardTitle className="text-lg">New Analysis</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
-                <div className="text-2xl mb-2">🎯</div>
-                <h4 className="font-medium mb-2">Strong Strategic Thinking</h4>
-                <p className="text-sm text-muted-foreground">
-                  Your conversations show excellent goal alignment and clear objectives.
-                </p>
-              </div>
-              
-              <div className="text-center p-4 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg">
-                <div className="text-2xl mb-2">⚡</div>
-                <h4 className="font-medium mb-2">Improve Specificity</h4>
-                <p className="text-sm text-muted-foreground">
-                  Try being more specific in your requests for better AI responses.
-                </p>
-              </div>
-              
-              <div className="text-center p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                <div className="text-2xl mb-2">💡</div>
-                <h4 className="font-medium mb-2">Innovation Opportunity</h4>
-                <p className="text-sm text-muted-foreground">
-                  Explore more creative approaches to unlock breakthrough insights.
-                </p>
-              </div>
-            </div>
+            <p className="text-muted-foreground mb-4">
+              Analyze a new AI conversation and get chess-style scoring
+            </p>
+            <Button className="w-full">Start Analysis</Button>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:shadow-md transition-shadow">
+          <CardHeader>
+            <CardTitle className="text-lg">Export Data</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">
+              Download your analysis data in various formats
+            </p>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => toast.info('Bulk export coming soon!')}
+            >
+              Export All
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:shadow-md transition-shadow">
+          <CardHeader>
+            <CardTitle className="text-lg">Settings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">
+              Customize your analysis preferences and notifications
+            </p>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => window.location.href = '/settings'}
+            >
+              Open Settings
+            </Button>
           </CardContent>
         </Card>
       </motion.div>
@@ -309,4 +480,3 @@ const DashboardPage: React.FC = () => {
 };
 
 export default DashboardPage;
-

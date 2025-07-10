@@ -31,19 +31,9 @@ export class SessionService {
       const session = await prisma.session.create({
         data: {
           userId,
-          title: metadata.title || `${metadata.platform || 'Analysis'} - ${new Date().toLocaleDateString()}`,
+          // FIXED: Use helper function to normalize platform
           platform: this.normalizePlatform(metadata.platform),
-          
-          // ✅ НОВОЕ: Инициализация производительных полей
-          messageCount: metadata.messageCount || 0,
-          overallScore: metadata.overallScore || 0,
-          strategicAvg: metadata.dimensionAverages?.strategic || 0,
-          tacticalAvg: metadata.dimensionAverages?.tactical || 0,
-          cognitiveAvg: metadata.dimensionAverages?.cognitive || 0,
-          innovationAvg: metadata.dimensionAverages?.innovation || 0,
-          trend: metadata.trend || 'stable',
-          
-          // Детальные данные в metadata JSON
+          // Store all metadata in the JSON field
           metadata: {
             ...metadata,
             createdAt: new Date().toISOString()
@@ -65,35 +55,18 @@ export class SessionService {
     summary: SessionSummary
   ): Promise<void> {
     try {
-      // ✅ НОВОЕ: Обновление производительных полей + metadata
-      const updatedData = {
-        // Производительные поля для быстрых запросов
+      // Store everything in metadata instead of non-existent fields
+      const updatedMetadata = {
         messageCount: summary.messageCount,
         overallScore: summary.overallScore,
-        strategicAvg: summary.dimensionAverages.strategic,
-        tacticalAvg: summary.dimensionAverages.tactical,
-        cognitiveAvg: summary.dimensionAverages.cognitive,
-        innovationAvg: summary.dimensionAverages.innovation,
         bestScore: summary.bestScore,
         worstScore: summary.worstScore,
         trend: summary.trend,
-        
-        // Статус обновляем
-        status: 'COMPLETED' as any,
-        
-        // Детальные данные в metadata
-        metadata: {
-          messageCount: summary.messageCount,
-          overallScore: summary.overallScore,
-          bestScore: summary.bestScore,
-          worstScore: summary.worstScore,
-          trend: summary.trend,
-          dimensionAverages: summary.dimensionAverages,
-          patterns: summary.patterns,
-          insights: summary.insights,
-          completedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        } as any
+        dimensionAverages: summary.dimensionAverages,
+        patterns: summary.patterns,
+        insights: summary.insights,
+        completedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
 
       await prisma.session.update({
@@ -101,7 +74,11 @@ export class SessionService {
           id: sessionId,
           userId // Ensure user owns the session
         },
-        data: updatedData
+        data: {
+          // Only update existing fields
+          status: 'COMPLETED' as any,
+          metadata: updatedMetadata as any
+        }
       });
 
       // Cache session summary for quick access
@@ -118,26 +95,6 @@ export class SessionService {
     }
   }
 
-  // ✅ НОВЫЙ МЕТОД: Обновление заголовка сессии
-  async updateSessionTitle(sessionId: string, userId: string, title: string): Promise<void> {
-    try {
-      await prisma.session.update({
-        where: {
-          id: sessionId,
-          userId // Ensure user owns the session
-        },
-        data: {
-          title: title.trim()
-        }
-      });
-
-      logger.info('Session title updated', { sessionId, userId, title });
-    } catch (error) {
-      logger.error('Failed to update session title', { error, sessionId, userId });
-      throw new Error('Failed to update session title');
-    }
-  }
-
   async getSession(sessionId: string, userId: string) {
     try {
       const session = await prisma.session.findFirst({
@@ -148,6 +105,7 @@ export class SessionService {
         include: {
           messages: {
             include: {
+              // Changed 'scores' to 'score' (singular, matches schema)
               score: true
             },
             orderBy: {
@@ -166,22 +124,16 @@ export class SessionService {
       
       return {
         ...session,
-        // ✅ НОВОЕ: Используем производительные поля где возможно
+        // Add metadata properties as direct properties for easier access
         projectContext: metadata.projectContext,
         sessionGoal: metadata.sessionGoal,
+        messageCount: metadata.messageCount,
+        overallScore: metadata.overallScore,
         completedAt: metadata.completedAt,
-        // Используем новые поля вместо metadata
-        messageCount: session.messageCount,
-        overallScore: session.overallScore,
-        trend: session.trend,
-        dimensionAverages: {
-          strategic: session.strategicAvg,
-          tactical: session.tacticalAvg,
-          cognitive: session.cognitiveAvg,
-          innovation: session.innovationAvg
-        },
-        patterns: metadata.patterns || [],
-        insights: metadata.insights || [],
+        trend: metadata.trend,
+        dimensionAverages: metadata.dimensionAverages,
+        patterns: metadata.patterns,
+        insights: metadata.insights,
         // Transform messages to include scores array for compatibility
         messages: session.messages.map(msg => ({
           ...msg,
@@ -200,30 +152,18 @@ export class SessionService {
     offset: number = 0
   ) {
     try {
-      // ✅ ОПТИМИЗИРОВАНО: Быстрые запросы по производительным полям
       const sessions = await prisma.session.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
+        // Only select existing fields
         select: {
           id: true,
-          title: true,
           platform: true,
           status: true,
           createdAt: true,
           updatedAt: true,
-          // Новые производительные поля
-          messageCount: true,
-          overallScore: true,
-          strategicAvg: true,
-          tacticalAvg: true,
-          cognitiveAvg: true,
-          innovationAvg: true,
-          bestScore: true,
-          worstScore: true,
-          trend: true,
-          // Metadata только для дополнительных данных
           metadata: true
         }
       });
@@ -232,21 +172,17 @@ export class SessionService {
         where: { userId }
       });
 
-      // ✅ НОВОЕ: Используем производительные поля напрямую
+      // Transform sessions to include metadata properties
       const transformedSessions = sessions.map(session => {
         const metadata = (session.metadata as any) || {};
         return {
           ...session,
           projectContext: metadata.projectContext,
           sessionGoal: metadata.sessionGoal,
-          completedAt: metadata.completedAt,
-          // Производительные поля уже есть в session
-          dimensionAverages: {
-            strategic: session.strategicAvg,
-            tactical: session.tacticalAvg,
-            cognitive: session.cognitiveAvg,
-            innovation: session.innovationAvg
-          }
+          messageCount: metadata.messageCount || 0,
+          overallScore: metadata.overallScore || 0,
+          trend: metadata.trend || 'stable',
+          completedAt: metadata.completedAt
         };
       });
 
@@ -285,7 +221,6 @@ export class SessionService {
       const since = new Date();
       since.setDate(since.getDate() - days);
 
-      // ✅ ОПТИМИЗИРОВАНО: Быстрые запросы по производительным полям
       const sessions = await prisma.session.findMany({
         where: {
           userId,
@@ -297,13 +232,7 @@ export class SessionService {
         select: {
           createdAt: true,
           platform: true,
-          messageCount: true,
-          overallScore: true,
-          strategicAvg: true,
-          tacticalAvg: true,
-          cognitiveAvg: true,
-          innovationAvg: true,
-          trend: true
+          metadata: true
         }
       });
 
@@ -325,15 +254,31 @@ export class SessionService {
         };
       }
 
-      // ✅ НОВОЕ: Используем производительные поля для вычислений
-      const totalSessions = sessions.length;
-      const totalMessages = sessions.reduce((sum, s) => sum + s.messageCount, 0);
-      const averageScore = sessions.reduce((sum, s) => sum + s.overallScore, 0) / totalSessions;
+      // Extract data from metadata
+      const sessionsWithMetadata = sessions.map(session => {
+        const metadata = (session.metadata as any) || {};
+        return {
+          ...session,
+          overallScore: metadata.overallScore || 0,
+          messageCount: metadata.messageCount || 0,
+          trend: metadata.trend || 'stable',
+          dimensionAverages: metadata.dimensionAverages || {
+            strategic: 0,
+            tactical: 0,
+            cognitive: 0,
+            innovation: 0
+          }
+        };
+      });
+
+      const totalSessions = sessionsWithMetadata.length;
+      const totalMessages = sessionsWithMetadata.reduce((sum, s) => sum + s.messageCount, 0);
+      const averageScore = sessionsWithMetadata.reduce((sum, s) => sum + s.overallScore, 0) / totalSessions;
 
       // Calculate improvement rate (comparing first half vs second half)
-      const midpoint = Math.floor(sessions.length / 2);
-      const firstHalf = sessions.slice(0, midpoint);
-      const secondHalf = sessions.slice(midpoint);
+      const midpoint = Math.floor(sessionsWithMetadata.length / 2);
+      const firstHalf = sessionsWithMetadata.slice(0, midpoint);
+      const secondHalf = sessionsWithMetadata.slice(midpoint);
       
       const firstHalfAvg = firstHalf.length > 0 
         ? firstHalf.reduce((sum, s) => sum + s.overallScore, 0) / firstHalf.length 
@@ -346,18 +291,30 @@ export class SessionService {
         ? ((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100 
         : 0;
 
-      // ✅ ОПТИМИЗИРОВАНО: Прямые вычисления из производительных полей
+      // Calculate dimension averages
       const dimensionAverages = {
-        strategic: sessions.reduce((sum, s) => sum + s.strategicAvg, 0) / totalSessions,
-        tactical: sessions.reduce((sum, s) => sum + s.tacticalAvg, 0) / totalSessions,
-        cognitive: sessions.reduce((sum, s) => sum + s.cognitiveAvg, 0) / totalSessions,
-        innovation: sessions.reduce((sum, s) => sum + s.innovationAvg, 0) / totalSessions
+        strategic: 0,
+        tactical: 0,
+        cognitive: 0,
+        innovation: 0
       };
 
+      sessionsWithMetadata.forEach(session => {
+        if (session.dimensionAverages) {
+          dimensionAverages.strategic += session.dimensionAverages.strategic || 0;
+          dimensionAverages.tactical += session.dimensionAverages.tactical || 0;
+          dimensionAverages.cognitive += session.dimensionAverages.cognitive || 0;
+          dimensionAverages.innovation += session.dimensionAverages.innovation || 0;
+        }
+      });
+
+      Object.keys(dimensionAverages).forEach(key => {
+        dimensionAverages[key as keyof typeof dimensionAverages] /= totalSessions;
+      });
+
       // Trend and platform distributions
-      const trendDistribution = sessions.reduce((acc, s) => {
-        const trend = s.trend || 'stable';
-        acc[trend] = (acc[trend] || 0) + 1;
+      const trendDistribution = sessionsWithMetadata.reduce((acc, s) => {
+        acc[s.trend] = (acc[s.trend] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
 
@@ -367,7 +324,7 @@ export class SessionService {
       }, {} as Record<string, number>);
 
       // Score history (last 30 data points)
-      const scoreHistory = sessions
+      const scoreHistory = sessionsWithMetadata
         .slice(-30)
         .map(s => ({
           date: s.createdAt.toISOString().split('T')[0],
