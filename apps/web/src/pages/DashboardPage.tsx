@@ -80,7 +80,7 @@ const DashboardPage: React.FC = () => {
       ]);
 
       setSessions(sessionsResponse.sessions || []);
-      setAnalytics(analyticsResponse);
+      setAnalytics(analyticsResponse.analytics);
 
       console.log('✅ Dashboard data loaded:', {
         sessionsCount: sessionsResponse.sessions?.length || 0,
