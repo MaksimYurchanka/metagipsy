@@ -113,23 +113,20 @@ const AnalysisPage: React.FC = () => {
   // ✅ EXTRACTED SAVE LOGIC with timing
   const performSessionSave = async (analysisRequest: any, store: any, userData: any, startTime: number) => {
     try {
-      // 🔧 CRITICAL FIX: Get fresh store state instead of using stale parameter
-      const currentStore = useAnalysisStore.getState();
-      
       const sessionData = {
         // Session metadata
         title: `${analysisRequest?.conversation?.platform || 'Unknown'} Analysis - ${new Date().toLocaleDateString()}`,
         platform: analysisRequest?.conversation?.platform || 'OTHER',
         
-        // ✅ FIXED: Using fresh store data instead of stale parameter
-        messageCount: currentStore.messages?.length || 0,
-        overallScore: currentStore.sessionSummary?.overallScore || 0,
+        // Session metrics
+        messageCount: store.messages?.length || 0,
+        overallScore: store.sessionSummary?.overallScore || 0,
         
         // Dimension averages from summary
-        strategicAvg: currentStore.sessionSummary?.dimensionAverages?.strategic || 0,
-        tacticalAvg: currentStore.sessionSummary?.dimensionAverages?.tactical || 0,
-        cognitiveAvg: currentStore.sessionSummary?.dimensionAverages?.cognitive || 0,
-        innovationAvg: currentStore.sessionSummary?.dimensionAverages?.innovation || 0,
+        strategicAvg: store.sessionSummary?.dimensionAverages?.strategic || 0,
+        tacticalAvg: store.sessionSummary?.dimensionAverages?.tactical || 0,
+        cognitiveAvg: store.sessionSummary?.dimensionAverages?.cognitive || 0,
+        innovationAvg: store.sessionSummary?.dimensionAverages?.innovation || 0,
         
         // Complete session data in metadata
         metadata: {
@@ -137,29 +134,29 @@ const AnalysisPage: React.FC = () => {
           sessionGoal: analysisRequest?.metadata?.sessionGoal,
           timestamp: new Date().toISOString(),
           completedAt: new Date().toISOString(),
-          overallScore: currentStore.sessionSummary?.overallScore || 0,
-          messageCount: currentStore.messages?.length || 0,
-          trend: currentStore.sessionSummary?.trend || 'stable',
-          dimensionAverages: currentStore.sessionSummary?.dimensionAverages || {},
-          patterns: currentStore.sessionSummary?.patterns || [],
-          insights: currentStore.sessionSummary?.insights || [],
+          overallScore: store.sessionSummary?.overallScore || 0,
+          messageCount: store.messages?.length || 0,
+          trend: store.sessionSummary?.trend || 'stable',
+          dimensionAverages: store.sessionSummary?.dimensionAverages || {},
+          patterns: store.sessionSummary?.patterns || [],
+          insights: store.sessionSummary?.insights || [],
           
           // Store complete messages with scores for export
-          messages: currentStore.messages?.map((msg: any, index: number) => ({
+          messages: store.messages?.map((msg: any, index: number) => ({
             index,
             role: msg.role,
             content: msg.content,
             timestamp: msg.timestamp || new Date().toISOString(),
             scores: [{
-              overall: currentStore.scores?.[index]?.overall || 0,
-              dimensions: currentStore.scores?.[index]?.dimensions || {
+              overall: store.scores?.[index]?.overall || 0,
+              dimensions: store.scores?.[index]?.dimensions || {
                 strategic: 0, tactical: 0, cognitive: 0, innovation: 0
               },
-              classification: currentStore.scores?.[index]?.classification || 'average',
-              chessNotation: currentStore.scores?.[index]?.chessNotation || '=',
-              explanation: currentStore.scores?.[index]?.explanation || '',
-              betterMove: currentStore.scores?.[index]?.betterMove,
-              confidence: currentStore.scores?.[index]?.confidence || 0.5
+              classification: store.scores?.[index]?.classification || 'average',
+              chessNotation: store.scores?.[index]?.chessNotation || '=',
+              explanation: store.scores?.[index]?.explanation || '',
+              betterMove: store.scores?.[index]?.betterMove,
+              confidence: store.scores?.[index]?.confidence || 0.5
             }]
           })) || []
         }
