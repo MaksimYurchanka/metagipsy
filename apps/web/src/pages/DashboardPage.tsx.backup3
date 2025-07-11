@@ -60,7 +60,6 @@ const DashboardPage: React.FC = () => {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [exportingSession, setExportingSession] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -107,43 +106,6 @@ const DashboardPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to delete session:', error);
       toast.error('Failed to delete session');
-    }
-  };
-
-  // ✅ CRITICAL FIX: Proper export with authentication
-  const exportSession = async (sessionId: string, format: 'json' | 'csv' | 'markdown' = 'json') => {
-    try {
-      setExportingSession(sessionId);
-      console.log('📁 EXPORT: Starting session export...', { sessionId, format });
-      
-      // ✅ Use proper API method with auth headers
-      const blob = await api.exportSession(sessionId, format);
-      
-      // ✅ Create download link and trigger download
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      
-      // ✅ Set proper filename based on format
-      const extension = format === 'json' ? 'json' : format === 'csv' ? 'csv' : 'md';
-      link.download = `session-${sessionId}.${extension}`;
-      
-      // ✅ Trigger download
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      // ✅ Clean up blob URL
-      window.URL.revokeObjectURL(url);
-      
-      console.log('✅ EXPORT: Session exported successfully');
-      toast.success(`Session exported as ${format.toUpperCase()}`);
-      
-    } catch (error) {
-      console.error('❌ EXPORT: Failed to export session:', error);
-      toast.error('Failed to export session. Please try again.');
-    } finally {
-      setExportingSession(null);
     }
   };
 
@@ -464,14 +426,12 @@ const DashboardPage: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => exportSession(session.id, 'json')}
-                          disabled={exportingSession === session.id}
+                          onClick={() => {
+                            const url = `${api.baseUrl}/sessions/${session.id}/export?format=json`;
+                            window.open(url, '_blank');
+                          }}
                         >
-                          {exportingSession === session.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Download className="w-4 h-4" />
-                          )}
+                          <Download className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="ghost"
