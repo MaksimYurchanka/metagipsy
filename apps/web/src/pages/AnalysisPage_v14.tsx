@@ -80,34 +80,64 @@ const AnalysisPage: React.FC = () => {
     }
   };
 
-  // ✅ STREAMLINED FUNCTION: Автосохранение с Supabase primary auth
+  // ✅ ENHANCED FUNCTION: Автосохранение с полной диагностикой
   const saveSessionToDatabase = async (analysisRequest: any, store: any) => {
     const saveStartTime = Date.now();
     console.log('💾 SESSION SAVE: Starting database save process...');
     
-    // ✅ PRIMARY AUTH: Supabase session check (most reliable)
+    // ✅ COMPREHENSIVE AUTH DIAGNOSTICS
+    console.log('🔍 AUTH STATE FULL DIAGNOSTIC:', {
+      timestamp: new Date().toISOString(),
+      hookState: {
+        isAuthenticated,
+        loading,
+        hasUser: !!user,
+        userId: user?.id || 'none',
+        userEmail: user?.email || 'none'
+      },
+      userObject: user ? {
+        id: user.id,
+        email: user.email,
+        created_at: user.created_at,
+        user_metadata: user.user_metadata
+      } : 'null'
+    });
+
+    // ✅ SUPABASE DIRECT CHECK
     const supabaseSession = await validateSupabaseSession();
     
-    if (!supabaseSession?.user) {
-      console.log('🔐 NO VALID SESSION - skipping session save:', {
-        hasSession: !!supabaseSession,
-        hasUser: !!supabaseSession?.user,
-        timestamp: new Date().toISOString()
+    // ✅ DECISION LOGIC WITH EVIDENCE
+    if (!isAuthenticated || !user) {
+      console.log('🔐 AUTH CHECK FAILED:', {
+        isAuthenticated,
+        hasUser: !!user,
+        supabaseSessionValid: !!supabaseSession,
+        decision: 'SKIP_SAVE',
+        reason: !isAuthenticated ? 'not_authenticated' : 'no_user_object'
       });
+      
+      // ✅ TRY FALLBACK to Supabase session
+      if (supabaseSession?.user) {
+        console.log('🔄 USING SUPABASE FALLBACK:', {
+          supabaseUserId: supabaseSession.user.id,
+          supabaseEmail: supabaseSession.user.email,
+          action: 'proceeding_with_supabase_data'
+        });
+        
+        // Continue with Supabase session data
+        return await performSessionSave(analysisRequest, store, {
+          id: supabaseSession.user.id,
+          email: supabaseSession.user.email
+        }, saveStartTime);
+      }
+      
+      console.log('🚫 NO VALID AUTH SOURCE - skipping session save');
       return;
     }
 
-    // ✅ PROCEED WITH SUPABASE SESSION DATA (always reliable)
-    console.log('✅ SUPABASE AUTH VERIFIED - proceeding with session save:', {
-      userId: supabaseSession.user.id,
-      userEmail: supabaseSession.user.email,
-      timestamp: new Date().toISOString()
-    });
-    
-    return await performSessionSave(analysisRequest, store, {
-      id: supabaseSession.user.id,
-      email: supabaseSession.user.email
-    }, saveStartTime);
+    // ✅ PROCEED WITH HOOK DATA
+    console.log('✅ AUTH VERIFIED - proceeding with session save');
+    return await performSessionSave(analysisRequest, store, user, saveStartTime);
   };
 
   // ✅ EXTRACTED SAVE LOGIC with timing
