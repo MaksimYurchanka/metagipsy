@@ -119,7 +119,7 @@ export class SessionService {
     summary: SessionSummary
   ): Promise<void> {
     try {
-      // ✅ CRITICAL FIX: Правильное устанавливание статуса без 'as any'
+      // ✅ НОВОЕ: Обновление производительных полей + metadata
       const updatedData = {
         // Производительные поля для быстрых запросов
         messageCount: summary.messageCount,
@@ -132,8 +132,8 @@ export class SessionService {
         worstScore: summary.worstScore,
         trend: summary.trend,
         
-        // ✅ CRITICAL FIX: Правильное устанавливание статуса
-        status: 'COMPLETED' as const, // Using const assertion instead of 'as any'
+        // Статус обновляем
+        status: 'COMPLETED' as any,
         
         // Детальные данные в metadata
         metadata: {
@@ -150,21 +150,12 @@ export class SessionService {
         } as any
       };
 
-      const updatedSession = await prisma.session.update({
+      await prisma.session.update({
         where: { 
           id: sessionId,
           userId // Ensure user owns the session
         },
         data: updatedData
-      });
-
-      // ✅ ENHANCED LOGGING: Log status change for debugging
-      console.log('✅ SESSION STATUS UPDATED:', {
-        sessionId,
-        userId,
-        status: updatedSession.status,
-        messageCount: updatedSession.messageCount,
-        overallScore: updatedSession.overallScore
       });
 
       // Cache session summary for quick access
@@ -174,16 +165,8 @@ export class SessionService {
         JSON.stringify(summary)
       );
 
-      logger.info('Session updated', { sessionId, userId, status: updatedSession.status });
+      logger.info('Session updated', { sessionId, userId });
     } catch (error) {
-      console.error('❌ SESSION UPDATE FAILED:', {
-        error: error instanceof Error ? error.message : String(error),
-        sessionId,
-        userId,
-        summaryMessageCount: summary.messageCount,
-        summaryScore: summary.overallScore
-      });
-      
       logger.error('Failed to update session', { error, sessionId, userId });
       throw new Error('Failed to update session');
     }
@@ -356,32 +339,16 @@ export class SessionService {
       const since = new Date();
       since.setDate(since.getDate() - days);
 
-      console.log('📊 ANALYTICS: Starting analytics calculation...', {
-        userId,
-        days,
-        since: since.toISOString()
-      });
-
-      // ✅ CRITICAL FIX: Include both ACTIVE and COMPLETED sessions for analytics
+      // ✅ ОПТИМИЗИРОВАНО: Быстрые запросы по производительным полям
       const sessions = await prisma.session.findMany({
         where: {
           userId,
           createdAt: {
             gte: since
           },
-          // ✅ CRITICAL FIX: Include sessions with analysis data regardless of status
-          OR: [
-            { status: 'COMPLETED' },
-            { 
-              status: 'ACTIVE',
-              messageCount: { gt: 0 }, // Only include ACTIVE sessions that have been analyzed
-              overallScore: { gt: 0 }
-            }
-          ]
+          status: 'COMPLETED'
         },
         select: {
-          id: true,
-          status: true,
           createdAt: true,
           platform: true,
           messageCount: true,
@@ -394,22 +361,7 @@ export class SessionService {
         }
       });
 
-      console.log('📊 ANALYTICS: Found sessions for analytics:', {
-        totalFound: sessions.length,
-        statuses: sessions.reduce((acc, s) => {
-          acc[s.status] = (acc[s.status] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>),
-        sampleSessions: sessions.slice(0, 3).map(s => ({
-          id: s.id,
-          status: s.status,
-          messageCount: s.messageCount,
-          overallScore: s.overallScore
-        }))
-      });
-
       if (sessions.length === 0) {
-        console.log('📊 ANALYTICS: No sessions found, returning zeros');
         return {
           totalSessions: 0,
           totalMessages: 0,
@@ -476,7 +428,7 @@ export class SessionService {
           score: s.overallScore
         }));
 
-      const analytics = {
+      return {
         totalSessions,
         totalMessages,
         averageScore: Math.round(averageScore),
@@ -486,22 +438,7 @@ export class SessionService {
         platformDistribution,
         scoreHistory
       };
-
-      console.log('📊 ANALYTICS: Calculated analytics:', {
-        totalSessions: analytics.totalSessions,
-        totalMessages: analytics.totalMessages,
-        averageScore: analytics.averageScore,
-        dimensionAverages: analytics.dimensionAverages
-      });
-
-      return analytics;
     } catch (error) {
-      console.error('❌ ANALYTICS: Failed to get session analytics:', {
-        error: error instanceof Error ? error.message : String(error),
-        userId,
-        days
-      });
-      
       logger.error('Failed to get session analytics', { error, userId });
       throw new Error('Failed to get session analytics');
     }
