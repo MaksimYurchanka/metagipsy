@@ -26,39 +26,8 @@ export class SessionService {
     return platformMap[platform.toLowerCase()] || 'OTHER';
   }
 
-  async createSession(userId: string, userEmail: string, metadata: SessionMetadata): Promise<string> {
+  async createSession(userId: string, metadata: SessionMetadata): Promise<string> {
     try {
-      // ✅ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Auto-create user if not exists
-      console.log('👤 ENSURING USER EXISTS:', userId, userEmail);
-      
-      try {
-        await prisma.user.upsert({
-          where: { id: userId },
-          update: {
-            // Обновляем email если изменился
-            email: userEmail || 'unknown@example.com',
-            updatedAt: new Date()
-          },
-          create: {
-            id: userId,
-            email: userEmail || 'unknown@example.com',
-            name: userEmail?.split('@')[0] || 'Anonymous User',
-            tier: 'FREE'
-          }
-        });
-        
-        console.log('✅ USER ENSURED:', userId);
-      } catch (userError) {
-        console.error('❌ User upsert failed:', userError);
-        logger.error('User upsert failed', { 
-          error: userError, 
-          userId, 
-          userEmail 
-        });
-        // Продолжаем выполнение - возможно пользователь уже существует
-      }
-
-      // Теперь создаем сессию (foreign key constraint будет выполнен)
       const session = await prisma.session.create({
         data: {
           userId,
@@ -82,31 +51,11 @@ export class SessionService {
         }
       });
 
-      console.log('✅ SESSION CREATED:', session.id);
-      logger.info('Session created successfully', { 
-        sessionId: session.id, 
-        userId,
-        userEmail 
-      });
-      
+      logger.info('Session created', { sessionId: session.id, userId });
       return session.id;
     } catch (error) {
-      console.error('❌ SESSION CREATION FAILED:', error);
-      logger.error('Failed to create session', { 
-        error, 
-        userId, 
-        userEmail,
-        metadata: metadata.title 
-      });
-      
-      // ✅ УЛУЧШЕННАЯ ДИАГНОСТИКА ОШИБОК
-      if (error.message?.includes('Foreign key constraint')) {
-        throw new Error('User synchronization failed. Please refresh and try again.');
-      } else if (error.code === 'P2002') {
-        throw new Error('Session already exists');
-      } else {
-        throw new Error('Failed to create session');
-      }
+      logger.error('Failed to create session', { error, userId });
+      throw new Error('Failed to create session');
     }
   }
 

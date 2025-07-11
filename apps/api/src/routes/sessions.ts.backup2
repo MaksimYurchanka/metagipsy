@@ -11,7 +11,6 @@ const sessionService = new SessionService();
 router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user!.id;
-    const userEmail = req.user!.email; // ✅ ДОБАВЛЕНО: Получаем email для user upsert
     const {
       title,
       platform,
@@ -56,8 +55,7 @@ router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) =>
       insights: metadata?.insights || []
     };
 
-    // ✅ КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ: Передаем userEmail для user upsert
-    const sessionId = await sessionService.createSession(userId, userEmail, sessionMetadata);
+    const sessionId = await sessionService.createSession(userId, sessionMetadata);
 
     // Step 2: Update session with analysis results
     const sessionSummary = {
@@ -87,7 +85,6 @@ router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) =>
     logger.info('Session saved successfully', { 
       sessionId, 
       userId, 
-      userEmail, // ✅ ДОБАВЛЕНО: Логируем email
       messageCount, 
       overallScore,
       platform 
@@ -103,7 +100,6 @@ router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) =>
     logger.error('Failed to save session', { 
       error, 
       userId: req.user!.id,
-      userEmail: req.user!.email, // ✅ ДОБАВЛЕНО: Логируем email при ошибке
       body: req.body 
     });
     
