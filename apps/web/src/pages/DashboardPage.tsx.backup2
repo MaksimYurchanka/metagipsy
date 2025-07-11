@@ -138,54 +138,6 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  // ✅ CRITICAL FIX: Safe dimension analysis with null checks
-  const getBestDimension = () => {
-    if (!analytics?.dimensionAverages || typeof analytics.dimensionAverages !== 'object') {
-      return { name: 'Strategic', score: 0 };
-    }
-
-    try {
-      const entries = Object.entries(analytics.dimensionAverages);
-      if (entries.length === 0) {
-        return { name: 'Strategic', score: 0 };
-      }
-
-      const sortedEntries = entries.sort(([,a], [,b]) => (b || 0) - (a || 0));
-      const bestEntry = sortedEntries[0];
-      
-      if (!bestEntry || !bestEntry[0]) {
-        return { name: 'Strategic', score: 0 };
-      }
-
-      const dimensionName = bestEntry[0].charAt(0).toUpperCase() + bestEntry[0].slice(1);
-      const score = bestEntry[1] || 0;
-
-      return { name: dimensionName, score: Math.round(score) };
-    } catch (error) {
-      console.error('❌ Error calculating best dimension:', error);
-      return { name: 'Strategic', score: 0 };
-    }
-  };
-
-  // ✅ SAFE: Get dimension averages with fallback
-  const getDimensionAverages = () => {
-    if (!analytics?.dimensionAverages || typeof analytics.dimensionAverages !== 'object') {
-      return {
-        strategic: 0,
-        tactical: 0,
-        cognitive: 0,
-        innovation: 0
-      };
-    }
-
-    return {
-      strategic: analytics.dimensionAverages.strategic || 0,
-      tactical: analytics.dimensionAverages.tactical || 0,
-      cognitive: analytics.dimensionAverages.cognitive || 0,
-      innovation: analytics.dimensionAverages.innovation || 0
-    };
-  };
-
   if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -226,10 +178,6 @@ const DashboardPage: React.FC = () => {
     );
   }
 
-  // ✅ Get safe values
-  const bestDimension = getBestDimension();
-  const dimensionAverages = getDimensionAverages();
-
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Header */}
@@ -263,9 +211,9 @@ const DashboardPage: React.FC = () => {
               <BarChart3 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{analytics.totalSessions || 0}</div>
+              <div className="text-2xl font-bold">{analytics.totalSessions}</div>
               <p className="text-xs text-muted-foreground">
-                {analytics.totalMessages || 0} total messages analyzed
+                {analytics.totalMessages} total messages analyzed
               </p>
             </CardContent>
           </Card>
@@ -276,9 +224,9 @@ const DashboardPage: React.FC = () => {
               <Target className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{analytics.averageScore || 0}</div>
+              <div className="text-2xl font-bold">{analytics.averageScore}</div>
               <p className="text-xs text-muted-foreground">
-                {getScoreLabel(analytics.averageScore || 0)} performance
+                {getScoreLabel(analytics.averageScore)} performance
               </p>
             </CardContent>
           </Card>
@@ -290,7 +238,7 @@ const DashboardPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {(analytics.improvementRate || 0) > 0 ? '+' : ''}{analytics.improvementRate || 0}%
+                {analytics.improvementRate > 0 ? '+' : ''}{analytics.improvementRate}%
               </div>
               <p className="text-xs text-muted-foreground">
                 vs previous period
@@ -305,10 +253,13 @@ const DashboardPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {bestDimension.name}
+                {Object.entries(analytics.dimensionAverages)
+                  .sort(([,a], [,b]) => b - a)[0]?.[0]?.charAt(0).toUpperCase() + 
+                 Object.entries(analytics.dimensionAverages)
+                  .sort(([,a], [,b]) => b - a)[0]?.[0]?.slice(1) || 'Strategic'}
               </div>
               <p className="text-xs text-muted-foreground">
-                {bestDimension.score} average
+                {Math.round(Math.max(...Object.values(analytics.dimensionAverages)))} average
               </p>
             </CardContent>
           </Card>
@@ -327,13 +278,13 @@ const DashboardPage: React.FC = () => {
               <CardTitle>Skill Dimensions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {Object.entries(dimensionAverages).map(([dimension, score]) => (
+              {Object.entries(analytics.dimensionAverages).map(([dimension, score]) => (
                 <div key={dimension} className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="capitalize font-medium">{dimension}</span>
-                    <span className="text-muted-foreground">{Math.round(score || 0)}/100</span>
+                    <span className="text-muted-foreground">{Math.round(score)}/100</span>
                   </div>
-                  <Progress value={score || 0} className="h-2" />
+                  <Progress value={score} className="h-2" />
                 </div>
               ))}
             </CardContent>
