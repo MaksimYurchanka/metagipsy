@@ -52,16 +52,11 @@ router.post('/',
       // Create session if user is authenticated
       let sessionId: string | undefined;
       if (req.user) {
-        // ✅ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавлен userEmail параметр
-        sessionId = await sessionService.createSession(
-          req.user.id, 
-          req.user.email, // ✅ ДОБАВЛЕНО: email для user upsert
-          {
-            platform: conversation.platform || 'AUTO',
-            projectContext: options.projectContext,
-            sessionGoal: options.sessionGoal
-          }
-        );
+        sessionId = await sessionService.createSession(req.user.id, {
+          platform: conversation.platform || 'AUTO',
+          projectContext: options.projectContext,
+          sessionGoal: options.sessionGoal
+        });
       }
 
       // Score messages
@@ -276,6 +271,8 @@ function detectPatterns(scores: any[]) {
 
   return patterns;
 }
+
+// Only showing the generateInsights function with the fix
 
 function generateInsights(scores: any[], messages: any[], dimensionAverages: any) {
   const insights = [];

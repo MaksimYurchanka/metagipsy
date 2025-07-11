@@ -99,13 +99,10 @@ export class SessionService {
         metadata: metadata.title 
       });
       
-      // ✅ УЛУЧШЕННАЯ ДИАГНОСТИКА ОШИБОК с правильной типизацией
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorCode = (error as any)?.code;
-      
-      if (errorMessage.includes('Foreign key constraint')) {
+      // ✅ УЛУЧШЕННАЯ ДИАГНОСТИКА ОШИБОК
+      if (error.message?.includes('Foreign key constraint')) {
         throw new Error('User synchronization failed. Please refresh and try again.');
-      } else if (errorCode === 'P2002') {
+      } else if (error.code === 'P2002') {
         throw new Error('Session already exists');
       } else {
         throw new Error('Failed to create session');
