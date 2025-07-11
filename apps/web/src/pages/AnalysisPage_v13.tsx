@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import ConversationInput from '@/components/analysis/ConversationInput';
@@ -6,7 +6,6 @@ import AnalysisResults from '@/components/analysis/AnalysisResults';
 import { useAnalysisStore } from '@/stores/analysisStore';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
-import { supabase } from '@/lib/supabase';
 import { Message } from '@/types';
 
 // ✅ FEATURES array OUTSIDE component to prevent recreation
@@ -36,8 +35,8 @@ const FEATURES = [
 const AnalysisPage: React.FC = () => {
   console.log('🚀 ANALYSIS PAGE: Starting PROTECTED render...');
   
-  // ✅ ПОЛУЧАЕМ AUTH STATE с полным логгированием
-  const { user, isAuthenticated, loading } = useAuth();
+  // ✅ ДОБАВЛЕНО: Получаем пользователя для сохранения сессий
+  const { user, isAuthenticated } = useAuth();
   
   // ✅ ULTRA STABLE: Direct store access without complex subscriptions
   const messages = useAnalysisStore((state) => state.messages || []);
@@ -48,100 +47,13 @@ const AnalysisPage: React.FC = () => {
   
   console.log('✅ ANALYSIS PAGE: Store subscriptions successful, messages:', messages.length);
 
-  // ✅ COMPREHENSIVE AUTH STATE LOGGING
-  useEffect(() => {
-    console.log('🔍 AUTH STATE MONITOR:', {
-      timestamp: new Date().toISOString(),
-      isAuthenticated,
-      loading,
-      hasUser: !!user,
-      userId: user?.id || 'none',
-      userEmail: user?.email || 'none',
-      userMetadata: user?.user_metadata || 'none'
-    });
-  }, [isAuthenticated, loading, user]);
-
-  // ✅ SUPABASE SESSION VALIDATOR
-  const validateSupabaseSession = async () => {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      console.log('🔍 SUPABASE SESSION CHECK:', {
-        hasSession: !!session,
-        hasUser: !!session?.user,
-        userId: session?.user?.id || 'none',
-        userEmail: session?.user?.email || 'none',
-        tokenExists: !!session?.access_token,
-        error: error?.message || 'none'
-      });
-      return session;
-    } catch (error) {
-      console.error('❌ SUPABASE SESSION ERROR:', error);
-      return null;
-    }
-  };
-
-  // ✅ ENHANCED FUNCTION: Автосохранение с полной диагностикой
+  // ✅ НОВАЯ ФУНКЦИЯ: Автосохранение сессии в базу данных
   const saveSessionToDatabase = async (analysisRequest: any, store: any) => {
-    const saveStartTime = Date.now();
-    console.log('💾 SESSION SAVE: Starting database save process...');
-    
-    // ✅ COMPREHENSIVE AUTH DIAGNOSTICS
-    console.log('🔍 AUTH STATE FULL DIAGNOSTIC:', {
-      timestamp: new Date().toISOString(),
-      hookState: {
-        isAuthenticated,
-        loading,
-        hasUser: !!user,
-        userId: user?.id || 'none',
-        userEmail: user?.email || 'none'
-      },
-      userObject: user ? {
-        id: user.id,
-        email: user.email,
-        created_at: user.created_at,
-        user_metadata: user.user_metadata
-      } : 'null'
-    });
-
-    // ✅ SUPABASE DIRECT CHECK
-    const supabaseSession = await validateSupabaseSession();
-    
-    // ✅ DECISION LOGIC WITH EVIDENCE
     if (!isAuthenticated || !user) {
-      console.log('🔐 AUTH CHECK FAILED:', {
-        isAuthenticated,
-        hasUser: !!user,
-        supabaseSessionValid: !!supabaseSession,
-        decision: 'SKIP_SAVE',
-        reason: !isAuthenticated ? 'not_authenticated' : 'no_user_object'
-      });
-      
-      // ✅ TRY FALLBACK to Supabase session
-      if (supabaseSession?.user) {
-        console.log('🔄 USING SUPABASE FALLBACK:', {
-          supabaseUserId: supabaseSession.user.id,
-          supabaseEmail: supabaseSession.user.email,
-          action: 'proceeding_with_supabase_data'
-        });
-        
-        // Continue with Supabase session data
-        return await performSessionSave(analysisRequest, store, {
-          id: supabaseSession.user.id,
-          email: supabaseSession.user.email
-        }, saveStartTime);
-      }
-      
-      console.log('🚫 NO VALID AUTH SOURCE - skipping session save');
+      console.log('🔐 User not authenticated, skipping session save');
       return;
     }
 
-    // ✅ PROCEED WITH HOOK DATA
-    console.log('✅ AUTH VERIFIED - proceeding with session save');
-    return await performSessionSave(analysisRequest, store, user, saveStartTime);
-  };
-
-  // ✅ EXTRACTED SAVE LOGIC with timing
-  const performSessionSave = async (analysisRequest: any, store: any, userData: any, startTime: number) => {
     try {
       const sessionData = {
         // Session metadata
@@ -192,71 +104,34 @@ const AnalysisPage: React.FC = () => {
         }
       };
 
-      console.log('💾 SESSION DATA PREPARED:', {
-        userId: userData.id,
-        userEmail: userData.email,
+      console.log('💾 Saving session to database:', {
         messageCount: sessionData.messageCount,
         overallScore: sessionData.overallScore,
-        platform: sessionData.platform,
-        preparationTime: Date.now() - startTime
+        platform: sessionData.platform
       });
 
-      console.log('🌐 API CALL: Sending session to backend...');
-      const apiStartTime = Date.now();
-      
       const response = await api.saveSession(sessionData);
       
-      const apiEndTime = Date.now();
-      console.log('🌐 API RESPONSE:', {
-        success: response.success,
-        sessionId: response.sessionId,
-        responseTime: apiEndTime - apiStartTime,
-        totalTime: apiEndTime - startTime
-      });
-      
       if (response.success) {
-        console.log('✅ SESSION SAVE SUCCESS:', {
-          sessionId: response.sessionId,
-          totalProcessingTime: Date.now() - startTime
-        });
+        console.log('✅ Session saved successfully:', response.sessionId);
         toast.success('📊 Analysis saved to your dashboard!');
       } else {
         throw new Error('Server returned unsuccessful response');
       }
 
     } catch (error) {
-      console.error('❌ SESSION SAVE ERROR:', {
-        error: error instanceof Error ? error.message : String(error),
-        errorType: error instanceof Error ? error.constructor.name : typeof error,
-        userId: userData.id,
-        userEmail: userData.email,
-        totalTime: Date.now() - startTime,
-        stack: error instanceof Error ? error.stack : 'no stack'
-      });
-      
+      console.error('❌ Failed to save session:', error);
       toast.error('Failed to save analysis. Please try again.');
     }
   };
 
-  // ✅ UPDATED: Analysis handler with comprehensive timing
+  // ✅ UPDATED: Analysis handler with auto-save
   const handleAnalyze = async (analysisRequest: any) => {
-    const analyzeStartTime = Date.now();
-    console.log('🚀 ANALYSIS PAGE: Starting analysis process...', {
-      timestamp: new Date().toISOString(),
-      requestSize: JSON.stringify(analysisRequest).length
-    });
+    console.log('🚀 ANALYSIS PAGE: Received analysisRequest:', analysisRequest);
     
     const newMessages = analysisRequest?.conversation?.messages || [];
     const options = analysisRequest?.options || {};
     const metadata = analysisRequest?.metadata || {};
-    
-    console.log('🔍 ANALYZE REQUEST DETAILS:', {
-      messageCount: newMessages.length,
-      platform: analysisRequest?.conversation?.platform,
-      useClaudeAnalysis: options.useClaudeAnalysis,
-      hasProjectContext: !!metadata.projectContext,
-      hasSessionGoal: !!metadata.sessionGoal
-    });
     
     if (!newMessages || newMessages.length === 0) {
       console.error('❌ ANALYSIS PAGE: No messages found');
@@ -285,7 +160,6 @@ const AnalysisPage: React.FC = () => {
       });
 
       // Perform analysis
-      const analysisStartTime = Date.now();
       if (options.useClaudeAnalysis) {
         console.log('🤖 ANALYSIS PAGE: Using Claude API');
         toast.info('Starting AI-powered analysis with Claude...');
@@ -295,42 +169,20 @@ const AnalysisPage: React.FC = () => {
         toast.info('Starting local analysis...');
         await performLocalAnalysis(newMessages, store);
       }
-      
-      const analysisEndTime = Date.now();
-      console.log('📊 ANALYSIS COMPLETED:', {
-        analysisTime: analysisEndTime - analysisStartTime,
-        totalMessages: newMessages.length,
-        avgTimePerMessage: (analysisEndTime - analysisStartTime) / newMessages.length
-      });
 
-      // ✅ AUTO-SAVE with timing tracking
-      console.log('💾 ANALYSIS PAGE: Starting auto-save to database...');
-      const saveStartTime = Date.now();
-      
+      // ✅ НОВОЕ: Автосохранение после успешного анализа
+      console.log('💾 ANALYSIS PAGE: Auto-saving session to database...');
       await saveSessionToDatabase(analysisRequest, store);
-      
-      console.log('💾 AUTO-SAVE COMPLETED:', {
-        saveTime: Date.now() - saveStartTime,
-        totalProcessTime: Date.now() - analyzeStartTime
-      });
 
     } catch (error) {
-      console.error('❌ ANALYSIS PAGE: Analysis failed:', {
-        error: error instanceof Error ? error.message : String(error),
-        errorType: error instanceof Error ? error.constructor.name : typeof error,
-        totalTime: Date.now() - analyzeStartTime,
-        stack: error instanceof Error ? error.stack : 'no stack'
-      });
-      
+      console.error('❌ ANALYSIS PAGE: Analysis failed:', error);
       const store = useAnalysisStore.getState();
       store.setError(error instanceof Error ? error.message : 'Analysis failed');
       toast.error('Analysis failed. Please try again.');
     } finally {
       const store = useAnalysisStore.getState();
       store.setIsAnalyzing(false);
-      console.log('✅ ANALYSIS PAGE: Process completed', {
-        totalTime: Date.now() - analyzeStartTime
-      });
+      console.log('✅ ANALYSIS PAGE: Analysis completed');
     }
   };
 
@@ -352,26 +204,16 @@ const AnalysisPage: React.FC = () => {
           Paste your conversation and get strategic insights with Claude AI or local analysis.
         </p>
         
-        {/* ✅ ENHANCED AUTH STATUS with debug info */}
-        {loading ? (
-          <div className="inline-flex items-center px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 text-sm">
-            <div className="w-2 h-2 bg-yellow-500 rounded-full mr-2 animate-pulse" />
-            Checking authentication...
-          </div>
-        ) : isAuthenticated ? (
-          <>
-            <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-600 text-sm">
-              <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
-              You're signed in and ready to analyze!
-            </div>
-            <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 text-sm ml-2">
-              📊 Analysis will be saved to your dashboard
-            </div>
-          </>
-        ) : (
-          <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 text-sm">
-            <div className="w-2 h-2 bg-orange-500 rounded-full mr-2" />
-            Not authenticated - analysis won't be saved
+        {/* ✅ ДОБАВЛЕНО: Приветствие для авторизованных пользователей */}
+        <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-600 text-sm">
+          <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
+          You're signed in and ready to analyze!
+        </div>
+        
+        {/* ✅ ДОБАВЛЕНО: Показываем информацию о сохранении */}
+        {isAuthenticated && (
+          <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 text-sm ml-2">
+            📊 Analysis will be saved to your dashboard
           </div>
         )}
       </motion.div>
@@ -435,22 +277,13 @@ const AnalysisPage: React.FC = () => {
   );
 };
 
-// ✅ CLAUDE ANALYSIS FUNCTION with enhanced logging
+// ✅ CLAUDE ANALYSIS FUNCTION - с улучшенной обработкой
 async function performClaudeAnalysis(analysisRequest: any, store: any) {
   console.log('🤖 CLAUDE API: Starting real analysis...');
-  const claudeStartTime = Date.now();
   
   try {
     const response = await api.analyzeConversation(analysisRequest);
-    const claudeResponseTime = Date.now() - claudeStartTime;
-    
-    console.log('🤖 CLAUDE API: Received response:', {
-      responseTime: claudeResponseTime,
-      hasResponse: !!response,
-      responseType: typeof response,
-      hasScores: !!(response?.scores),
-      scoresLength: response?.scores?.length || 0
-    });
+    console.log('🤖 CLAUDE API: Received response:', response);
     
     if (!response || typeof response !== 'object') {
       throw new Error('Invalid API response format');
@@ -506,20 +339,10 @@ async function performClaudeAnalysis(analysisRequest: any, store: any) {
       store.setSessionSummary(sessionSummary);
     }
     
-    console.log('✅ CLAUDE ANALYSIS SUCCESS:', {
-      totalTime: Date.now() - claudeStartTime,
-      processedScores: processedScores.length,
-      hasSummary: !!sessionSummary
-    });
-    
     toast.success(`✅ AI analysis completed! ${processedScores.length} messages analyzed.`);
     
   } catch (error) {
-    console.error('❌ CLAUDE API: Analysis failed:', {
-      error: error instanceof Error ? error.message : String(error),
-      totalTime: Date.now() - claudeStartTime
-    });
-    
+    console.error('❌ CLAUDE API: Analysis failed:', error);
     toast.warning('AI analysis failed, falling back to local analysis...');
     
     await performLocalAnalysis(analysisRequest.conversation.messages, store);
