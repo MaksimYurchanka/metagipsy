@@ -210,7 +210,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
           <Upload className="h-5 w-5" />
           Paste Your Conversation
           {claudeAnalysisEnabled && (
-            <Badge variant="secondary" className="bg-purple-500/20 text-purple-400 border-purple-500/30">
+            <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-200">
               <Sparkles className="h-3 w-3 mr-1" />
               Claude AI
             </Badge>
@@ -218,16 +218,16 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* ✅ FIXED: Dark Theme Claude Analysis Toggle */}
+        {/* Claude Analysis Toggle */}
         <motion.div 
-          className="p-3 bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-lg border border-purple-700/40 dark:from-purple-900/30 dark:to-blue-900/30 dark:border-purple-700/40"
+          className="p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-purple-400" />
-              <span className="font-medium text-purple-200 dark:text-purple-200">AI-Powered Analysis</span>
+              <Sparkles className="h-4 w-4 text-purple-600" />
+              <span className="font-medium text-purple-900">AI-Powered Analysis</span>
             </div>
             <Switch
               checked={localClaudeEnabled}
@@ -235,7 +235,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
               disabled={isAnalyzing}
             />
           </div>
-          <p className="text-sm text-purple-300 dark:text-purple-300 mt-1">
+          <p className="text-sm text-purple-700 mt-1">
             {claudeAnalysisEnabled 
               ? "Using Claude AI for sophisticated 4-dimension scoring"
               : "Using local analysis engine (faster but simpler)"
@@ -257,9 +257,9 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
             disabled={isAnalyzing}
           />
           
-          {/* ✅ FIXED: Status indicators with improved mobile layout */}
-          <div className="flex items-center justify-between text-sm text-muted-foreground flex-wrap gap-2">
-            <div className="flex items-center gap-4 flex-wrap">
+          {/* Status indicators */}
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <div className="flex items-center gap-4">
               {detectedPlatform && (
                 <div className="flex items-center gap-1">
                   <CheckCircle className="h-4 w-4 text-green-500" />
@@ -272,12 +272,17 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
                 </Badge>
               )}
               {claudeAnalysisEnabled && (
-                <Badge variant="outline" className="text-purple-400 border-purple-500/30">
+                <Badge variant="outline" className="text-purple-600 border-purple-300">
                   AI Analysis Ready
                 </Badge>
               )}
             </div>
-            {/* ✅ REMOVED: Character limit completely for better mobile UX */}
+            <div className={cn(
+              conversationText.length > 8000 && "text-amber-600",
+              conversationText.length > 9500 && "text-red-600"
+            )}>
+              {conversationText.length}/10000 characters
+            </div>
           </div>
         </div>
         
@@ -418,7 +423,7 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
           )}
           
           {canAnalyze && claudeAnalysisEnabled && (
-            <div className="text-center text-sm text-purple-400">
+            <div className="text-center text-sm text-purple-600">
               ✨ Ready for AI-powered chess analysis with Claude
             </div>
           )}
