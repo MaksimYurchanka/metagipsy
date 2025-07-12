@@ -1,12 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import NavBar from '@/components/layout/NavBar';
 import ConversationInput from '@/components/analysis/ConversationInput';
 import AnalysisResults from '@/components/analysis/AnalysisResults';
 import { useAnalysisStore } from '@/stores/analysisStore';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { Message } from '@/types';
 
 // ✅ FEATURES array OUTSIDE component to prevent recreation
@@ -36,8 +36,8 @@ const FEATURES = [
 const AnalysisPage: React.FC = () => {
   console.log('🚀 ANALYSIS PAGE: Starting PROTECTED render...');
   
-  // ✅ ДОБАВЛЕНО: Получаем пользователя для сохранения сессий
-  const { user, isAuthenticated } = useAuth();
+  // ✅ ПОЛУЧАЕМ AUTH STATE с полным логгированием
+  const { user, isAuthenticated, loading } = useAuth();
   
   // ✅ ULTRA STABLE: Direct store access without complex subscriptions
   const messages = useAnalysisStore((state) => state.messages || []);
@@ -48,28 +48,88 @@ const AnalysisPage: React.FC = () => {
   
   console.log('✅ ANALYSIS PAGE: Store subscriptions successful, messages:', messages.length);
 
-  // ✅ НОВАЯ ФУНКЦИЯ: Автосохранение сессии в базу данных
+  // ✅ COMPREHENSIVE AUTH STATE LOGGING
+  useEffect(() => {
+    console.log('🔍 AUTH STATE MONITOR:', {
+      timestamp: new Date().toISOString(),
+      isAuthenticated,
+      loading,
+      hasUser: !!user,
+      userId: user?.id || 'none',
+      userEmail: user?.email || 'none',
+      userMetadata: user?.user_metadata || 'none'
+    });
+  }, [isAuthenticated, loading, user]);
+
+  // ✅ SUPABASE SESSION VALIDATOR
+  const validateSupabaseSession = async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      console.log('🔍 SUPABASE SESSION CHECK:', {
+        hasSession: !!session,
+        hasUser: !!session?.user,
+        userId: session?.user?.id || 'none',
+        userEmail: session?.user?.email || 'none',
+        tokenExists: !!session?.access_token,
+        error: error?.message || 'none'
+      });
+      return session;
+    } catch (error) {
+      console.error('❌ SUPABASE SESSION ERROR:', error);
+      return null;
+    }
+  };
+
+  // ✅ STREAMLINED FUNCTION: Автосохранение с Supabase primary auth
   const saveSessionToDatabase = async (analysisRequest: any, store: any) => {
-    if (!isAuthenticated || !user) {
-      console.log('🔐 User not authenticated, skipping session save');
+    const saveStartTime = Date.now();
+    console.log('💾 SESSION SAVE: Starting database save process...');
+    
+    // ✅ PRIMARY AUTH: Supabase session check (most reliable)
+    const supabaseSession = await validateSupabaseSession();
+    
+    if (!supabaseSession?.user) {
+      console.log('🔐 NO VALID SESSION - skipping session save:', {
+        hasSession: !!supabaseSession,
+        hasUser: !!supabaseSession?.user,
+        timestamp: new Date().toISOString()
+      });
       return;
     }
 
+    // ✅ PROCEED WITH SUPABASE SESSION DATA (always reliable)
+    console.log('✅ SUPABASE AUTH VERIFIED - proceeding with session save:', {
+      userId: supabaseSession.user.id,
+      userEmail: supabaseSession.user.email,
+      timestamp: new Date().toISOString()
+    });
+    
+    return await performSessionSave(analysisRequest, store, {
+      id: supabaseSession.user.id,
+      email: supabaseSession.user.email
+    }, saveStartTime);
+  };
+
+  // ✅ EXTRACTED SAVE LOGIC with timing
+  const performSessionSave = async (analysisRequest: any, store: any, userData: any, startTime: number) => {
     try {
+      // 🔧 CRITICAL FIX: Get fresh store state instead of using stale parameter
+      const currentStore = useAnalysisStore.getState();
+      
       const sessionData = {
         // Session metadata
         title: `${analysisRequest?.conversation?.platform || 'Unknown'} Analysis - ${new Date().toLocaleDateString()}`,
         platform: analysisRequest?.conversation?.platform || 'OTHER',
         
-        // Session metrics
-        messageCount: store.messages?.length || 0,
-        overallScore: store.sessionSummary?.overallScore || 0,
+        // ✅ FIXED: Using fresh store data instead of stale parameter
+        messageCount: currentStore.messages?.length || 0,
+        overallScore: currentStore.sessionSummary?.overallScore || 0,
         
         // Dimension averages from summary
-        strategicAvg: store.sessionSummary?.dimensionAverages?.strategic || 0,
-        tacticalAvg: store.sessionSummary?.dimensionAverages?.tactical || 0,
-        cognitiveAvg: store.sessionSummary?.dimensionAverages?.cognitive || 0,
-        innovationAvg: store.sessionSummary?.dimensionAverages?.innovation || 0,
+        strategicAvg: currentStore.sessionSummary?.dimensionAverages?.strategic || 0,
+        tacticalAvg: currentStore.sessionSummary?.dimensionAverages?.tactical || 0,
+        cognitiveAvg: currentStore.sessionSummary?.dimensionAverages?.cognitive || 0,
+        innovationAvg: currentStore.sessionSummary?.dimensionAverages?.innovation || 0,
         
         // Complete session data in metadata
         metadata: {
@@ -77,62 +137,99 @@ const AnalysisPage: React.FC = () => {
           sessionGoal: analysisRequest?.metadata?.sessionGoal,
           timestamp: new Date().toISOString(),
           completedAt: new Date().toISOString(),
-          overallScore: store.sessionSummary?.overallScore || 0,
-          messageCount: store.messages?.length || 0,
-          trend: store.sessionSummary?.trend || 'stable',
-          dimensionAverages: store.sessionSummary?.dimensionAverages || {},
-          patterns: store.sessionSummary?.patterns || [],
-          insights: store.sessionSummary?.insights || [],
+          overallScore: currentStore.sessionSummary?.overallScore || 0,
+          messageCount: currentStore.messages?.length || 0,
+          trend: currentStore.sessionSummary?.trend || 'stable',
+          dimensionAverages: currentStore.sessionSummary?.dimensionAverages || {},
+          patterns: currentStore.sessionSummary?.patterns || [],
+          insights: currentStore.sessionSummary?.insights || [],
           
           // Store complete messages with scores for export
-          messages: store.messages?.map((msg: any, index: number) => ({
+          messages: currentStore.messages?.map((msg: any, index: number) => ({
             index,
             role: msg.role,
             content: msg.content,
             timestamp: msg.timestamp || new Date().toISOString(),
             scores: [{
-              overall: store.scores?.[index]?.overall || 0,
-              dimensions: store.scores?.[index]?.dimensions || {
+              overall: currentStore.scores?.[index]?.overall || 0,
+              dimensions: currentStore.scores?.[index]?.dimensions || {
                 strategic: 0, tactical: 0, cognitive: 0, innovation: 0
               },
-              classification: store.scores?.[index]?.classification || 'average',
-              chessNotation: store.scores?.[index]?.chessNotation || '=',
-              explanation: store.scores?.[index]?.explanation || '',
-              betterMove: store.scores?.[index]?.betterMove,
-              confidence: store.scores?.[index]?.confidence || 0.5
+              classification: currentStore.scores?.[index]?.classification || 'average',
+              chessNotation: currentStore.scores?.[index]?.chessNotation || '=',
+              explanation: currentStore.scores?.[index]?.explanation || '',
+              betterMove: currentStore.scores?.[index]?.betterMove,
+              confidence: currentStore.scores?.[index]?.confidence || 0.5
             }]
           })) || []
         }
       };
 
-      console.log('💾 Saving session to database:', {
+      console.log('💾 SESSION DATA PREPARED:', {
+        userId: userData.id,
+        userEmail: userData.email,
         messageCount: sessionData.messageCount,
         overallScore: sessionData.overallScore,
-        platform: sessionData.platform
+        platform: sessionData.platform,
+        preparationTime: Date.now() - startTime
       });
 
+      console.log('🌐 API CALL: Sending session to backend...');
+      const apiStartTime = Date.now();
+      
       const response = await api.saveSession(sessionData);
       
+      const apiEndTime = Date.now();
+      console.log('🌐 API RESPONSE:', {
+        success: response.success,
+        sessionId: response.sessionId,
+        responseTime: apiEndTime - apiStartTime,
+        totalTime: apiEndTime - startTime
+      });
+      
       if (response.success) {
-        console.log('✅ Session saved successfully:', response.sessionId);
+        console.log('✅ SESSION SAVE SUCCESS:', {
+          sessionId: response.sessionId,
+          totalProcessingTime: Date.now() - startTime
+        });
         toast.success('📊 Analysis saved to your dashboard!');
       } else {
         throw new Error('Server returned unsuccessful response');
       }
 
     } catch (error) {
-      console.error('❌ Failed to save session:', error);
+      console.error('❌ SESSION SAVE ERROR:', {
+        error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        userId: userData.id,
+        userEmail: userData.email,
+        totalTime: Date.now() - startTime,
+        stack: error instanceof Error ? error.stack : 'no stack'
+      });
+      
       toast.error('Failed to save analysis. Please try again.');
     }
   };
 
-  // ✅ UPDATED: Analysis handler with auto-save
+  // ✅ UPDATED: Analysis handler with comprehensive timing
   const handleAnalyze = async (analysisRequest: any) => {
-    console.log('🚀 ANALYSIS PAGE: Received analysisRequest:', analysisRequest);
+    const analyzeStartTime = Date.now();
+    console.log('🚀 ANALYSIS PAGE: Starting analysis process...', {
+      timestamp: new Date().toISOString(),
+      requestSize: JSON.stringify(analysisRequest).length
+    });
     
     const newMessages = analysisRequest?.conversation?.messages || [];
     const options = analysisRequest?.options || {};
     const metadata = analysisRequest?.metadata || {};
+    
+    console.log('🔍 ANALYZE REQUEST DETAILS:', {
+      messageCount: newMessages.length,
+      platform: analysisRequest?.conversation?.platform,
+      useClaudeAnalysis: options.useClaudeAnalysis,
+      hasProjectContext: !!metadata.projectContext,
+      hasSessionGoal: !!metadata.sessionGoal
+    });
     
     if (!newMessages || newMessages.length === 0) {
       console.error('❌ ANALYSIS PAGE: No messages found');
@@ -161,6 +258,7 @@ const AnalysisPage: React.FC = () => {
       });
 
       // Perform analysis
+      const analysisStartTime = Date.now();
       if (options.useClaudeAnalysis) {
         console.log('🤖 ANALYSIS PAGE: Using Claude API');
         toast.info('Starting AI-powered analysis with Claude...');
@@ -170,20 +268,42 @@ const AnalysisPage: React.FC = () => {
         toast.info('Starting local analysis...');
         await performLocalAnalysis(newMessages, store);
       }
+      
+      const analysisEndTime = Date.now();
+      console.log('📊 ANALYSIS COMPLETED:', {
+        analysisTime: analysisEndTime - analysisStartTime,
+        totalMessages: newMessages.length,
+        avgTimePerMessage: (analysisEndTime - analysisStartTime) / newMessages.length
+      });
 
-      // ✅ НОВОЕ: Автосохранение после успешного анализа
-      console.log('💾 ANALYSIS PAGE: Auto-saving session to database...');
+      // ✅ AUTO-SAVE with timing tracking
+      console.log('💾 ANALYSIS PAGE: Starting auto-save to database...');
+      const saveStartTime = Date.now();
+      
       await saveSessionToDatabase(analysisRequest, store);
+      
+      console.log('💾 AUTO-SAVE COMPLETED:', {
+        saveTime: Date.now() - saveStartTime,
+        totalProcessTime: Date.now() - analyzeStartTime
+      });
 
     } catch (error) {
-      console.error('❌ ANALYSIS PAGE: Analysis failed:', error);
+      console.error('❌ ANALYSIS PAGE: Analysis failed:', {
+        error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        totalTime: Date.now() - analyzeStartTime,
+        stack: error instanceof Error ? error.stack : 'no stack'
+      });
+      
       const store = useAnalysisStore.getState();
       store.setError(error instanceof Error ? error.message : 'Analysis failed');
       toast.error('Analysis failed. Please try again.');
     } finally {
       const store = useAnalysisStore.getState();
       store.setIsAnalyzing(false);
-      console.log('✅ ANALYSIS PAGE: Analysis completed');
+      console.log('✅ ANALYSIS PAGE: Process completed', {
+        totalTime: Date.now() - analyzeStartTime
+      });
     }
   };
 
@@ -191,9 +311,6 @@ const AnalysisPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      {/* ✅ NAVIGATION BAR */}
-      <NavBar />
-
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -208,16 +325,26 @@ const AnalysisPage: React.FC = () => {
           Paste your conversation and get strategic insights with Claude AI or local analysis.
         </p>
         
-        {/* ✅ ДОБАВЛЕНО: Приветствие для авторизованных пользователей */}
-        <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-600 text-sm">
-          <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
-          You're signed in and ready to analyze!
-        </div>
-        
-        {/* ✅ ДОБАВЛЕНО: Показываем информацию о сохранении */}
-        {isAuthenticated && (
-          <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 text-sm ml-2">
-            📊 Analysis will be saved to your dashboard
+        {/* ✅ ENHANCED AUTH STATUS with debug info */}
+        {loading ? (
+          <div className="inline-flex items-center px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 text-sm">
+            <div className="w-2 h-2 bg-yellow-500 rounded-full mr-2 animate-pulse" />
+            Checking authentication...
+          </div>
+        ) : isAuthenticated ? (
+          <>
+            <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-600 text-sm">
+              <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse" />
+              You're signed in and ready to analyze!
+            </div>
+            <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 text-sm ml-2">
+              📊 Analysis will be saved to your dashboard
+            </div>
+          </>
+        ) : (
+          <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 text-sm">
+            <div className="w-2 h-2 bg-orange-500 rounded-full mr-2" />
+            Not authenticated - analysis won't be saved
           </div>
         )}
       </motion.div>
@@ -281,13 +408,22 @@ const AnalysisPage: React.FC = () => {
   );
 };
 
-// ✅ CLAUDE ANALYSIS FUNCTION - с улучшенной обработкой
+// ✅ CLAUDE ANALYSIS FUNCTION with enhanced logging
 async function performClaudeAnalysis(analysisRequest: any, store: any) {
   console.log('🤖 CLAUDE API: Starting real analysis...');
+  const claudeStartTime = Date.now();
   
   try {
     const response = await api.analyzeConversation(analysisRequest);
-    console.log('🤖 CLAUDE API: Received response:', response);
+    const claudeResponseTime = Date.now() - claudeStartTime;
+    
+    console.log('🤖 CLAUDE API: Received response:', {
+      responseTime: claudeResponseTime,
+      hasResponse: !!response,
+      responseType: typeof response,
+      hasScores: !!(response?.scores),
+      scoresLength: response?.scores?.length || 0
+    });
     
     if (!response || typeof response !== 'object') {
       throw new Error('Invalid API response format');
@@ -343,10 +479,20 @@ async function performClaudeAnalysis(analysisRequest: any, store: any) {
       store.setSessionSummary(sessionSummary);
     }
     
+    console.log('✅ CLAUDE ANALYSIS SUCCESS:', {
+      totalTime: Date.now() - claudeStartTime,
+      processedScores: processedScores.length,
+      hasSummary: !!sessionSummary
+    });
+    
     toast.success(`✅ AI analysis completed! ${processedScores.length} messages analyzed.`);
     
   } catch (error) {
-    console.error('❌ CLAUDE API: Analysis failed:', error);
+    console.error('❌ CLAUDE API: Analysis failed:', {
+      error: error instanceof Error ? error.message : String(error),
+      totalTime: Date.now() - claudeStartTime
+    });
+    
     toast.warning('AI analysis failed, falling back to local analysis...');
     
     await performLocalAnalysis(analysisRequest.conversation.messages, store);

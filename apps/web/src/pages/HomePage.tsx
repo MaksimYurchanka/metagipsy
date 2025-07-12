@@ -2,7 +2,6 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Zap, BarChart3, Target, Brain, Lightbulb, ArrowRight, CheckCircle } from 'lucide-react';
-import NavBar from '@/components/layout/NavBar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -54,10 +53,7 @@ const HomePage: React.FC = () => {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-20">
-      {/* ✅ NAVIGATION BAR */}
-      <NavBar />
-
+    <div className="space-y-20">
       {/* Hero Section */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}
@@ -306,3 +302,4 @@ const HomePage: React.FC = () => {
 };
 
 export default HomePage;
+
