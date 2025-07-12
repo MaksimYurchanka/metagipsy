@@ -233,12 +233,11 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
               checked={localClaudeEnabled}
               onCheckedChange={setLocalClaudeEnabled}
               disabled={isAnalyzing}
-              className="data-[state=checked]:bg-purple-500 data-[state=unchecked]:bg-gray-600"
             />
           </div>
           <p className="text-sm text-purple-300 dark:text-purple-300 mt-1">
             {claudeAnalysisEnabled 
-              ? "Using Claude AI for sophisticated 5-dimension scoring"
+              ? "Using Claude AI for sophisticated 4-dimension scoring"
               : "Using local analysis engine (faster but simpler)"
             }
           </p>
@@ -353,7 +352,6 @@ Assistant: I'd be happy to help optimize your React project! Let's start by iden
                     id="pattern-detection"
                     checked={enablePatternDetection}
                     disabled={isAnalyzing}
-                    className="data-[state=checked]:bg-blue-500 data-[state=unchecked]:bg-gray-600"
                   />
                   <Label htmlFor="pattern-detection">Pattern Detection</Label>
                 </div>
