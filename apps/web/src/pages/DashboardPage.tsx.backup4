@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { Link } from 'react-router-dom';
-import NavBar from '@/components/layout/NavBar';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,8 +16,7 @@ import {
   Download,
   Trash2,
   Eye,
-  Loader2,
-  Sparkles
+  Loader2
 } from 'lucide-react';
 
 interface SessionData {
@@ -63,6 +60,7 @@ const DashboardPage: React.FC = () => {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exportingSession, setExportingSession] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -82,7 +80,7 @@ const DashboardPage: React.FC = () => {
       ]);
 
       setSessions(sessionsResponse.sessions || []);
-      setAnalytics(analyticsResponse);
+      setAnalytics(analyticsResponse.analytics);
 
       console.log('✅ Dashboard data loaded:', {
         sessionsCount: sessionsResponse.sessions?.length || 0,
@@ -109,6 +107,43 @@ const DashboardPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to delete session:', error);
       toast.error('Failed to delete session');
+    }
+  };
+
+  // ✅ CRITICAL FIX: Proper export with authentication
+  const exportSession = async (sessionId: string, format: 'json' | 'csv' | 'markdown' = 'json') => {
+    try {
+      setExportingSession(sessionId);
+      console.log('📁 EXPORT: Starting session export...', { sessionId, format });
+      
+      // ✅ Use proper API method with auth headers
+      const blob = await api.exportSession(sessionId, format);
+      
+      // ✅ Create download link and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // ✅ Set proper filename based on format
+      const extension = format === 'json' ? 'json' : format === 'csv' ? 'csv' : 'md';
+      link.download = `session-${sessionId}.${extension}`;
+      
+      // ✅ Trigger download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // ✅ Clean up blob URL
+      window.URL.revokeObjectURL(url);
+      
+      console.log('✅ EXPORT: Session exported successfully');
+      toast.success(`Session exported as ${format.toUpperCase()}`);
+      
+    } catch (error) {
+      console.error('❌ EXPORT: Failed to export session:', error);
+      toast.error('Failed to export session. Please try again.');
+    } finally {
+      setExportingSession(null);
     }
   };
 
@@ -141,33 +176,75 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  // ✅ CRITICAL FIX: Safe dimension analysis with null checks
+  const getBestDimension = () => {
+    if (!analytics?.dimensionAverages || typeof analytics.dimensionAverages !== 'object') {
+      return { name: 'Strategic', score: 0 };
+    }
+
+    try {
+      const entries = Object.entries(analytics.dimensionAverages);
+      if (entries.length === 0) {
+        return { name: 'Strategic', score: 0 };
+      }
+
+      const sortedEntries = entries.sort(([,a], [,b]) => (b || 0) - (a || 0));
+      const bestEntry = sortedEntries[0];
+      
+      if (!bestEntry || !bestEntry[0]) {
+        return { name: 'Strategic', score: 0 };
+      }
+
+      const dimensionName = bestEntry[0].charAt(0).toUpperCase() + bestEntry[0].slice(1);
+      const score = bestEntry[1] || 0;
+
+      return { name: dimensionName, score: Math.round(score) };
+    } catch (error) {
+      console.error('❌ Error calculating best dimension:', error);
+      return { name: 'Strategic', score: 0 };
+    }
+  };
+
+  // ✅ SAFE: Get dimension averages with fallback
+  const getDimensionAverages = () => {
+    if (!analytics?.dimensionAverages || typeof analytics.dimensionAverages !== 'object') {
+      return {
+        strategic: 0,
+        tactical: 0,
+        cognitive: 0,
+        innovation: 0
+      };
+    }
+
+    return {
+      strategic: analytics.dimensionAverages.strategic || 0,
+      tactical: analytics.dimensionAverages.tactical || 0,
+      cognitive: analytics.dimensionAverages.cognitive || 0,
+      innovation: analytics.dimensionAverages.innovation || 0
+    };
+  };
+
   if (!isAuthenticated) {
     return (
-      <div className="max-w-7xl mx-auto space-y-8">
-        <NavBar />
-        <div className="flex items-center justify-center min-h-screen">
-          <Card className="p-8 text-center">
-            <CardContent>
-              <h2 className="text-xl font-bold mb-4">Please log in to view your dashboard</h2>
-              <Button asChild>
-                <Link to="/analyze">Go to Analysis</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="p-8 text-center">
+          <CardContent>
+            <h2 className="text-xl font-bold mb-4">Please log in to view your dashboard</h2>
+            <Button onClick={() => window.location.href = '/analyze'}>
+              Go to Analysis
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto space-y-8">
-        <NavBar />
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center space-y-4">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto" />
-            <p className="text-muted-foreground">Loading your dashboard...</p>
-          </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto" />
+          <p className="text-muted-foreground">Loading your dashboard...</p>
         </div>
       </div>
     );
@@ -175,26 +252,24 @@ const DashboardPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto space-y-8">
-        <NavBar />
-        <div className="flex items-center justify-center min-h-screen">
-          <Card className="p-8 text-center">
-            <CardContent>
-              <h2 className="text-xl font-bold mb-4 text-red-600">Error Loading Dashboard</h2>
-              <p className="text-muted-foreground mb-4">{error}</p>
-              <Button onClick={fetchDashboardData}>Try Again</Button>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="p-8 text-center">
+          <CardContent>
+            <h2 className="text-xl font-bold mb-4 text-red-600">Error Loading Dashboard</h2>
+            <p className="text-muted-foreground mb-4">{error}</p>
+            <Button onClick={fetchDashboardData}>Try Again</Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
+  // ✅ Get safe values
+  const bestDimension = getBestDimension();
+  const dimensionAverages = getDimensionAverages();
+
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      {/* ✅ NAVIGATION BAR */}
-      <NavBar />
-
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -226,9 +301,9 @@ const DashboardPage: React.FC = () => {
               <BarChart3 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{analytics.totalSessions}</div>
+              <div className="text-2xl font-bold">{analytics.totalSessions || 0}</div>
               <p className="text-xs text-muted-foreground">
-                {analytics.totalMessages} total messages analyzed
+                {analytics.totalMessages || 0} total messages analyzed
               </p>
             </CardContent>
           </Card>
@@ -239,9 +314,9 @@ const DashboardPage: React.FC = () => {
               <Target className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{analytics.averageScore}</div>
+              <div className="text-2xl font-bold">{analytics.averageScore || 0}</div>
               <p className="text-xs text-muted-foreground">
-                {getScoreLabel(analytics.averageScore)} performance
+                {getScoreLabel(analytics.averageScore || 0)} performance
               </p>
             </CardContent>
           </Card>
@@ -253,7 +328,7 @@ const DashboardPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {analytics.improvementRate > 0 ? '+' : ''}{analytics.improvementRate}%
+                {(analytics.improvementRate || 0) > 0 ? '+' : ''}{analytics.improvementRate || 0}%
               </div>
               <p className="text-xs text-muted-foreground">
                 vs previous period
@@ -268,13 +343,10 @@ const DashboardPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {Object.entries(analytics.dimensionAverages)
-                  .sort(([,a], [,b]) => b - a)[0]?.[0]?.charAt(0).toUpperCase() + 
-                 Object.entries(analytics.dimensionAverages)
-                  .sort(([,a], [,b]) => b - a)[0]?.[0]?.slice(1) || 'Strategic'}
+                {bestDimension.name}
               </div>
               <p className="text-xs text-muted-foreground">
-                {Math.round(Math.max(...Object.values(analytics.dimensionAverages)))} average
+                {bestDimension.score} average
               </p>
             </CardContent>
           </Card>
@@ -293,13 +365,13 @@ const DashboardPage: React.FC = () => {
               <CardTitle>Skill Dimensions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {Object.entries(analytics.dimensionAverages).map(([dimension, score]) => (
+              {Object.entries(dimensionAverages).map(([dimension, score]) => (
                 <div key={dimension} className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="capitalize font-medium">{dimension}</span>
-                    <span className="text-muted-foreground">{Math.round(score)}/100</span>
+                    <span className="text-muted-foreground">{Math.round(score || 0)}/100</span>
                   </div>
-                  <Progress value={score} className="h-2" />
+                  <Progress value={score || 0} className="h-2" />
                 </div>
               ))}
             </CardContent>
@@ -320,12 +392,9 @@ const DashboardPage: React.FC = () => {
               <Button 
                 variant="outline" 
                 size="sm"
-                asChild
+                onClick={() => window.location.href = '/analyze'}
               >
-                <Link to="/analyze">
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  New Analysis
-                </Link>
+                New Analysis
               </Button>
             </CardTitle>
           </CardHeader>
@@ -337,8 +406,8 @@ const DashboardPage: React.FC = () => {
                 <p className="text-muted-foreground mb-4">
                   Start analyzing your AI conversations to see insights here
                 </p>
-                <Button asChild>
-                  <Link to="/analyze">Start Your First Analysis</Link>
+                <Button onClick={() => window.location.href = '/analyze'}>
+                  Start Your First Analysis
                 </Button>
               </div>
             ) : (
@@ -395,12 +464,14 @@ const DashboardPage: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => {
-                            const url = `${api.baseUrl}/sessions/${session.id}/export?format=json`;
-                            window.open(url, '_blank');
-                          }}
+                          onClick={() => exportSession(session.id, 'json')}
+                          disabled={exportingSession === session.id}
                         >
-                          <Download className="w-4 h-4" />
+                          {exportingSession === session.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
                         </Button>
                         <Button
                           variant="ghost"
@@ -444,7 +515,8 @@ const DashboardPage: React.FC = () => {
         transition={{ delay: 0.4 }}
         className="grid grid-cols-1 md:grid-cols-3 gap-6"
       >
-        <Card className="cursor-pointer hover:shadow-md transition-shadow">
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" 
+              onClick={() => window.location.href = '/analyze'}>
           <CardHeader>
             <CardTitle className="text-lg">New Analysis</CardTitle>
           </CardHeader>
@@ -452,9 +524,7 @@ const DashboardPage: React.FC = () => {
             <p className="text-muted-foreground mb-4">
               Analyze a new AI conversation and get chess-style scoring
             </p>
-            <Button className="w-full" asChild>
-              <Link to="/analyze">Start Analysis</Link>
-            </Button>
+            <Button className="w-full">Start Analysis</Button>
           </CardContent>
         </Card>
 
@@ -487,9 +557,9 @@ const DashboardPage: React.FC = () => {
             <Button 
               variant="outline" 
               className="w-full"
-              asChild
+              onClick={() => window.location.href = '/settings'}
             >
-              <Link to="/settings">Open Settings</Link>
+              Open Settings
             </Button>
           </CardContent>
         </Card>
