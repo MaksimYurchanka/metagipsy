@@ -55,15 +55,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* ✅ ENHANCED: Mobile sidebar backdrop with blur */}
+      {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* ✅ FIXED: Enhanced Desktop & Mobile SideBar */}
+      {/* ✅ FIXED: Enhanced Desktop SideBar Visibility */}
       <motion.div
         initial={false}
         animate={{
@@ -71,11 +71,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         }}
         transition={{ type: 'tween', duration: 0.3 }}
         className={cn(
-          // ✅ ENHANCED: Solid dark background for mobile
-          "fixed inset-y-0 left-0 z-50 w-64 border-r border-border",
-          "bg-gray-900/95 backdrop-blur-md lg:bg-card",
+          // ✅ CRITICAL FIX: Enhanced desktop visibility
+          "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border",
           "lg:static lg:translate-x-0 lg:!block lg:!relative lg:!transform-none",
-          "flex flex-col shadow-2xl lg:shadow-none",
+          "flex flex-col",
           // ✅ FORCE: Desktop always visible
           "lg:flex lg:w-64 lg:min-w-[16rem]"
         )}
