@@ -19,7 +19,6 @@ import {
   Loader2
 } from 'lucide-react';
 
-// ✅ ENHANCED: SessionData with 5D Context support
 interface SessionData {
   id: string;
   title?: string;
@@ -30,14 +29,12 @@ interface SessionData {
   tacticalAvg: number;
   cognitiveAvg: number;
   innovationAvg: number;
-  contextAvg: number; // ✅ NEW: 5th dimension support
   trend?: 'improving' | 'declining' | 'stable' | 'volatile';
   createdAt: string;
   projectContext?: string;
   sessionGoal?: string;
 }
 
-// ✅ ENHANCED: AnalyticsData with 5D Context support
 interface AnalyticsData {
   totalSessions: number;
   totalMessages: number;
@@ -48,7 +45,6 @@ interface AnalyticsData {
     tactical: number;
     cognitive: number;
     innovation: number;
-    context: number; // ✅ NEW: 5th dimension analytics
   };
   trendDistribution: Record<string, number>;
   platformDistribution: Record<string, number>;
@@ -151,24 +147,6 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  // ✅ ENHANCED: View session with proper routing
-  const viewSession = async (sessionId: string) => {
-    try {
-      console.log('👁️ VIEW SESSION: Opening session details...', { sessionId });
-      
-      // ✅ OPTION 1: Navigate to analyze page with session data (recommended)
-      // This will work immediately with existing infrastructure
-      window.location.href = `/analyze?session=${sessionId}`;
-      
-      // ✅ OPTION 2: Alternative - could open modal with session details
-      // toast.info('Loading session details...');
-      
-    } catch (error) {
-      console.error('❌ VIEW SESSION: Failed to open session:', error);
-      toast.error('Failed to open session details');
-    }
-  };
-
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600 bg-green-50 border-green-200';
     if (score >= 70) return 'text-blue-600 bg-blue-50 border-blue-200';
@@ -198,7 +176,7 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  // ✅ ENHANCED: Best dimension analysis with 5D Context support
+  // ✅ CRITICAL FIX: Safe dimension analysis with null checks
   const getBestDimension = () => {
     if (!analytics?.dimensionAverages || typeof analytics.dimensionAverages !== 'object') {
       return { name: 'Strategic', score: 0 };
@@ -227,15 +205,14 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  // ✅ ENHANCED: Get 5D dimension averages with Context support
+  // ✅ SAFE: Get dimension averages with fallback
   const getDimensionAverages = () => {
     if (!analytics?.dimensionAverages || typeof analytics.dimensionAverages !== 'object') {
       return {
         strategic: 0,
         tactical: 0,
         cognitive: 0,
-        innovation: 0,
-        context: 0 // ✅ NEW: Context dimension default
+        innovation: 0
       };
     }
 
@@ -243,18 +220,8 @@ const DashboardPage: React.FC = () => {
       strategic: analytics.dimensionAverages.strategic || 0,
       tactical: analytics.dimensionAverages.tactical || 0,
       cognitive: analytics.dimensionAverages.cognitive || 0,
-      innovation: analytics.dimensionAverages.innovation || 0,
-      context: analytics.dimensionAverages.context || 0 // ✅ NEW: Context dimension
+      innovation: analytics.dimensionAverages.innovation || 0
     };
-  };
-
-  // ✅ NEW: 5D dimension configuration with icons and colors
-  const dimensionConfig = {
-    strategic: { icon: '🎯', color: 'text-purple-600', label: 'Strategic' },
-    tactical: { icon: '⚡', color: 'text-blue-600', label: 'Tactical' },
-    cognitive: { icon: '🧠', color: 'text-green-600', label: 'Cognitive' },
-    innovation: { icon: '💡', color: 'text-yellow-600', label: 'Innovation' },
-    context: { icon: '🧭', color: 'text-cyan-600', label: 'Context' } // ✅ NEW: Context with compass
   };
 
   if (!isAuthenticated) {
@@ -277,7 +244,7 @@ const DashboardPage: React.FC = () => {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center space-y-4">
           <Loader2 className="w-8 h-8 animate-spin mx-auto" />
-          <p className="text-muted-foreground">Loading your 5D dashboard...</p>
+          <p className="text-muted-foreground">Loading your dashboard...</p>
         </div>
       </div>
     );
@@ -309,14 +276,14 @@ const DashboardPage: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         className="space-y-4"
       >
-        <h1 className="text-4xl font-bold">Your 5D Analysis Dashboard</h1>
+        <h1 className="text-4xl font-bold">Your Analysis Dashboard</h1>
         <p className="text-xl text-muted-foreground">
-          Track your AI conversation improvement journey across 5 dimensions
+          Track your AI conversation improvement journey
         </p>
         
         <div className="flex items-center gap-2 text-sm text-green-600">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          Welcome back, {user?.email}! ✨ Now with Context dimension analysis
+          Welcome back, {user?.email}!
         </div>
       </motion.div>
 
@@ -380,14 +347,13 @@ const DashboardPage: React.FC = () => {
               </div>
               <p className="text-xs text-muted-foreground">
                 {bestDimension.score} average
-                {bestDimension.name === 'Context' && ' 🧭'}
               </p>
             </CardContent>
           </Card>
         </motion.div>
       )}
 
-      {/* ✅ ENHANCED: 5D Dimension Breakdown with Context support */}
+      {/* Dimension Breakdown */}
       {analytics && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -396,50 +362,24 @@ const DashboardPage: React.FC = () => {
         >
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                5D Skill Dimensions
-                <Badge variant="secondary" className="text-xs">
-                  Context NEW
-                </Badge>
-              </CardTitle>
+              <CardTitle>Skill Dimensions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {Object.entries(dimensionAverages).map(([dimension, score]) => {
-                const config = dimensionConfig[dimension as keyof typeof dimensionConfig];
-                return (
-                  <div key={dimension} className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{config.icon}</span>
-                        <span className={`capitalize font-medium ${config.color}`}>
-                          {config.label}
-                        </span>
-                        {dimension === 'context' && (
-                          <Badge variant="outline" className="text-xs bg-cyan-50 text-cyan-700 border-cyan-300">
-                            NEW
-                          </Badge>
-                        )}
-                      </div>
-                      <span className="text-muted-foreground">{Math.round(score || 0)}/100</span>
-                    </div>
-                    <Progress 
-                      value={score || 0} 
-                      className={`h-2 ${dimension === 'context' ? 'bg-cyan-100' : ''}`}
-                    />
-                    {dimension === 'context' && score > 0 && (
-                      <p className="text-xs text-cyan-600">
-                        Temporal understanding & state awareness
-                      </p>
-                    )}
+              {Object.entries(dimensionAverages).map(([dimension, score]) => (
+                <div key={dimension} className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="capitalize font-medium">{dimension}</span>
+                    <span className="text-muted-foreground">{Math.round(score || 0)}/100</span>
                   </div>
-                );
-              })}
+                  <Progress value={score || 0} className="h-2" />
+                </div>
+              ))}
             </CardContent>
           </Card>
         </motion.div>
       )}
 
-      {/* ✅ ENHANCED: Session History with 5D Context support */}
+      {/* Session History */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -448,7 +388,7 @@ const DashboardPage: React.FC = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              Recent 5D Analyses
+              Recent Analyses
               <Button 
                 variant="outline" 
                 size="sm"
@@ -462,12 +402,12 @@ const DashboardPage: React.FC = () => {
             {sessions.length === 0 ? (
               <div className="text-center py-12">
                 <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">No 5D analyses yet</h3>
+                <h3 className="text-lg font-medium mb-2">No analyses yet</h3>
                 <p className="text-muted-foreground mb-4">
-                  Start analyzing your AI conversations to see 5D insights here
+                  Start analyzing your AI conversations to see insights here
                 </p>
                 <Button onClick={() => window.location.href = '/analyze'}>
-                  Start Your First 5D Analysis
+                  Start Your First Analysis
                 </Button>
               </div>
             ) : (
@@ -487,10 +427,6 @@ const DashboardPage: React.FC = () => {
                             {session.platform}
                           </Badge>
                           {getTrendIcon(session.trend)}
-                          {/* ✅ 5D indicator */}
-                          <Badge variant="secondary" className="text-xs bg-gradient-to-r from-purple-100 to-cyan-100 dark:from-purple-900 dark:to-cyan-900">
-                            5D
-                          </Badge>
                         </div>
                         
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -511,26 +447,17 @@ const DashboardPage: React.FC = () => {
                           >
                             {session.overallScore}/100
                           </Badge>
-                          <div className="text-xs text-muted-foreground flex items-center gap-2">
-                            <span>🎯{Math.round(session.strategicAvg)}</span>
-                            <span>⚡{Math.round(session.tacticalAvg)}</span>
-                            <span>🧠{Math.round(session.cognitiveAvg)}</span>
-                            <span>💡{Math.round(session.innovationAvg)}</span>
-                            {/* ✅ NEW: Context dimension display */}
-                            <span className="text-cyan-600 font-medium">
-                              🧭{Math.round(session.contextAvg || 0)}
-                            </span>
+                          <div className="text-xs text-muted-foreground">
+                            S:{Math.round(session.strategicAvg)} T:{Math.round(session.tacticalAvg)} C:{Math.round(session.cognitiveAvg)} I:{Math.round(session.innovationAvg)}
                           </div>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-2">
-                        {/* ✅ FIXED: Working Eye button */}
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => viewSession(session.id)}
-                          title="View session details"
+                          onClick={() => window.open(`/sessions/${session.id}`, '_blank')}
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -539,7 +466,6 @@ const DashboardPage: React.FC = () => {
                           size="sm"
                           onClick={() => exportSession(session.id, 'json')}
                           disabled={exportingSession === session.id}
-                          title="Export session"
                         >
                           {exportingSession === session.id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -555,7 +481,6 @@ const DashboardPage: React.FC = () => {
                               deleteSession(session.id);
                             }
                           }}
-                          title="Delete session"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -593,16 +518,13 @@ const DashboardPage: React.FC = () => {
         <Card className="cursor-pointer hover:shadow-md transition-shadow" 
               onClick={() => window.location.href = '/analyze'}>
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              New 5D Analysis
-              <span className="text-lg">🧭</span>
-            </CardTitle>
+            <CardTitle className="text-lg">New Analysis</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">
-              Analyze a new AI conversation with revolutionary 5D chess-style scoring
+              Analyze a new AI conversation and get chess-style scoring
             </p>
-            <Button className="w-full">Start 5D Analysis</Button>
+            <Button className="w-full">Start Analysis</Button>
           </CardContent>
         </Card>
 
@@ -612,7 +534,7 @@ const DashboardPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">
-              Download your 5D analysis data in various formats
+              Download your analysis data in various formats
             </p>
             <Button 
               variant="outline" 
@@ -630,7 +552,7 @@ const DashboardPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-4">
-              Customize your 5D analysis preferences and notifications
+              Customize your analysis preferences and notifications
             </p>
             <Button 
               variant="outline" 
