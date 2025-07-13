@@ -1,4 +1,4 @@
-// ✅ ENHANCED CONVERSATION PARSER with Claude 3.5 Haiku Integration & TYPE COMPATIBILITY
+// ✅ ENHANCED CONVERSATION PARSER with Claude 3.5 Haiku Integration & SMARTER_CONTEXT_SCORING
 // apps/api/src/lib/conversation-parser.ts
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -6,9 +6,9 @@ import { Message, Platform, ParseResult } from '../types';
 import { logger } from './logger';
 import { config } from './config';
 
-// ✅ TYPE COMPATIBLE: ParseResult options matching existing types
+// ✅ ENHANCED: ParseResult options with Haiku-first approach
 export interface EnhancedParseOptions {
-  forcePattern?: boolean;     // Force pattern parsing (skip Haiku)
+  forcePattern?: boolean;     // Reverse logic - force pattern if needed
   userSignature?: string;
   expectedPlatform?: Platform;
   analysisDepth?: 'quick' | 'standard' | 'deep';
@@ -17,11 +17,11 @@ export interface EnhancedParseOptions {
   enableContextScoring?: boolean;
 }
 
-// ✅ TYPE COMPATIBLE: Haiku parsing result extending ParseResult
+// ✅ NEW: Haiku parsing result with cost tracking
 interface HaikuParseResult extends ParseResult {
   haikuCost: number;
   haikuConfidence: number;
-  contextScores?: number[];  // Per-message context scores (separate from metadata)
+  contextScores?: number[];  // Per-message context scores
 }
 
 export class ConversationParser {
@@ -73,9 +73,7 @@ export class ConversationParser {
         }
 
         const processingTime = Date.now() - startTime;
-        if (haikuResult.metadata) {
-          haikuResult.metadata.processingTime = processingTime;
-        }
+        haikuResult.metadata.processingTime = processingTime;
         
         logger.info(`✅ ${this.HAIKU_MODEL} PARSING SUCCESS:`, {
           requestId,
@@ -102,13 +100,10 @@ export class ConversationParser {
     // ✅ SMARTER_CONTEXT_SCORING: Apply even to pattern parsing
     if (options.enableContextScoring !== false) {
       const contextScores = this.calculateSmarterContextScores(patternResult.messages);
-      // Store context scores separately since they're not in metadata type
-      (patternResult as any).contextScores = contextScores;
+      patternResult.metadata.contextScores = contextScores;
     }
 
-    if (patternResult.metadata) {
-      patternResult.metadata.processingTime = Date.now() - startTime;
-    }
+    patternResult.metadata.processingTime = Date.now() - startTime;
     return patternResult;
   }
 
@@ -143,8 +138,7 @@ export class ConversationParser {
       ...parseResult,
       haikuCost: estimatedCost,
       haikuConfidence: parseResult.confidence,
-      // ✅ TYPE COMPATIBLE: Use 'haiku' instead of 'claude-3.5-haiku'
-      method: 'haiku' // This matches the 'pattern' | 'haiku' | 'hybrid' union
+      method: 'claude-3.5-haiku'
     };
   }
 
@@ -382,12 +376,10 @@ REQUIREMENTS:
         messages,
         platform: this.normalizePlatform(parsed.platform),
         confidence: Math.min(parsed.confidence || 0.8, 0.95), // Cap AI confidence at 95%
-        // ✅ TYPE COMPATIBLE: Use 'haiku' instead of 'claude-3.5-haiku'
-        method: 'haiku',
+        method: 'claude-3.5-haiku',
         metadata: {
           originalLength: originalText.length,
           processingTime: 0, // Will be set by caller
-          cost: this.calculateHaikuCost(originalText.length),
           patternLearning: [
             `${this.HAIKU_MODEL} parsing: ${parsed.patterns?.join(', ') || 'no patterns'}`,
             `Insights: ${parsed.insights?.join('; ') || 'none'}`,
@@ -487,18 +479,13 @@ REQUIREMENTS:
           result = this.parseGenericConversation(text);
       }
       
-      if (!result.metadata) {
-        result.metadata = {
-          originalLength: text.length,
-          processingTime: Date.now() - startTime
-        };
-      } else {
-        result.metadata.processingTime = Date.now() - startTime;
-      }
-      
-      if (options?.userSignature && result.metadata.patternLearning) {
-        result.metadata.patternLearning.push(`User signature: ${options.userSignature}`);
-      }
+      result.metadata = {
+        originalLength: text.length,
+        processingTime: Date.now() - startTime,
+        ...(options?.userSignature && { 
+          patternLearning: [`User signature: ${options.userSignature}`]
+        })
+      };
       
       result.method = 'pattern';
       
@@ -672,6 +659,7 @@ REQUIREMENTS:
       metadata: {
         originalLength: text.length,
         processingTime: 0, // Will be set by parent function
+        // ✅ FIXED: Use valid metadata properties
         patternLearning: [
           `Claude parsing: ${parsedParts} parts processed`,
           `Final messages: ${messages.length}`,
@@ -770,6 +758,7 @@ REQUIREMENTS:
       metadata: {
         originalLength: text.length,
         processingTime: 0, // Will be set by parent function
+        // ✅ FIXED: Use valid metadata properties
         patternLearning: [
           `ChatGPT parsing: ${parseMethod}`,
           `Messages extracted: ${messages.length}`,
@@ -827,6 +816,7 @@ REQUIREMENTS:
       metadata: {
         originalLength: text.length,
         processingTime: 0, // Will be set by parent function
+        // ✅ FIXED: Use valid metadata properties
         patternLearning: [
           'Generic alternating parsing',
           `Messages: ${messages.length}`,
@@ -853,6 +843,7 @@ REQUIREMENTS:
       metadata: {
         originalLength: text.length,
         processingTime: 0,
+        // ✅ FIXED: Use valid metadata properties
         patternLearning: ['Fallback parsing applied']
       }
     };
