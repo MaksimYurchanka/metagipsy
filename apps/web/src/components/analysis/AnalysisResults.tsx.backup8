@@ -15,7 +15,7 @@ type SortType = 'index' | 'score';
 
 // ✅ CRITICAL FIX: Use individual primitive selectors to avoid object recreation
 const AnalysisResults: React.FC = () => {
-  console.log('🚀 ANALYSIS RESULTS 5D: Starting render...');
+  console.log('🚀 ANALYSIS RESULTS PRIMITIVE: Starting render...');
   
   // ✅ PRIMITIVE SELECTORS - Each returns a primitive value, no objects
   const messages = useAnalysisStore((state) => state.messages || []);
@@ -32,14 +32,11 @@ const AnalysisResults: React.FC = () => {
   const tacticalAvg = useAnalysisStore((state) => state._rawStats?.tacticalAvg || 0);
   const cognitiveAvg = useAnalysisStore((state) => state._rawStats?.cognitiveAvg || 0);
   const innovationAvg = useAnalysisStore((state) => state._rawStats?.innovationAvg || 0);
-  // ✅ CRITICAL NEW: Context dimension support
-  const contextAvg = useAnalysisStore((state) => state._rawStats?.contextAvg || 0);
   
-  console.log('📊 5D VALUES:', { 
+  console.log('📊 PRIMITIVE VALUES:', { 
     messagesCount: messages.length, 
     scoresCount: scores.length, 
     avgScore: averageScore,
-    contextAvg: contextAvg,
     totalMsgs: totalMessages 
   });
   
@@ -51,7 +48,7 @@ const AnalysisResults: React.FC = () => {
   // ✅ NO EARLY RETURN - Always render something to avoid conditional hooks
   const hasData = messages.length > 0 && scores.length > 0;
   
-  console.log('✅ HAS DATA CHECK (5D):', hasData, 'messages:', messages.length, 'scores:', scores.length);
+  console.log('✅ HAS DATA CHECK:', hasData, 'messages:', messages.length, 'scores:', scores.length);
   
   // ✅ CRITICAL FIX: STABLE callbacks with ZERO dependencies
   const toggleExpanded = useCallback((index: number) => {
@@ -122,17 +119,16 @@ const AnalysisResults: React.FC = () => {
     });
   }, [filteredMessages, sortBy, messages, scores]);
   
-  // ✅ CRITICAL NEW: 5D Dimensions including Context!
+  // ✅ CRITICAL FIX: Dimensions using individual primitive values
   const dimensions = useMemo(() => {
-    console.log('📈 Computing 5D dimensions from primitive values');
+    console.log('📈 Computing dimensions from primitive values');
     return [
       { key: 'strategic', label: 'Strategic', value: strategicAvg, icon: '🎯' },
       { key: 'tactical', label: 'Tactical', value: tacticalAvg, icon: '⚔️' },
       { key: 'cognitive', label: 'Cognitive', value: cognitiveAvg, icon: '🧠' },
-      { key: 'innovation', label: 'Innovation', value: innovationAvg, icon: '💡' },
-      { key: 'context', label: 'Context', value: contextAvg, icon: '🧭' } // ✅ NEW: 5th dimension!
+      { key: 'innovation', label: 'Innovation', value: innovationAvg, icon: '💡' }
     ];
-  }, [strategicAvg, tacticalAvg, cognitiveAvg, innovationAvg, contextAvg]); // ✅ All 5D dependencies!
+  }, [strategicAvg, tacticalAvg, cognitiveAvg, innovationAvg]); // ← Primitive dependencies!
   
   // ✅ CRITICAL FIX: Memoized message components with stable toggleExpanded
   const messageComponents = useMemo(() => {
@@ -178,7 +174,7 @@ const AnalysisResults: React.FC = () => {
     }
   };
   
-  console.log('✅ ANALYSIS RESULTS 5D: Rendering, hasData:', hasData);
+  console.log('✅ ANALYSIS RESULTS PRIMITIVE: Rendering, hasData:', hasData);
   
   return (
     <div className="space-y-6">
@@ -189,7 +185,7 @@ const AnalysisResults: React.FC = () => {
             <div className="text-4xl mb-2">♟️</div>
             <p className="text-muted-foreground">No analysis data available</p>
             <p className="text-sm text-muted-foreground mt-2">
-              Paste a conversation to see detailed 5D chess-style scoring
+              Paste a conversation to see detailed chess-style scoring
             </p>
           </div>
         </div>
@@ -260,7 +256,7 @@ const AnalysisResults: React.FC = () => {
             <div className="flex items-center justify-between">
               <TabsList>
                 <TabsTrigger value="messages">Messages</TabsTrigger>
-                <TabsTrigger value="dimensions">5D Dimensions</TabsTrigger>
+                <TabsTrigger value="dimensions">Dimensions</TabsTrigger>
                 <TabsTrigger value="insights">Insights</TabsTrigger>
               </TabsList>
               
@@ -325,19 +321,13 @@ const AnalysisResults: React.FC = () => {
             </TabsContent>
             
             <TabsContent value="dimensions" className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {dimensions.map(({ key, label, value, icon }) => (
-                  <Card key={key} className={cn(
-                    "transition-all duration-200 hover:shadow-md",
-                    key === 'context' && "ring-2 ring-blue-200 dark:ring-blue-800" // ✅ Highlight new dimension
-                  )}>
+                  <Card key={key}>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <span className="text-2xl">{icon}</span>
                         {label}
-                        {key === 'context' && (
-                          <Badge variant="secondary" className="text-xs">NEW</Badge> // ✅ Mark as new
-                        )}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -378,7 +368,7 @@ const AnalysisResults: React.FC = () => {
             <TabsContent value="insights" className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>5D Session Insights</CardTitle>
+                  <CardTitle>Session Insights</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -387,7 +377,7 @@ const AnalysisResults: React.FC = () => {
                         <div className="text-2xl mb-2">🎯</div>
                         <h4 className="font-medium">Strengths</h4>
                         <p className="text-sm text-muted-foreground">
-                          Strong strategic thinking and contextual awareness
+                          Strong strategic thinking and goal alignment
                         </p>
                       </div>
                       
@@ -395,28 +385,27 @@ const AnalysisResults: React.FC = () => {
                         <div className="text-2xl mb-2">⚡</div>
                         <h4 className="font-medium">Opportunities</h4>
                         <p className="text-sm text-muted-foreground">
-                          Improve tactical clarity and temporal understanding
+                          Improve tactical clarity and specificity
                         </p>
                       </div>
                       
                       <div className="text-center p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                        <div className="text-2xl mb-2">🧭</div>
-                        <h4 className="font-medium">Context Mastery</h4>
+                        <div className="text-2xl mb-2">💡</div>
+                        <h4 className="font-medium">Recommendations</h4>
                         <p className="text-sm text-muted-foreground">
-                          Excellent context awareness with score of {Math.round(contextAvg)}
+                          Break complex requests into smaller parts
                         </p>
                       </div>
                     </div>
                     
                     <div className="space-y-3">
-                      <h4 className="font-medium">5D Analysis</h4>
+                      <h4 className="font-medium">Detailed Analysis</h4>
                       <div className="prose prose-sm max-w-none">
                         <p>
-                          Your conversation demonstrates strong 5-dimensional chess thinking. 
-                          The Context awareness score of {Math.round(contextAvg)} shows excellent 
-                          temporal understanding and state awareness. Strategic alignment remains 
-                          strong with clear goal progression. Consider enhancing tactical 
-                          specificity for even better results.
+                          Your conversation shows strong strategic alignment with clear goals. 
+                          The assistant responses demonstrate good understanding and provide 
+                          actionable guidance. Consider being more specific in your initial 
+                          requests to get even better results.
                         </p>
                       </div>
                     </div>

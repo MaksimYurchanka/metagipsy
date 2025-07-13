@@ -21,7 +21,7 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
   isExpanded = false,
   onToggle
 }) => {
-  console.log(`🔍 MESSAGE ANALYSIS 5D ${index}: Starting render...`);
+  console.log(`🔍 MESSAGE ANALYSIS ${index}: Starting render...`);
   
   // ✅ CRITICAL FIX 1: Local state for when no parent control
   const [localExpanded, setLocalExpanded] = useState(isExpanded);
@@ -35,11 +35,11 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
   const shouldAutoExpand = autoExpandLowScores && score.overall < 60;
   const finalExpanded = onToggle ? isExpanded : (shouldAutoExpand || localExpanded);
   
-  console.log(`✅ MESSAGE ANALYSIS 5D ${index}: State determined, expanded:`, finalExpanded);
+  console.log(`✅ MESSAGE ANALYSIS ${index}: State determined, expanded:`, finalExpanded);
   
   // ✅ CRITICAL FIX 4: STABLE toggle function with ZERO dependencies on onToggle!
   const handleToggle = useCallback(() => {
-    console.log(`🔄 MESSAGE ANALYSIS 5D ${index}: Toggle clicked`);
+    console.log(`🔄 MESSAGE ANALYSIS ${index}: Toggle clicked`);
     if (onToggle) {
       onToggle(index);
     } else {
@@ -57,21 +57,20 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
     };
   }, [message.role]);
   
-  // ✅ CRITICAL NEW: 5D dimensions array with Context support!
+  // ✅ CRITICAL FIX 6: Memoized dimensions array (stable reference)
   const dimensions = useMemo(() => {
-    console.log(`📊 MESSAGE ANALYSIS 5D ${index}: Computing 5D dimensions`);
+    console.log(`📊 MESSAGE ANALYSIS ${index}: Computing dimensions`);
     return [
       { key: 'strategic', label: 'Strategic', value: score.dimensions?.strategic || 0 },
       { key: 'tactical', label: 'Tactical', value: score.dimensions?.tactical || 0 },
       { key: 'cognitive', label: 'Cognitive', value: score.dimensions?.cognitive || 0 },
-      { key: 'innovation', label: 'Innovation', value: score.dimensions?.innovation || 0 },
-      { key: 'context', label: 'Context', value: score.dimensions?.context || 0 } // ✅ NEW: 5th dimension!
+      { key: 'innovation', label: 'Innovation', value: score.dimensions?.innovation || 0 }
     ];
   }, [score.dimensions, index]); // ← Stable dependencies
   
   // ✅ CRITICAL FIX 7: Memoized expanded content (expensive computation)
   const expandedContent = useMemo(() => {
-    console.log(`🏗️ MESSAGE ANALYSIS 5D ${index}: Building expanded content, show:`, finalExpanded);
+    console.log(`🏗️ MESSAGE ANALYSIS ${index}: Building expanded content, show:`, finalExpanded);
     
     if (!finalExpanded) return null;
     
@@ -83,24 +82,16 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
         transition={{ duration: animationsEnabled ? 0.2 : 0 }}
         className="space-y-4"
       >
-        {/* 5D Dimension scores */}
+        {/* Dimension scores */}
         <div className="space-y-3">
-          <h4 className="text-sm font-medium">5D Dimension Breakdown</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <h4 className="text-sm font-medium">Dimension Breakdown</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {dimensions.map(({ key, label, value }) => (
-              <div key={key} className={cn(
-                "space-y-1",
-                key === 'context' && "ring-1 ring-blue-200 dark:ring-blue-800 rounded p-2" // ✅ Highlight new dimension
-              )}>
+              <div key={key} className="space-y-1">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     <span className="text-sm">{getDimensionIcon(key)}</span>
-                    <span className="text-sm font-medium">
-                      {label}
-                      {key === 'context' && (
-                        <Badge variant="outline" className="ml-1 text-xs">NEW</Badge> // ✅ Mark as new
-                      )}
-                    </span>
+                    <span className="text-sm font-medium">{label}</span>
                   </div>
                   <ScoreBadge 
                     score={value} 
@@ -113,12 +104,6 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
                   value={value} 
                   className="h-2"
                 />
-                {/* ✅ NEW: Context dimension explanation */}
-                {key === 'context' && value > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Temporal understanding & state awareness
-                  </p>
-                )}
               </div>
             ))}
           </div>
@@ -149,22 +134,6 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
           </div>
         )}
         
-        {/* ✅ NEW: Context awareness insights */}
-        {score.dimensions?.context && score.dimensions.context > 70 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🧭</span>
-              <h4 className="text-sm font-medium">Context Mastery</h4>
-            </div>
-            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-3 rounded-md">
-              <p className="text-sm text-blue-800 dark:text-blue-200">
-                Excellent temporal understanding and state awareness! This message demonstrates 
-                strong context continuity with a score of {Math.round(score.dimensions.context)}.
-              </p>
-            </div>
-          </div>
-        )}
-        
         {/* Low score warning */}
         {score.overall < 40 && (
           <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-3 rounded-md">
@@ -176,14 +145,11 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
           </div>
         )}
         
-        {/* Enhanced Metadata with 5D info */}
+        {/* Metadata */}
         <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
           <div className="flex items-center gap-4">
             <span>Confidence: {Math.round((score.confidence || 0) * 100)}%</span>
             <span>Classification: {score.classification}</span>
-            {score.dimensions?.context && (
-              <span className="text-blue-600">Context: {Math.round(score.dimensions.context)}</span>
-            )}
           </div>
           <div>
             {message.content.length} characters
@@ -195,7 +161,7 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
   
   // ✅ CRITICAL FIX 8: Memoized card content (prevent unnecessary re-renders)
   const cardContent = useMemo(() => {
-    console.log(`🏗️ MESSAGE ANALYSIS 5D ${index}: Building card content`);
+    console.log(`🏗️ MESSAGE ANALYSIS ${index}: Building card content`);
     
     return (
       <Card className={cn(
@@ -227,10 +193,6 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
                       {formatTimestamp(message.timestamp)}
                     </span>
                   )}
-                  {/* ✅ NEW: 5D indicator */}
-                  <Badge variant="secondary" className="text-xs">
-                    5D
-                  </Badge>
                 </div>
                 
                 <p className={cn(
@@ -248,16 +210,6 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
                 size={compactMode ? "sm" : "md"}
                 animated={animationsEnabled}
               />
-              
-              {/* ✅ NEW: Context score badge if available */}
-              {score.dimensions?.context && score.dimensions.context > 0 && (
-                <ScoreBadge 
-                  score={score.dimensions.context} 
-                  dimension="context"
-                  size="sm"
-                  animated={animationsEnabled}
-                />
-              )}
               
               <Button
                 variant="ghost"
@@ -288,13 +240,12 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
     message, 
     index, 
     score.overall, 
-    score.dimensions?.context,
     animationsEnabled, 
     handleToggle,
     expandedContent
   ]); // ← All dependencies are stable now!
   
-  console.log(`✅ MESSAGE ANALYSIS 5D ${index}: Render complete`);
+  console.log(`✅ MESSAGE ANALYSIS ${index}: Render complete`);
   
   // ✅ CRITICAL FIX 9: Conditional animation wrapper (stable logic)
   if (animationsEnabled) {
