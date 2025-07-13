@@ -5,9 +5,9 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "rm -rf dist && npx prisma generate && npx prisma db push --force-reset && tsc",
+    "build": "rm -rf dist && npx prisma generate && npx prisma db push --accept-data-loss && tsc",
     "build:migrate": "rm -rf dist && npx prisma generate && npx prisma migrate deploy && tsc",
-    "build:safe": "rm -rf dist && npx prisma generate && npx prisma db push --accept-data-loss && tsc",
+    "build:fresh": "rm -rf dist && npx prisma generate && npx prisma db push --force-reset && tsc",
     "start": "node dist/index.js",
     "postinstall": "npx prisma generate",
     "migrate:deploy": "npx prisma migrate deploy",
