@@ -1,10 +1,10 @@
-// ✅ UNIFIED CONVERSATION PARSER with Fixed Metadata Types & 5D Foundation
+// ✅ ENHANCED CONVERSATION PARSER with Unified Types & 5D Foundation
 // apps/api/src/lib/conversation-parser.ts
 
 import { Message, Platform, ParseResult } from '../types';
 import { logger } from './logger';
 
-// ✅ ENHANCED: ParseResult options with unified types
+// ✅ ENHANCED: ParseResult now uses unified types from ../types
 export interface EnhancedParseOptions {
   forceHaiku?: boolean;
   userSignature?: string;
@@ -38,29 +38,20 @@ export class ConversationParser {
           result = this.parseGenericConversation(text);
       }
       
-      // ✅ CRITICAL FIX: Only use properties that exist in ParseResult metadata type
+      // ✅ ENHANCED: Add processing metadata
       result.metadata = {
+        ...result.metadata,
         originalLength: text.length,
         processingTime: Date.now() - startTime,
-        // ✅ REMOVED: 'method' and 'requestedMethod' (don't exist in types)
-        // ✅ ADDED: Valid optional properties from ParseResult metadata
-        ...(options?.forceHaiku && { 
-          cost: 0, // Estimated cost for future Haiku integration
-          patternLearning: ['Enhanced parsing requested'] 
-        })
+        method: 'pattern', // Current method, will be enhanced later
+        ...(options?.requestId && { requestId: options.requestId }),
+        ...(options?.userId && { userId: options.userId })
       };
-      
-      // ✅ FOUNDATION: Set method on result level (exists in ParseResult)
-      result.method = 'pattern'; // Current method, will be enhanced later
       
       // ✅ FOUNDATION: Prepare for enhanced parsing integration
       if (options?.forceHaiku) {
         logger.info('Haiku parsing requested but not yet implemented, using pattern parsing');
-        // ✅ FIXED: Store in patternLearning instead of non-existent property
-        if (!result.metadata.patternLearning) {
-          result.metadata.patternLearning = [];
-        }
-        result.metadata.patternLearning.push('Haiku method requested');
+        result.metadata.requestedMethod = 'haiku';
       }
       
       return result;
@@ -229,17 +220,11 @@ export class ConversationParser {
       messages,
       platform: 'claude', // ✅ UNIFIED: lowercase platform
       confidence: Math.max(0.1, confidence),
-      method: 'pattern', // ✅ VALID: exists in ParseResult
       metadata: {
         originalLength: text.length,
-        processingTime: 0, // Will be set by parent function
-        // ✅ FIXED: Use valid metadata properties
-        patternLearning: [
-          `Claude parsing: ${parsedParts} parts processed`,
-          `Final messages: ${messages.length}`,
-          `Confidence: ${confidence}`,
-          'Method: claude_role_markers'
-        ]
+        parsedParts: parsedParts,
+        finalMessages: messages.length,
+        parseMethod: 'claude_role_markers'
       }
     };
   }
@@ -252,12 +237,12 @@ export class ConversationParser {
     
     const messages: Message[] = [];
     let confidence = 0.8;
-    let parseMethod = '';
     
     try {
       const cleanText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
       
       let textParts: string[] = [];
+      let parseMethod = '';
       
       // Try different ChatGPT formats
       if (/(?:User|ChatGPT|Assistant):\s*/i.test(cleanText)) {
@@ -319,7 +304,6 @@ export class ConversationParser {
         });
       }
       confidence = 0.1;
-      parseMethod = 'fallback';
     }
     
     console.log(`📊 CHATGPT PARSING COMPLETE: ${messages.length} messages extracted`);
@@ -328,16 +312,11 @@ export class ConversationParser {
       messages,
       platform: 'chatgpt', // ✅ UNIFIED: lowercase platform
       confidence: Math.max(0.1, confidence),
-      method: 'pattern', // ✅ VALID: exists in ParseResult
       metadata: {
         originalLength: text.length,
-        processingTime: 0, // Will be set by parent function
-        // ✅ FIXED: Use valid metadata properties
-        patternLearning: [
-          `ChatGPT parsing: ${parseMethod}`,
-          `Messages extracted: ${messages.length}`,
-          `Confidence: ${confidence}`
-        ]
+        parsedParts: 0,
+        finalMessages: messages.length,
+        parseMethod: 'chatgpt_safe'
       }
     };
   }
@@ -386,16 +365,11 @@ export class ConversationParser {
       messages,
       platform: 'other', // ✅ UNIFIED: lowercase platform
       confidence: 0.3,
-      method: 'pattern', // ✅ VALID: exists in ParseResult
       metadata: {
         originalLength: text.length,
-        processingTime: 0, // Will be set by parent function
-        // ✅ FIXED: Use valid metadata properties
-        patternLearning: [
-          'Generic alternating parsing',
-          `Messages: ${messages.length}`,
-          'Low confidence due to no role markers'
-        ]
+        parsedParts: 0,
+        finalMessages: messages.length,
+        parseMethod: 'generic_alternating'
       }
     };
   }
@@ -413,12 +387,11 @@ export class ConversationParser {
       }],
       platform: 'other', // ✅ UNIFIED: lowercase platform
       confidence: 0.1,
-      method: 'pattern', // ✅ VALID: exists in ParseResult
       metadata: {
         originalLength: text.length,
-        processingTime: 0,
-        // ✅ FIXED: Use valid metadata properties
-        patternLearning: ['Fallback parsing applied']
+        parsedParts: 1,
+        finalMessages: 1,
+        parseMethod: 'fallback'
       }
     };
   }
@@ -449,7 +422,7 @@ export class ConversationParser {
     return signatures;
   }
   
-  // ✅ FOUNDATION: Enhanced parsing methods with fixed metadata
+  // ✅ FOUNDATION: Prepare for enhanced parsing methods
   static async parseConversationEnhanced(
     text: string, 
     options?: EnhancedParseOptions
@@ -474,14 +447,12 @@ export class ConversationParser {
     // Use existing parsing for now
     const result = this.parseConversation(text, options);
     
-    // ✅ ENHANCED: Add detected patterns to metadata using valid properties
+    // ✅ ENHANCED: Add detected patterns to metadata
     if (detectedSignatures.length > 0) {
-      if (!result.metadata.patternLearning) {
-        result.metadata.patternLearning = [];
-      }
-      result.metadata.patternLearning.push(
-        ...detectedSignatures.map(sig => `Detected signature: ${sig}`)
-      );
+      result.metadata = {
+        ...result.metadata,
+        detectedSignatures
+      };
     }
     
     return result;
@@ -513,7 +484,7 @@ export class ConversationParser {
 // ✅ ENHANCED: Function-based export with unified types
 export function parseConversation(
   messages: any,
-  platform: string = 'auto'
+  platform: string = 'AUTO'
 ): Message[] {
   console.log('🔄 PARSE CONVERSATION CALLED:', { 
     inputType: Array.isArray(messages) ? 'array' : typeof messages,

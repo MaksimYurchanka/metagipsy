@@ -1,4 +1,4 @@
-// ✅ UNIFIED 5D DATABASE SCHEMA with Lowercase Platform Compatibility
+// ✅ ENHANCED 5D DATABASE SCHEMA with Parsing Support
 // apps/api/prisma/schema.prisma
 
 generator client {
@@ -30,7 +30,7 @@ model Session {
   id          String      @id @default(cuid())
   userId      String
   title       String?
-  platform    Platform    @default(other)
+  platform    Platform    @default(OTHER)
   status      SessionStatus @default(ACTIVE)
   
   // ✅ ENHANCED: 5D Aggregated metrics for fast access
@@ -260,12 +260,11 @@ enum UserTier {
   ENTERPRISE
 }
 
-// ✅ CRITICAL FIX: Platform enum with lowercase values for API compatibility
 enum Platform {
-  claude     // ✅ FIXED: lowercase for unified API compatibility
-  chatgpt    // ✅ FIXED: lowercase for unified API compatibility  
-  other      // ✅ FIXED: lowercase for unified API compatibility
-  auto       // ✅ FIXED: lowercase for unified API compatibility
+  CLAUDE     // Maps to 'claude' in API
+  CHATGPT    // Maps to 'chatgpt' in API
+  OTHER      // Maps to 'other' in API
+  AUTO       // Maps to 'auto' in API
 }
 
 enum Role {

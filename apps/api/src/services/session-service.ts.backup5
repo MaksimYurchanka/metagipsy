@@ -5,40 +5,37 @@ import { SessionSummary, SessionMetadata, AnalysisPattern, Platform } from '../t
 
 export class SessionService {
   /**
-   * ✅ CRITICAL FIX: Normalize platform values to match unified lowercase Prisma enum
+   * Helper method to normalize platform values to match Prisma enum
    */
   private normalizePlatform(platform?: string): Platform {
-    if (!platform) return 'other';
+    if (!platform) return 'OTHER';
     
-    // ✅ UNIFIED: All platforms mapped to lowercase for database compatibility
     const platformMap: Record<string, Platform> = {
-      // Handle lowercase input (from frontend/parser) - direct mapping
-      'claude': 'claude',
-      'chatgpt': 'chatgpt', 
-      'other': 'other',
-      'auto': 'auto',
-      // Handle legacy uppercase input - convert to lowercase
-      'CLAUDE': 'claude',
-      'CHATGPT': 'chatgpt',
-      'OTHER': 'other',
-      'AUTO': 'auto'
+      // Handle lowercase input (from frontend/parser)
+      'claude': 'CLAUDE',
+      'chatgpt': 'CHATGPT', 
+      'other': 'OTHER',
+      'auto': 'AUTO',
+      // Handle uppercase input (already correct)
+      'CLAUDE': 'CLAUDE',
+      'CHATGPT': 'CHATGPT',
+      'OTHER': 'OTHER',
+      'AUTO': 'AUTO'
     };
     
-    // ✅ ENHANCED: Safe conversion with fallback
-    const normalizedPlatform = platformMap[platform] || platformMap[platform.toLowerCase()];
-    return normalizedPlatform || 'other';
+    return platformMap[platform.toLowerCase()] || 'OTHER';
   }
 
   async createSession(userId: string, userEmail: string, metadata: SessionMetadata): Promise<string> {
     try {
-      // ✅ ENHANCED: Auto-create user if not exists with better error handling
+      // ✅ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Auto-create user if not exists
       console.log('👤 ENSURING USER EXISTS:', userId, userEmail);
       
       try {
         await prisma.user.upsert({
           where: { id: userId },
           update: {
-            // Update email if changed
+            // Обновляем email если изменился
             email: userEmail || 'unknown@example.com',
             updatedAt: new Date()
           },
@@ -58,36 +55,26 @@ export class SessionService {
           userId, 
           userEmail 
         });
-        // Continue execution - user might already exist
+        // Продолжаем выполнение - возможно пользователь уже существует
       }
 
-      // ✅ CRITICAL FIX: Use normalized lowercase platform
-      const normalizedPlatform = this.normalizePlatform(metadata.platform);
-      console.log('🔄 PLATFORM NORMALIZED:', metadata.platform, '→', normalizedPlatform);
-
-      // Create session with unified platform and 5D support
+      // Теперь создаем сессию (foreign key constraint будет выполнен)
       const session = await prisma.session.create({
         data: {
           userId,
-          title: metadata.title || `${normalizedPlatform} Analysis - ${new Date().toLocaleDateString()}`,
-          platform: normalizedPlatform, // ✅ UNIFIED: lowercase platform
+          title: metadata.title || `${metadata.platform || 'Analysis'} - ${new Date().toLocaleDateString()}`,
+          platform: this.normalizePlatform(metadata.platform),
           
-          // ✅ ENHANCED: Initialize 5D performance fields
+          // ✅ НОВОЕ: Инициализация производительных полей
           messageCount: metadata.messageCount || 0,
           overallScore: metadata.overallScore || 0,
           strategicAvg: metadata.dimensionAverages?.strategic || 0,
           tacticalAvg: metadata.dimensionAverages?.tactical || 0,
           cognitiveAvg: metadata.dimensionAverages?.cognitive || 0,
           innovationAvg: metadata.dimensionAverages?.innovation || 0,
-          contextAvg: metadata.dimensionAverages?.context || 0, // ✅ NEW: 5th dimension
           trend: metadata.trend || 'stable',
           
-          // ✅ ENHANCED: Parsing metadata support
-          parsingMethod: metadata.parsingMethod,
-          parsingConfidence: metadata.parsingConfidence,
-          parsingCost: metadata.parsingCost,
-          
-          // Detailed data in metadata JSON
+          // Детальные данные в metadata JSON
           metadata: {
             ...metadata,
             createdAt: new Date().toISOString()
@@ -95,13 +82,11 @@ export class SessionService {
         }
       });
 
-      console.log('✅ SESSION CREATED with 5D support:', session.id, 'Platform:', session.platform);
+      console.log('✅ SESSION CREATED:', session.id);
       logger.info('Session created successfully', { 
         sessionId: session.id, 
         userId,
-        userEmail,
-        platform: session.platform,
-        contextAvg: session.contextAvg // ✅ NEW: Log 5th dimension
+        userEmail 
       });
       
       return session.id;
@@ -111,11 +96,10 @@ export class SessionService {
         error, 
         userId, 
         userEmail,
-        metadata: metadata.title,
-        platform: metadata.platform 
+        metadata: metadata.title 
       });
       
-      // ✅ ENHANCED: Better error diagnostics
+      // ✅ УЛУЧШЕННАЯ ДИАГНОСТИКА ОШИБОК с правильной типизацией
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorCode = (error as any)?.code;
       
@@ -135,31 +119,30 @@ export class SessionService {
     summary: SessionSummary
   ): Promise<void> {
     try {
-      // ✅ ENHANCED: Update with 5D dimension averages
+      // ✅ CRITICAL FIX: Правильное устанавливание статуса без 'as any'
       const updatedData = {
-        // 5D performance fields for fast access
+        // Производительные поля для быстрых запросов
         messageCount: summary.messageCount,
         overallScore: summary.overallScore,
         strategicAvg: summary.dimensionAverages.strategic,
         tacticalAvg: summary.dimensionAverages.tactical,
         cognitiveAvg: summary.dimensionAverages.cognitive,
         innovationAvg: summary.dimensionAverages.innovation,
-        contextAvg: summary.dimensionAverages.context, // ✅ NEW: 5th dimension update
         bestScore: summary.bestScore,
         worstScore: summary.worstScore,
         trend: summary.trend,
         
-        // ✅ FIXED: Proper status setting without type errors
-        status: 'COMPLETED' as const,
+        // ✅ CRITICAL FIX: Правильное устанавливание статуса
+        status: 'COMPLETED' as const, // Using const assertion instead of 'as any'
         
-        // ✅ ENHANCED: 5D metadata with context dimension
+        // Детальные данные в metadata
         metadata: {
           messageCount: summary.messageCount,
           overallScore: summary.overallScore,
           bestScore: summary.bestScore,
           worstScore: summary.worstScore,
           trend: summary.trend,
-          dimensionAverages: summary.dimensionAverages, // ✅ NOW includes context
+          dimensionAverages: summary.dimensionAverages,
           patterns: summary.patterns,
           insights: summary.insights,
           completedAt: new Date().toISOString(),
@@ -175,37 +158,30 @@ export class SessionService {
         data: updatedData
       });
 
-      // ✅ ENHANCED: Log 5D update
-      console.log('✅ SESSION 5D UPDATE COMPLETE:', {
+      // ✅ ENHANCED LOGGING: Log status change for debugging
+      console.log('✅ SESSION STATUS UPDATED:', {
         sessionId,
         userId,
         status: updatedSession.status,
         messageCount: updatedSession.messageCount,
-        overallScore: updatedSession.overallScore,
-        contextAvg: updatedSession.contextAvg // ✅ NEW: Log context dimension
+        overallScore: updatedSession.overallScore
       });
 
-      // Cache session summary with 5D data
+      // Cache session summary for quick access
       await redis.setex(
         `session:${sessionId}:summary`,
         3600, // 1 hour
         JSON.stringify(summary)
       );
 
-      logger.info('Session updated with 5D support', { 
-        sessionId, 
-        userId, 
-        status: updatedSession.status,
-        contextAvg: updatedSession.contextAvg // ✅ NEW: Log context dimension
-      });
+      logger.info('Session updated', { sessionId, userId, status: updatedSession.status });
     } catch (error) {
-      console.error('❌ SESSION 5D UPDATE FAILED:', {
+      console.error('❌ SESSION UPDATE FAILED:', {
         error: error instanceof Error ? error.message : String(error),
         sessionId,
         userId,
         summaryMessageCount: summary.messageCount,
-        summaryScore: summary.overallScore,
-        summaryContext: summary.dimensionAverages.context // ✅ NEW: Log context in error
+        summaryScore: summary.overallScore
       });
       
       logger.error('Failed to update session', { error, sessionId, userId });
@@ -213,7 +189,7 @@ export class SessionService {
     }
   }
 
-  // ✅ PRESERVED: Update session title method
+  // ✅ НОВЫЙ МЕТОД: Обновление заголовка сессии
   async updateSessionTitle(sessionId: string, userId: string, title: string): Promise<void> {
     try {
       await prisma.session.update({
@@ -261,11 +237,11 @@ export class SessionService {
       
       return {
         ...session,
-        // ✅ ENHANCED: Use 5D performance fields where possible
+        // ✅ НОВОЕ: Используем производительные поля где возможно
         projectContext: metadata.projectContext,
         sessionGoal: metadata.sessionGoal,
         completedAt: metadata.completedAt,
-        // Use new 5D fields instead of metadata
+        // Используем новые поля вместо metadata
         messageCount: session.messageCount,
         overallScore: session.overallScore,
         trend: session.trend,
@@ -273,8 +249,7 @@ export class SessionService {
           strategic: session.strategicAvg,
           tactical: session.tacticalAvg,
           cognitive: session.cognitiveAvg,
-          innovation: session.innovationAvg,
-          context: session.contextAvg // ✅ NEW: 5th dimension in response
+          innovation: session.innovationAvg
         },
         patterns: metadata.patterns || [],
         insights: metadata.insights || [],
@@ -296,7 +271,7 @@ export class SessionService {
     offset: number = 0
   ) {
     try {
-      // ✅ OPTIMIZED: Fast queries using 5D performance fields
+      // ✅ ОПТИМИЗИРОВАНО: Быстрые запросы по производительным полям
       const sessions = await prisma.session.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
@@ -309,22 +284,17 @@ export class SessionService {
           status: true,
           createdAt: true,
           updatedAt: true,
-          // ✅ ENHANCED: 5D performance fields
+          // Новые производительные поля
           messageCount: true,
           overallScore: true,
           strategicAvg: true,
           tacticalAvg: true,
           cognitiveAvg: true,
           innovationAvg: true,
-          contextAvg: true, // ✅ NEW: 5th dimension in list
           bestScore: true,
           worstScore: true,
           trend: true,
-          // Enhanced parsing fields
-          parsingMethod: true,
-          parsingConfidence: true,
-          parsingCost: true,
-          // Metadata only for additional data
+          // Metadata только для дополнительных данных
           metadata: true
         }
       });
@@ -333,7 +303,7 @@ export class SessionService {
         where: { userId }
       });
 
-      // ✅ ENHANCED: Use 5D performance fields directly
+      // ✅ НОВОЕ: Используем производительные поля напрямую
       const transformedSessions = sessions.map(session => {
         const metadata = (session.metadata as any) || {};
         return {
@@ -341,13 +311,12 @@ export class SessionService {
           projectContext: metadata.projectContext,
           sessionGoal: metadata.sessionGoal,
           completedAt: metadata.completedAt,
-          // ✅ ENHANCED: 5D dimension averages from performance fields
+          // Производительные поля уже есть в session
           dimensionAverages: {
             strategic: session.strategicAvg,
             tactical: session.tacticalAvg,
             cognitive: session.cognitiveAvg,
-            innovation: session.innovationAvg,
-            context: session.contextAvg // ✅ NEW: 5th dimension in session list
+            innovation: session.innovationAvg
           }
         };
       });
@@ -387,25 +356,25 @@ export class SessionService {
       const since = new Date();
       since.setDate(since.getDate() - days);
 
-      console.log('📊 5D ANALYTICS: Starting enhanced analytics calculation...', {
+      console.log('📊 ANALYTICS: Starting analytics calculation...', {
         userId,
         days,
         since: since.toISOString()
       });
 
-      // ✅ ENHANCED: Include both ACTIVE and COMPLETED sessions for 5D analytics
+      // ✅ CRITICAL FIX: Include both ACTIVE and COMPLETED sessions for analytics
       const sessions = await prisma.session.findMany({
         where: {
           userId,
           createdAt: {
             gte: since
           },
-          // ✅ ENHANCED: Include sessions with 5D analysis data
+          // ✅ CRITICAL FIX: Include sessions with analysis data regardless of status
           OR: [
             { status: 'COMPLETED' },
             { 
               status: 'ACTIVE',
-              messageCount: { gt: 0 },
+              messageCount: { gt: 0 }, // Only include ACTIVE sessions that have been analyzed
               overallScore: { gt: 0 }
             }
           ]
@@ -421,25 +390,26 @@ export class SessionService {
           tacticalAvg: true,
           cognitiveAvg: true,
           innovationAvg: true,
-          contextAvg: true, // ✅ NEW: 5th dimension in analytics
           trend: true
         }
       });
 
-      console.log('📊 5D ANALYTICS: Found sessions for enhanced analytics:', {
+      console.log('📊 ANALYTICS: Found sessions for analytics:', {
         totalFound: sessions.length,
         statuses: sessions.reduce((acc, s) => {
           acc[s.status] = (acc[s.status] || 0) + 1;
           return acc;
         }, {} as Record<string, number>),
-        avg5DScores: sessions.length > 0 ? {
-          context: sessions.reduce((sum, s) => sum + s.contextAvg, 0) / sessions.length,
-          strategic: sessions.reduce((sum, s) => sum + s.strategicAvg, 0) / sessions.length
-        } : null
+        sampleSessions: sessions.slice(0, 3).map(s => ({
+          id: s.id,
+          status: s.status,
+          messageCount: s.messageCount,
+          overallScore: s.overallScore
+        }))
       });
 
       if (sessions.length === 0) {
-        console.log('📊 5D ANALYTICS: No sessions found, returning 5D zeros');
+        console.log('📊 ANALYTICS: No sessions found, returning zeros');
         return {
           totalSessions: 0,
           totalMessages: 0,
@@ -449,8 +419,7 @@ export class SessionService {
             strategic: 0,
             tactical: 0,
             cognitive: 0,
-            innovation: 0,
-            context: 0 // ✅ NEW: 5th dimension in analytics response
+            innovation: 0
           },
           trendDistribution: {},
           platformDistribution: {},
@@ -458,7 +427,7 @@ export class SessionService {
         };
       }
 
-      // ✅ ENHANCED: Use 5D performance fields for calculations
+      // ✅ НОВОЕ: Используем производительные поля для вычислений
       const totalSessions = sessions.length;
       const totalMessages = sessions.reduce((sum, s) => sum + s.messageCount, 0);
       const averageScore = sessions.reduce((sum, s) => sum + s.overallScore, 0) / totalSessions;
@@ -479,13 +448,12 @@ export class SessionService {
         ? ((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100 
         : 0;
 
-      // ✅ ENHANCED: 5D dimension averages from performance fields
+      // ✅ ОПТИМИЗИРОВАНО: Прямые вычисления из производительных полей
       const dimensionAverages = {
         strategic: sessions.reduce((sum, s) => sum + s.strategicAvg, 0) / totalSessions,
         tactical: sessions.reduce((sum, s) => sum + s.tacticalAvg, 0) / totalSessions,
         cognitive: sessions.reduce((sum, s) => sum + s.cognitiveAvg, 0) / totalSessions,
-        innovation: sessions.reduce((sum, s) => sum + s.innovationAvg, 0) / totalSessions,
-        context: sessions.reduce((sum, s) => sum + s.contextAvg, 0) / totalSessions // ✅ NEW: 5th dimension average
+        innovation: sessions.reduce((sum, s) => sum + s.innovationAvg, 0) / totalSessions
       };
 
       // Trend and platform distributions
@@ -513,23 +481,22 @@ export class SessionService {
         totalMessages,
         averageScore: Math.round(averageScore),
         improvementRate: Math.round(improvementRate),
-        dimensionAverages, // ✅ NOW includes context dimension
+        dimensionAverages,
         trendDistribution,
         platformDistribution,
         scoreHistory
       };
 
-      console.log('📊 5D ANALYTICS: Calculated enhanced analytics:', {
+      console.log('📊 ANALYTICS: Calculated analytics:', {
         totalSessions: analytics.totalSessions,
         totalMessages: analytics.totalMessages,
         averageScore: analytics.averageScore,
-        contextAvg: analytics.dimensionAverages.context, // ✅ NEW: Log context average
-        allDimensionAverages: analytics.dimensionAverages
+        dimensionAverages: analytics.dimensionAverages
       });
 
       return analytics;
     } catch (error) {
-      console.error('❌ 5D ANALYTICS: Failed to get enhanced session analytics:', {
+      console.error('❌ ANALYTICS: Failed to get session analytics:', {
         error: error instanceof Error ? error.message : String(error),
         userId,
         days

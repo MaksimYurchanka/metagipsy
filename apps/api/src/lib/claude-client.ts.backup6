@@ -1,0 +1,338 @@
+// ВОССТАНОВЛЕН apps/api/src/lib/claude-client.ts
+
+import Anthropic from '@anthropic-ai/sdk';
+import { logger } from './logger';
+import { config } from './config';
+
+export interface AnalysisContext {
+  userId?: string;
+  previousMessages?: any[];
+  messagePosition?: number;
+  analysisDepth?: 'quick' | 'standard' | 'deep';
+  projectContext?: string;
+  sessionGoal?: string;
+}
+
+export interface ChessScore {
+  overall: number;
+  dimensions: {
+    strategic: number;
+    tactical: number;
+    cognitive: number;
+    innovation: number;
+  };
+  classification: string;
+  chessNotation: string;
+  confidence: number;
+  explanation: string;
+  betterMove?: string;
+}
+
+export class ClaudeClient {
+  private anthropic: Anthropic;
+
+  constructor() {
+    // ✅ УЛУЧШЕНА ДИАГНОСТИКА API KEY
+    if (!config.anthropic?.apiKey || config.anthropic.apiKey === '') {
+      logger.warn('ANTHROPIC_API_KEY not configured - using fallback scoring');
+      console.log('🔑 API Key status:', config.anthropic?.apiKey ? 'Present but empty' : 'Not present');
+    } else {
+      console.log('🔑 ANTHROPIC_API_KEY configured successfully');
+    }
+    
+    this.anthropic = new Anthropic({
+      apiKey: config.anthropic?.apiKey || 'dummy'
+    });
+  }
+
+  /**
+   * 🎯 CLAUDE SONNET 4 ANALYSIS - ВОССТАНОВЛЕНА ПРАВИЛЬНАЯ МОДЕЛЬ
+   */
+  async analyzeMessage(
+    message: any,
+    context: AnalysisContext
+  ): Promise<ChessScore> {
+    try {
+      // ✅ УЛУЧШЕНА ПРОВЕРКА API KEY
+      if (!config.anthropic?.apiKey || config.anthropic.apiKey === '') {
+        console.log('⚠️ No valid API key, using local fallback');
+        return this.localFallbackScoring(message, context);
+      }
+
+      console.log('🧠 CLAUDE SONNET 4 ANALYSIS STARTING...');
+      
+      const prompt = this.buildAnalysisPrompt(message, context);
+      
+      // ✅ ВОССТАНОВЛЕНО: Claude Sonnet 4 (правильная модель из backup2)
+      const response = await this.anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514', // ✅ ВОССТАНОВЛЕНА CLAUDE SONNET 4!
+        max_tokens: 4000,
+        temperature: 0.1,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
+      });
+
+      console.log('✅ CLAUDE SONNET 4 ANALYSIS COMPLETE');
+      
+      // ✅ ULTRA-SAFE: Handle content with proper type checking
+      let analysisText = '';
+      
+      try {
+        if (response.content && Array.isArray(response.content) && response.content.length > 0) {
+          const firstContent = response.content[0];
+          if (firstContent && typeof firstContent === 'object' && 'text' in firstContent) {
+            analysisText = String(firstContent.text || '');
+          }
+        }
+      } catch (contentError) {
+        console.log('Content parsing error, using fallback');
+        return this.localFallbackScoring(message, context);
+      }
+      
+      return this.parseAnalysisResponse(analysisText);
+
+    } catch (error) {
+      // ✅ УЛУЧШЕНА ДИАГНОСТИКА ОШИБОК
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const messageRole = message?.role || 'unknown';
+      const messageLength = message?.content?.length || 0;
+      
+      // ✅ ДОБАВЛЕНА ДЕТАЛЬНАЯ ДИАГНОСТИКА
+      console.log('❌ CLAUDE API ERROR DETAILS:');
+      console.log('- Error message:', errorMessage);
+      console.log('- API Key present:', !!config.anthropic?.apiKey);
+      console.log('- API Key length:', config.anthropic?.apiKey?.length || 0);
+      console.log('- Model used: claude-sonnet-4-20250514');
+      
+      logger.error('Claude analysis failed', { 
+        error: errorMessage,
+        messageRole,
+        messageLength,
+        hasApiKey: !!config.anthropic?.apiKey,
+        model: 'claude-sonnet-4-20250514'
+      });
+      
+      // Fallback to local scoring instead of failing
+      return this.localFallbackScoring(message, context);
+    }
+  }
+
+  /**
+   * 🎯 VIP PROMPT FOR BENCHMARK USERS
+   */
+  private buildAnalysisPrompt(message: any, context: AnalysisContext): string {
+    const isVipUser = context.userId === process.env.BENCHMARK_USER_ID;
+    
+    const basePrompt = `You are MetaGipsy OWL Chess Engine, analyzing AI conversation quality using chess strategic principles.
+
+ANALYZE this ${message.role} message and score it 0-100 across 4 dimensions:
+
+MESSAGE TO ANALYZE:
+"${message.content}"
+
+CONTEXT:
+- Position in conversation: ${context.messagePosition || 0}
+- Previous messages: ${context.previousMessages?.length || 0}
+- Analysis depth: ${context.analysisDepth || 'standard'}
+${context.projectContext ? `- Project context: ${context.projectContext}` : ''}
+${context.sessionGoal ? `- Session goal: ${context.sessionGoal}` : ''}
+
+SCORING DIMENSIONS:
+1. STRATEGIC (0-100): Goal alignment, efficient progress, compound value
+2. TACTICAL (0-100): Clarity, specificity, actionability, structure  
+3. COGNITIVE (0-100): Timing, complexity matching, energy alignment
+4. INNOVATION (0-100): Creative thinking, pattern breaking, synthesis
+
+CHESS CLASSIFICATIONS:
+- 90-100: Brilliant (!!) - Exceptional strategic move
+- 80-89: Excellent (!) - Strong, well-executed move  
+- 70-79: Good (+) - Solid, above-average move
+- 50-69: Average (=) - Acceptable, standard move
+- 30-49: Mistake (?) - Suboptimal, could be better
+- 0-29: Blunder (??) - Poor move, needs improvement
+
+OUTPUT FORMAT (JSON):
+{
+  "overall": 85,
+  "strategic": 90,
+  "tactical": 85,
+  "cognitive": 80,
+  "innovation": 85,
+  "classification": "Excellent",
+  "chessNotation": "!",
+  "confidence": 0.9,
+  "explanation": "Clear strategic thinking with specific goals...",
+  "betterMove": "Consider adding specific metrics or constraints..."
+}`;
+
+    if (isVipUser) {
+      return `🎯 BENCHMARK ANALYSIS MODE - MAXIMUM PRECISION
+
+This message is from our benchmark creator. Provide the most sophisticated analysis possible.
+
+${basePrompt}
+
+SPECIAL INSTRUCTIONS for benchmark analysis:
+- Use full analytical depth and meta-cognitive patterns
+- Look for innovation potential and strategic brilliance
+- Score with benchmark precision (your analysis sets the standard)
+- Identify what makes this conversation exemplary
+- This analysis will calibrate scoring for all other users`;
+    }
+    
+    return basePrompt;
+  }
+
+  /**
+   * Parse Claude's analysis response - ULTRA-SAFE
+   */
+  private parseAnalysisResponse(text: string): ChessScore {
+    try {
+      // Extract JSON from response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch && jsonMatch[0]) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        
+        // Validate and normalize scores with safe fallbacks
+        const overall = this.safeNumber(parsed.overall, 50);
+        const strategic = this.safeNumber(parsed.strategic, 50);
+        const tactical = this.safeNumber(parsed.tactical, 50);
+        const cognitive = this.safeNumber(parsed.cognitive, 50);
+        const innovation = this.safeNumber(parsed.innovation, 50);
+        
+        return {
+          overall: Math.round(overall),
+          dimensions: {
+            strategic: Math.round(strategic),
+            tactical: Math.round(tactical),
+            cognitive: Math.round(cognitive),
+            innovation: Math.round(innovation)
+          },
+          classification: String(parsed.classification || 'Average'),
+          chessNotation: String(parsed.chessNotation || '='),
+          confidence: this.safeNumber(parsed.confidence, 0.8),
+          explanation: String(parsed.explanation || 'Analysis completed'),
+          betterMove: parsed.betterMove ? String(parsed.betterMove) : undefined
+        };
+      }
+    } catch (parseError) {
+      const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parse error';
+      logger.error('Failed to parse Claude response', { 
+        error: errorMessage, 
+        text: text.substring(0, 200) 
+      });
+    }
+
+    // Fallback scoring if parsing fails
+    return this.generateFallbackScore();
+  }
+
+  /**
+   * Safe number conversion with bounds checking
+   */
+  private safeNumber(value: any, fallback: number): number {
+    const num = Number(value);
+    if (isNaN(num)) return fallback;
+    return Math.max(0, Math.min(100, num));
+  }
+
+  /**
+   * Fallback to local scoring when Claude is unavailable
+   */
+  private localFallbackScoring(message: any, context: AnalysisContext): ChessScore {
+    console.log('🔧 USING LOCAL FALLBACK SCORING');
+    
+    // Simple heuristic scoring
+    const content = String(message?.content || '');
+    const length = content.length;
+    
+    let strategic = 50;
+    let tactical = 50;
+    let cognitive = 50;
+    let innovation = 50;
+
+    // Strategic scoring - safe regex matching
+    try {
+      if (/goal|objective|target|achieve|result/i.test(content)) strategic += 15;
+      if (/because|therefore|so that|in order to/i.test(content)) strategic += 10;
+      const questionMatches = content.match(/\?/g);
+      if (questionMatches && questionMatches.length > 0) strategic += 5;
+    } catch (regexError) {
+      console.log('Regex error in strategic scoring, using base score');
+    }
+
+    // Tactical scoring - safe regex matching
+    try {
+      if (length > 100) tactical += 10;
+      const numberMatches = content.match(/\d+/g);
+      if (numberMatches && numberMatches.length > 0) tactical += 15;
+      if (/for example|such as|specifically/i.test(content)) tactical += 10;
+      if (content.includes('\n')) tactical += 5;
+    } catch (regexError) {
+      console.log('Regex error in tactical scoring, using base score');
+    }
+
+    // Cognitive scoring
+    if (length > 50 && length < 500) cognitive += 10;
+    if (context.messagePosition === 0) cognitive += 5;
+    
+    // Innovation scoring - safe regex matching
+    try {
+      if (/creative|innovative|alternative|different/i.test(content)) innovation += 15;
+      if (/what if|how about|consider/i.test(content)) innovation += 10;
+    } catch (regexError) {
+      console.log('Regex error in innovation scoring, using base score');
+    }
+
+    // Normalize scores
+    strategic = Math.min(100, strategic);
+    tactical = Math.min(100, tactical);
+    cognitive = Math.min(100, cognitive);
+    innovation = Math.min(100, innovation);
+
+    const overall = Math.round((strategic + tactical + cognitive + innovation) / 4);
+
+    return {
+      overall,
+      dimensions: { strategic, tactical, cognitive, innovation },
+      classification: this.getClassification(overall),
+      chessNotation: this.getChessNotation(overall),
+      confidence: 0.6, // Lower confidence for fallback
+      explanation: `Local analysis: Strategic clarity and goal focus detected.`,
+      betterMove: overall < 70 ? 'Consider being more specific about your goals and context.' : undefined
+    };
+  }
+
+  private generateFallbackScore(): ChessScore {
+    return {
+      overall: 50,
+      dimensions: { strategic: 50, tactical: 50, cognitive: 50, innovation: 50 },
+      classification: 'Average',
+      chessNotation: '=',
+      confidence: 0.5,
+      explanation: 'Fallback scoring applied due to analysis error'
+    };
+  }
+
+  private getClassification(score: number): string {
+    if (score >= 90) return 'Brilliant';
+    if (score >= 80) return 'Excellent';
+    if (score >= 70) return 'Good';
+    if (score >= 50) return 'Average';
+    if (score >= 30) return 'Mistake';
+    return 'Blunder';
+  }
+
+  private getChessNotation(score: number): string {
+    if (score >= 90) return '!!';
+    if (score >= 80) return '!';
+    if (score >= 70) return '+';
+    if (score >= 50) return '=';
+    if (score >= 30) return '?';
+    return '??';
+  }
+}
