@@ -1,69 +1,34 @@
-// ✅ ENHANCED CONVERSATION PARSER with Unified Types & 5D Foundation
-// apps/api/src/lib/conversation-parser.ts
+// BULLETPROOF apps/api/src/lib/conversation-parser.ts
 
-import { Message, Platform, ParseResult } from '../types';
-import { logger } from './logger';
+import { Message, Platform } from '../types';
 
-// ✅ ENHANCED: ParseResult now uses unified types from ../types
-export interface EnhancedParseOptions {
-  forceHaiku?: boolean;
-  userSignature?: string;
-  expectedPlatform?: Platform;
-  analysisDepth?: 'quick' | 'standard' | 'deep';
-  userId?: string;
-  requestId?: string;
+export interface ParseResult {
+  messages: Message[];
+  platform: Platform;
+  confidence: number;
+  metadata?: Record<string, any>;
 }
 
 export class ConversationParser {
   
   /**
-   * ✅ ENHANCED: Auto-detect platform and parse conversation with unified types
+   * Auto-detect platform and parse conversation
    */
-  static parseConversation(text: string, options?: EnhancedParseOptions): ParseResult {
-    const startTime = Date.now();
+  static parseConversation(text: string): ParseResult {
+    const detectedPlatform = this.detectPlatform(text);
     
-    try {
-      const detectedPlatform = this.detectPlatform(text);
-      
-      let result: ParseResult;
-      
-      switch (detectedPlatform) {
-        case 'claude':
-          result = this.parseClaudeConversation(text);
-          break;
-        case 'chatgpt':
-          result = this.parseChatGPTConversation(text);
-          break;
-        default:
-          result = this.parseGenericConversation(text);
-      }
-      
-      // ✅ ENHANCED: Add processing metadata
-      result.metadata = {
-        ...result.metadata,
-        originalLength: text.length,
-        processingTime: Date.now() - startTime,
-        method: 'pattern', // Current method, will be enhanced later
-        ...(options?.requestId && { requestId: options.requestId }),
-        ...(options?.userId && { userId: options.userId })
-      };
-      
-      // ✅ FOUNDATION: Prepare for enhanced parsing integration
-      if (options?.forceHaiku) {
-        logger.info('Haiku parsing requested but not yet implemented, using pattern parsing');
-        result.metadata.requestedMethod = 'haiku';
-      }
-      
-      return result;
-      
-    } catch (error) {
-      logger.error('Conversation parsing failed:', error);
-      return this.createFallbackResult(text);
+    switch (detectedPlatform) {
+      case 'CLAUDE':
+        return this.parseClaudeConversation(text);
+      case 'CHATGPT':
+        return this.parseChatGPTConversation(text);
+      default:
+        return this.parseGenericConversation(text);
     }
   }
   
   /**
-   * ✅ UNIFIED: Detect conversation platform with lowercase types
+   * Detect conversation platform based on patterns - BULLETPROOF
    */
   static detectPlatform(text: string): Platform {
     console.log('🔍 DETECTING PLATFORM for text length:', text.length);
@@ -90,21 +55,20 @@ export class ConversationParser {
       if (chatgptMatches) chatgptScore += chatgptMatches.length;
       
     } catch (error) {
-      console.log('Pattern matching error, defaulting to other');
-      return 'other';
+      console.log('Pattern matching error, defaulting to OTHER');
+      return 'OTHER';
     }
     
     console.log(`📊 PLATFORM SCORES: Claude=${claudeScore}, ChatGPT=${chatgptScore}`);
     
-    // ✅ UNIFIED: Return lowercase platform types
-    if (claudeScore > chatgptScore && claudeScore > 0) return 'claude';
-    if (chatgptScore > claudeScore && chatgptScore > 0) return 'chatgpt';
+    if (claudeScore > chatgptScore && claudeScore > 0) return 'CLAUDE';
+    if (chatgptScore > claudeScore && chatgptScore > 0) return 'CHATGPT';
     
-    return 'other';
+    return 'OTHER';
   }
   
   /**
-   * ✅ ENHANCED: Parse Claude conversation with unified platform type
+   * Parse Claude conversation format - BULLETPROOF
    */
   static parseClaudeConversation(text: string): ParseResult {
     console.log('🤖 PARSING CLAUDE CONVERSATION...');
@@ -218,7 +182,7 @@ export class ConversationParser {
     
     return {
       messages,
-      platform: 'claude', // ✅ UNIFIED: lowercase platform
+      platform: 'CLAUDE',
       confidence: Math.max(0.1, confidence),
       metadata: {
         originalLength: text.length,
@@ -230,7 +194,7 @@ export class ConversationParser {
   }
   
   /**
-   * ✅ ENHANCED: Parse ChatGPT conversation with unified platform type
+   * Parse ChatGPT conversation format - BULLETPROOF
    */
   static parseChatGPTConversation(text: string): ParseResult {
     console.log('💬 PARSING CHATGPT CONVERSATION...');
@@ -310,7 +274,7 @@ export class ConversationParser {
     
     return {
       messages,
-      platform: 'chatgpt', // ✅ UNIFIED: lowercase platform
+      platform: 'CHATGPT',
       confidence: Math.max(0.1, confidence),
       metadata: {
         originalLength: text.length,
@@ -322,7 +286,7 @@ export class ConversationParser {
   }
   
   /**
-   * ✅ ENHANCED: Parse generic conversation with unified platform type
+   * Parse generic conversation format - BULLETPROOF
    */
   static parseGenericConversation(text: string): ParseResult {
     console.log('🔀 PARSING GENERIC CONVERSATION...');
@@ -363,7 +327,7 @@ export class ConversationParser {
     
     return {
       messages,
-      platform: 'other', // ✅ UNIFIED: lowercase platform
+      platform: 'OTHER',
       confidence: 0.3,
       metadata: {
         originalLength: text.length,
@@ -373,115 +337,9 @@ export class ConversationParser {
       }
     };
   }
-  
-  /**
-   * ✅ ENHANCED: Create fallback result with unified types
-   */
-  static createFallbackResult(text: string): ParseResult {
-    return {
-      messages: [{
-        role: 'user',
-        content: text.substring(0, 1000),
-        index: 0,
-        timestamp: new Date().toISOString()
-      }],
-      platform: 'other', // ✅ UNIFIED: lowercase platform
-      confidence: 0.1,
-      metadata: {
-        originalLength: text.length,
-        parsedParts: 1,
-        finalMessages: 1,
-        parseMethod: 'fallback'
-      }
-    };
-  }
-  
-  // ✅ ENHANCED: User signature detection for improved parsing
-  static detectUserSignature(text: string): string[] {
-    const signatures: string[] = [];
-    
-    // Common signature patterns
-    const patterns = [
-      /^([A-Z][a-z]+):\s*/gm,        // "Alex:", "John:", etc.
-      /^([A-Z]{2,}):\s*/gm,          // "MY:", "JD:", etc.
-      /^([a-z_]+\d*):\s*/gm,         // "user1:", "alex_m:", etc.
-    ];
-    
-    patterns.forEach(pattern => {
-      const matches = text.match(pattern);
-      if (matches) {
-        matches.forEach(match => {
-          const signature = match.replace(':', '').trim();
-          if (!signatures.includes(signature)) {
-            signatures.push(signature);
-          }
-        });
-      }
-    });
-    
-    return signatures;
-  }
-  
-  // ✅ FOUNDATION: Prepare for enhanced parsing methods
-  static async parseConversationEnhanced(
-    text: string, 
-    options?: EnhancedParseOptions
-  ): Promise<ParseResult> {
-    console.log('🚀 ENHANCED PARSING: Starting enhanced conversation parsing...');
-    
-    // ✅ FOUNDATION: For now, use existing parsing but log enhanced options
-    if (options?.forceHaiku) {
-      logger.info('Enhanced parsing with Haiku requested - using pattern parsing for now');
-    }
-    
-    if (options?.userSignature) {
-      logger.info(`User signature provided: ${options.userSignature}`);
-    }
-    
-    // Detect user signatures for improved parsing
-    const detectedSignatures = this.detectUserSignature(text);
-    if (detectedSignatures.length > 0) {
-      logger.info(`Detected user signatures: ${detectedSignatures.join(', ')}`);
-    }
-    
-    // Use existing parsing for now
-    const result = this.parseConversation(text, options);
-    
-    // ✅ ENHANCED: Add detected patterns to metadata
-    if (detectedSignatures.length > 0) {
-      result.metadata = {
-        ...result.metadata,
-        detectedSignatures
-      };
-    }
-    
-    return result;
-  }
-  
-  // ✅ FOUNDATION: Validation for enhanced parsing
-  static validateParseResult(result: ParseResult): boolean {
-    if (!result.messages || result.messages.length === 0) {
-      return false;
-    }
-    
-    // Check for alternating roles (good conversation pattern)
-    for (let i = 1; i < result.messages.length; i++) {
-      if (result.messages[i].role === result.messages[i-1].role) {
-        logger.warn(`Non-alternating pattern detected at index ${i}`);
-      }
-    }
-    
-    // Check for minimum content length
-    const shortMessages = result.messages.filter(m => m.content.length < 10);
-    if (shortMessages.length > 0) {
-      logger.warn(`${shortMessages.length} messages have very short content`);
-    }
-    
-    return true;
-  }
 }
 
-// ✅ ENHANCED: Function-based export with unified types
+// Function-based export - BULLETPROOF
 export function parseConversation(
   messages: any,
   platform: string = 'AUTO'
@@ -526,14 +384,6 @@ export function parseConversation(
     console.log('Parse conversation error, returning empty array');
     return [];
   }
-}
-
-// ✅ ENHANCED: Enhanced parsing function export
-export async function parseConversationEnhanced(
-  text: string,
-  options?: EnhancedParseOptions
-): Promise<ParseResult> {
-  return ConversationParser.parseConversationEnhanced(text, options);
 }
 
 export default ConversationParser;

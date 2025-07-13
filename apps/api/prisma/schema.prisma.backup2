@@ -1,5 +1,5 @@
-// ✅ ENHANCED 5D DATABASE SCHEMA with Parsing Support
-// apps/api/prisma/schema.prisma
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
@@ -33,25 +33,19 @@ model Session {
   platform    Platform    @default(OTHER)
   status      SessionStatus @default(ACTIVE)
   
-  // ✅ ENHANCED: 5D Aggregated metrics for fast access
+  // ✅ ДОБАВЛЕНО: Агрегированные метрики для быстрого доступа
   messageCount    Int         @default(0)
   overallScore    Float       @default(0)
   strategicAvg    Float       @default(0)
   tacticalAvg     Float       @default(0)
   cognitiveAvg    Float       @default(0)
   innovationAvg   Float       @default(0)
-  contextAvg      Float       @default(0)  // ✅ NEW: 5th dimension average
   
-  // ✅ PRESERVED: Additional metrics
+  // ✅ ДОБАВЛЕНО: Дополнительные метрики
   bestScore       Float?
   worstScore      Float?
   trend           String?     // 'improving' | 'declining' | 'stable' | 'volatile'
   sessionDuration Int?        // minutes
-  
-  // ✅ ENHANCED: Parsing metadata
-  parsingMethod     String?   // 'pattern' | 'haiku' | 'hybrid'
-  parsingConfidence Float?    // 0.0 - 1.0
-  parsingCost       Float?    // Cost in USD for AI parsing
   
   metadata    Json?
   createdAt   DateTime    @default(now())
@@ -71,7 +65,7 @@ model Message {
   id        String   @id @default(cuid())
   sessionId String
   role      Role
-  content   String   @db.Text
+  content   String   @db.Text  // ✅ ИСПРАВЛЕНО: Text для длинного контента
   timestamp DateTime?
   index     Int
   metadata  Json?
@@ -94,20 +88,11 @@ model Score {
   tactical    Float
   cognitive   Float
   innovation  Float
-  context     Float    // ✅ NEW: 5th dimension score
   classification String
   chessNotation  String
   confidence  Float
-  explanation String?  @db.Text
-  betterMove  String?  @db.Text
-  
-  // ✅ ENHANCED: Context analysis details
-  temporalUnderstanding Float? // Component of context dimension
-  stateAwareness       Float? // Component of context dimension
-  redundancyPrevention Float? // Component of context dimension
-  metaCommunication    Float? // Component of context dimension
-  progressRecognition  Float? // Component of context dimension
-  
+  explanation String?  @db.Text  // ✅ ИСПРАВЛЕНО: Text для длинного контента
+  betterMove  String?  @db.Text  // ✅ ИСПРАВЛЕНО: Text для длинного контента
   createdAt   DateTime @default(now())
 
   // Relations
@@ -125,7 +110,7 @@ model Pattern {
   startIndex  Int
   endIndex    Int
   confidence  Float
-  description String      @db.Text
+  description String      @db.Text  // ✅ ИСПРАВЛЕНО: Text для длинного контента
   metadata    Json?
   createdAt   DateTime    @default(now())
 
@@ -140,7 +125,7 @@ model Insight {
   sessionId   String
   type        InsightType
   title       String
-  description String      @db.Text
+  description String      @db.Text  // ✅ ИСПРАВЛЕНО: Text для длинного контента
   priority    Priority    @default(MEDIUM)
   actionable  Boolean     @default(false)
   metadata    Json?
@@ -168,7 +153,7 @@ model ApiKey {
   @@map("api_keys")
 }
 
-// ✅ ENHANCED: Analytics tables for 5D aggregated statistics
+// ✅ ДОБАВЛЕНО: Analytics tables для агрегированной статистики
 model DailyStats {
   id              String   @id @default(cuid())
   date            DateTime @unique
@@ -176,20 +161,6 @@ model DailyStats {
   totalMessages   Int      @default(0)
   avgScore        Float?
   activeUsers     Int      @default(0)
-  
-  // ✅ ENHANCED: 5D daily averages
-  avgStrategic    Float?
-  avgTactical     Float?
-  avgCognitive    Float?
-  avgInnovation   Float?
-  avgContext      Float?   // ✅ NEW: 5th dimension daily average
-  
-  // ✅ ENHANCED: Parsing statistics
-  patternParsingCount  Int  @default(0)
-  haikuParsingCount    Int  @default(0)
-  hybridParsingCount   Int  @default(0)
-  totalParsingCost     Float @default(0)
-  
   createdAt       DateTime @default(now())
 
   @@map("daily_stats")
@@ -204,56 +175,13 @@ model UserStats {
   avgScore        Float?
   bestScore       Float?
   worstScore      Float?
-  
-  // ✅ ENHANCED: 5D user averages
-  avgStrategic    Float?
-  avgTactical     Float?
-  avgCognitive    Float?
-  avgInnovation   Float?
-  avgContext      Float?   // ✅ NEW: 5th dimension user average
-  
-  // ✅ ENHANCED: User parsing statistics
-  parsingCostTotal Float   @default(0)
-  preferredMethod  String? // Most used parsing method
-  
   createdAt       DateTime @default(now())
 
   @@unique([userId, date])
   @@map("user_stats")
 }
 
-// ✅ NEW: Parsing Sessions for enhanced parsing workflow
-model ParsingSession {
-  id                String   @id @default(cuid())
-  userId            String?  // Optional - allow anonymous parsing
-  originalText      String   @db.Text
-  
-  // Parsing results
-  method            String   // 'pattern' | 'haiku' | 'hybrid'
-  confidence        Float
-  messageCount      Int
-  processingTime    Int      // milliseconds
-  cost              Float    @default(0)
-  
-  // User interaction
-  userSignature     String?
-  needsVerification Boolean  @default(false)
-  verified          Boolean  @default(false)
-  
-  // Learning data
-  userPatterns      Json?    // Detected user-specific patterns
-  improvements      Json?    // Suggested improvements
-  
-  // Relations to analysis
-  analysisSessionId String?  // If proceeded to analysis
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  @@map("parsing_sessions")
-}
-
-// ✅ ENHANCED: Enums with unified lowercase platform values
+// Enums
 enum UserTier {
   FREE
   PRO
@@ -261,10 +189,10 @@ enum UserTier {
 }
 
 enum Platform {
-  CLAUDE     // Maps to 'claude' in API
-  CHATGPT    // Maps to 'chatgpt' in API
-  OTHER      // Maps to 'other' in API
-  AUTO       // Maps to 'auto' in API
+  CLAUDE
+  CHATGPT
+  OTHER
+  AUTO
 }
 
 enum Role {
@@ -287,8 +215,6 @@ enum PatternType {
   BREAKTHROUGH
   DECLINE
   OSCILLATION
-  CONTEXT_LOSS      // ✅ NEW: Context-related pattern
-  TEMPORAL_CONFUSION // ✅ NEW: Temporal awareness issues
 }
 
 enum InsightType {
@@ -297,7 +223,6 @@ enum InsightType {
   CELEBRATION
   SUGGESTION
   PATTERN
-  CONTEXT_AWARENESS // ✅ NEW: Context-specific insights
 }
 
 enum Priority {

@@ -1,21 +1,23 @@
-// ✅ ENHANCED 5D SCORING ENGINE with Context Awareness
-// apps/api/src/lib/scoring-engine.ts
-
-import { Message, ChessScore, ConversationContext, ContextAnalysis, ScoringWeights } from '../types';
+import { Message, ChessScore, ConversationContext } from '@/types';
 import { logger } from './logger';
 
+export interface ScoringWeights {
+  strategic: number;
+  tactical: number;
+  cognitive: number;
+  innovation: number;
+}
+
 export class LocalScoringEngine {
-  // ✅ ENHANCED: 5D Scoring weights with Context dimension
   private weights: ScoringWeights = {
-    strategic: 0.25,    // Reduced to make room for context
-    tactical: 0.25,     // Reduced to make room for context  
-    cognitive: 0.20,    // Reduced to make room for context
-    innovation: 0.10,   // Reduced to make room for context
-    context: 0.20       // ✅ NEW: 5th dimension - Context awareness
+    strategic: 0.30,
+    tactical: 0.30,
+    cognitive: 0.25,
+    innovation: 0.15
   };
   
   /**
-   * ✅ ENHANCED: Score a message using 5D local algorithms
+   * Score a message using local algorithms
    */
   scoreMessage(message: Message, context: ConversationContext = {}): ChessScore {
     try {
@@ -23,8 +25,7 @@ export class LocalScoringEngine {
         strategic: this.calculateStrategicScore(message, context),
         tactical: this.calculateTacticalScore(message, context),
         cognitive: this.calculateCognitiveScore(message, context),
-        innovation: this.calculateInnovationScore(message, context),
-        context: this.calculateContextScore(message, context) // ✅ NEW: 5th dimension
+        innovation: this.calculateInnovationScore(message, context)
       };
       
       const overall = this.calculateOverallScore(dimensions);
@@ -33,7 +34,7 @@ export class LocalScoringEngine {
       
       return {
         overall,
-        dimensions, // ✅ Now includes 5D scoring
+        dimensions,
         classification,
         chessNotation,
         confidence: 0.7, // Local scoring confidence
@@ -154,173 +155,7 @@ export class LocalScoringEngine {
     return Math.max(0, Math.min(100, score));
   }
   
-  /**
-   * ✅ NEW: Calculate context dimension score (0-100)
-   * Measures temporal understanding, state awareness, redundancy prevention
-   */
-  private calculateContextScore(message: Message, context: ConversationContext): number {
-    let score = 50; // Base score
-    
-    // Get detailed context analysis
-    const contextAnalysis = this.analyzeContextAwareness(message, context);
-    
-    // Temporal understanding (25% of context score)
-    score += (contextAnalysis.temporalUnderstanding - 50) * 0.25;
-    
-    // State awareness (25% of context score)  
-    score += (contextAnalysis.stateAwareness - 50) * 0.25;
-    
-    // Redundancy prevention (20% of context score)
-    score += (contextAnalysis.redundancyPrevention - 50) * 0.20;
-    
-    // Meta communication (15% of context score)
-    score += (contextAnalysis.metaCommunication - 50) * 0.15;
-    
-    // Progress recognition (15% of context score)
-    score += (contextAnalysis.progressRecognition - 50) * 0.15;
-    
-    return Math.max(0, Math.min(100, score));
-  }
-  
-  /**
-   * ✅ NEW: Analyze context awareness components
-   */
-  private analyzeContextAwareness(message: Message, context: ConversationContext): ContextAnalysis {
-    const content = message.content.toLowerCase();
-    
-    // Temporal Understanding: Does the message show awareness of conversation timeline?
-    let temporalUnderstanding = 50;
-    
-    // Positive temporal indicators
-    if (/\b(now|currently|at this point|so far|previously|earlier|next|after|before)\b/.test(content)) {
-      temporalUnderstanding += 20;
-    }
-    if (/\b(progress|step|phase|stage|milestone|checkpoint)\b/.test(content)) {
-      temporalUnderstanding += 15;
-    }
-    if (/\b(building on|following up|continuing|next step|moving forward)\b/.test(content)) {
-      temporalUnderstanding += 10;
-    }
-    
-    // Negative temporal indicators
-    if (/\b(let's start over|from scratch|beginning again|reset)\b/.test(content)) {
-      temporalUnderstanding -= 15;
-    }
-    
-    // State Awareness: Does the message recognize current vs past state?
-    let stateAwareness = 50;
-    
-    // Positive state indicators
-    if (/\b(current|existing|present|status|state|situation)\b/.test(content)) {
-      stateAwareness += 15;
-    }
-    if (/\b(has been|have been|was|were|used to be|changed|evolved)\b/.test(content)) {
-      stateAwareness += 10;
-    }
-    if (/\b(working|functioning|operational|active|ready)\b/.test(content)) {
-      stateAwareness += 10;
-    }
-    
-    // Check if message acknowledges completed tasks
-    if (context.previousMessages && context.previousMessages.length > 0) {
-      const recentContent = context.previousMessages
-        .slice(-3)
-        .map(m => m.content.toLowerCase())
-        .join(' ');
-        
-      if (/\b(done|completed|finished|solved|fixed|working)\b/.test(recentContent)) {
-        if (/\b(great|good|excellent|perfect|thanks|appreciate)\b/.test(content)) {
-          stateAwareness += 20; // Acknowledges completion
-        } else if (/\b(now|next|let's|how about|what about)\b/.test(content)) {
-          stateAwareness += 15; // Builds on completion
-        }
-      }
-    }
-    
-    // Redundancy Prevention: Does the message avoid repeating previous suggestions?
-    let redundancyPrevention = 50;
-    
-    if (context.previousMessages && context.previousMessages.length > 0) {
-      const previousContent = context.previousMessages
-        .filter(m => m.role === 'assistant')
-        .map(m => m.content.toLowerCase())
-        .join(' ');
-      
-      // Check for similar suggestions/advice
-      const messageKeywords = this.extractKeywords(content);
-      const previousKeywords = this.extractKeywords(previousContent);
-      const overlap = this.calculateKeywordOverlap(messageKeywords, previousKeywords);
-      
-      if (overlap > 0.7) {
-        redundancyPrevention -= 30; // High repetition penalty
-      } else if (overlap > 0.4) {
-        redundancyPrevention -= 15; // Moderate repetition penalty
-      } else if (overlap < 0.2) {
-        redundancyPrevention += 15; // Good novelty bonus
-      }
-    }
-    
-    // Positive redundancy prevention indicators
-    if (/\b(new|different|alternative|another|fresh|novel)\b/.test(content)) {
-      redundancyPrevention += 10;
-    }
-    if (/\b(instead|rather|alternatively|however|but)\b/.test(content)) {
-      redundancyPrevention += 5;
-    }
-    
-    // Meta Communication: Clear about context limitations?
-    let metaCommunication = 50;
-    
-    // Positive meta communication indicators
-    if (/\b(i understand|i see|i notice|based on|given that|considering)\b/.test(content)) {
-      metaCommunication += 15;
-    }
-    if (/\b(need more|unclear|not sure|help me understand|clarify)\b/.test(content)) {
-      metaCommunication += 10;
-    }
-    if (/\b(assume|assuming|if i understand|correct me)\b/.test(content)) {
-      metaCommunication += 10;
-    }
-    
-    // Communication about process/method
-    if (/\b(approach|method|process|way|technique|strategy)\b/.test(content)) {
-      metaCommunication += 5;
-    }
-    
-    // Progress Recognition: Acknowledges user achievements?
-    let progressRecognition = 50;
-    
-    if (message.role === 'assistant') {
-      // Assistant messages should acknowledge user progress
-      if (/\b(good|great|excellent|well done|nice|perfect|exactly|right)\b/.test(content)) {
-        progressRecognition += 20;
-      }
-      if (/\b(progress|improvement|better|advancing|moving forward)\b/.test(content)) {
-        progressRecognition += 15;
-      }
-      if (/\b(i see you|you've|you have|you did|you made|you completed)\b/.test(content)) {
-        progressRecognition += 10;
-      }
-    } else {
-      // User messages showing self-awareness of progress
-      if (/\b(i did|i completed|i finished|i solved|i managed|i succeeded)\b/.test(content)) {
-        progressRecognition += 15;
-      }
-      if (/\b(working|progress|better|improved|fixed)\b/.test(content)) {
-        progressRecognition += 10;
-      }
-    }
-    
-    return {
-      temporalUnderstanding: Math.max(0, Math.min(100, temporalUnderstanding)),
-      stateAwareness: Math.max(0, Math.min(100, stateAwareness)),
-      redundancyPrevention: Math.max(0, Math.min(100, redundancyPrevention)),
-      metaCommunication: Math.max(0, Math.min(100, metaCommunication)),
-      progressRecognition: Math.max(0, Math.min(100, progressRecognition))
-    };
-  }
-
-  // ✅ All existing helper methods preserved (no changes needed)
+  // Helper methods for scoring calculations
   
   private extractKeywords(text: string): string[] {
     const stopWords = new Set(['the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but', 'in', 'with', 'to', 'for', 'of', 'as', 'by']);
@@ -614,22 +449,12 @@ export class LocalScoringEngine {
     return Math.min(10, score);
   }
   
-  /**
-   * ✅ ENHANCED: Calculate overall score with 5D weights
-   */
-  private calculateOverallScore(dimensions: { 
-    strategic: number; 
-    tactical: number; 
-    cognitive: number; 
-    innovation: number;
-    context: number; // ✅ NEW: 5th dimension
-  }): number {
+  private calculateOverallScore(dimensions: { strategic: number; tactical: number; cognitive: number; innovation: number }): number {
     return Math.round(
       dimensions.strategic * this.weights.strategic +
       dimensions.tactical * this.weights.tactical +
       dimensions.cognitive * this.weights.cognitive +
-      dimensions.innovation * this.weights.innovation +
-      dimensions.context * this.weights.context // ✅ NEW: Context weight
+      dimensions.innovation * this.weights.innovation
     );
   }
   
@@ -651,16 +476,7 @@ export class LocalScoringEngine {
     return '??';
   }
   
-  /**
-   * ✅ ENHANCED: Generate explanation with 5D awareness
-   */
-  private generateExplanation(dimensions: { 
-    strategic: number; 
-    tactical: number; 
-    cognitive: number; 
-    innovation: number;
-    context: number; // ✅ NEW: 5th dimension
-  }, context: ConversationContext): string {
+  private generateExplanation(dimensions: { strategic: number; tactical: number; cognitive: number; innovation: number }, context: ConversationContext): string {
     const weakest = this.findWeakestDimension(dimensions);
     const strongest = this.findStrongestDimension(dimensions);
     
@@ -672,91 +488,52 @@ export class LocalScoringEngine {
       return `Excellent ${strongest} approach. ${this.getStrengthDescription(strongest)}`;
     }
     
-    return 'Balanced performance across all 5 dimensions with room for improvement.';
+    return 'Balanced performance across dimensions with room for improvement.';
   }
   
-  /**
-   * ✅ ENHANCED: Find weakest dimension including context
-   */
-  private findWeakestDimension(dimensions: { 
-    strategic: number; 
-    tactical: number; 
-    cognitive: number; 
-    innovation: number;
-    context: number; // ✅ NEW: 5th dimension
-  }): string {
+  private findWeakestDimension(dimensions: { strategic: number; tactical: number; cognitive: number; innovation: number }): string {
     return Object.entries(dimensions).reduce((min, [key, value]) => 
       value < dimensions[min] ? key : min, 'strategic');
   }
   
-  /**
-   * ✅ ENHANCED: Find strongest dimension including context
-   */
-  private findStrongestDimension(dimensions: { 
-    strategic: number; 
-    tactical: number; 
-    cognitive: number; 
-    innovation: number;
-    context: number; // ✅ NEW: 5th dimension
-  }): string {
+  private findStrongestDimension(dimensions: { strategic: number; tactical: number; cognitive: number; innovation: number }): string {
     return Object.entries(dimensions).reduce((max, [key, value]) => 
       value > dimensions[max] ? key : max, 'strategic');
   }
   
-  /**
-   * ✅ ENHANCED: Dimension hints including context
-   */
   private getDimensionHint(dimension: string): string {
     const hints = {
       strategic: 'Focus more on goal advancement and clear outcomes.',
       tactical: 'Be more specific and provide clearer context.',
       cognitive: 'Consider message length and complexity appropriateness.',
-      innovation: 'Try more creative approaches or novel perspectives.',
-      context: 'Improve awareness of conversation timeline and current state.' // ✅ NEW
+      innovation: 'Try more creative approaches or novel perspectives.'
     };
     return hints[dimension] || 'Consider improving this dimension.';
   }
   
-  /**
-   * ✅ ENHANCED: Strength descriptions including context
-   */
   private getStrengthDescription(dimension: string): string {
     const descriptions = {
       strategic: 'Strong goal alignment and strategic thinking.',
       tactical: 'Clear, specific, and well-contextualized communication.',
       cognitive: 'Appropriate complexity and cognitive load management.',
-      innovation: 'Creative and novel approach to the problem.',
-      context: 'Excellent temporal understanding and state awareness.' // ✅ NEW
+      innovation: 'Creative and novel approach to the problem.'
     };
     return descriptions[dimension] || 'Strong performance in this area.';
   }
   
-  /**
-   * ✅ ENHANCED: Better move suggestions with context awareness
-   */
-  private suggestBetterMove(message: Message, dimensions: { 
-    strategic: number; 
-    tactical: number; 
-    cognitive: number; 
-    innovation: number;
-    context: number; // ✅ NEW: 5th dimension
-  }, context: ConversationContext): string {
+  private suggestBetterMove(message: Message, dimensions: { strategic: number; tactical: number; cognitive: number; innovation: number }, context: ConversationContext): string {
     const weakest = this.findWeakestDimension(dimensions);
     
     const suggestions = {
       strategic: 'Try connecting your message more directly to your main goal. Be explicit about how this advances your objective.',
       tactical: 'Be more specific in your request. Provide concrete examples and clear context for better results.',
       cognitive: 'Consider breaking this into smaller, more focused questions. Reduce complexity for clearer thinking.',
-      innovation: 'Try approaching this from a different angle. What would an expert in another field suggest?',
-      context: 'Show awareness of the conversation timeline and acknowledge what has already been discussed or completed.' // ✅ NEW
+      innovation: 'Try approaching this from a different angle. What would an expert in another field suggest?'
     };
     
     return suggestions[weakest] || 'Consider being more specific and goal-oriented in your communication.';
   }
   
-  /**
-   * ✅ ENHANCED: Default score with 5D dimensions
-   */
   private getDefaultScore(): ChessScore {
     return {
       overall: 50,
@@ -764,8 +541,7 @@ export class LocalScoringEngine {
         strategic: 50,
         tactical: 50,
         cognitive: 50,
-        innovation: 50,
-        context: 50 // ✅ NEW: 5th dimension default
+        innovation: 50
       },
       classification: 'average',
       chessNotation: '=',
@@ -774,33 +550,7 @@ export class LocalScoringEngine {
       betterMove: 'Try rephrasing your message more clearly.'
     };
   }
-  
-  /**
-   * ✅ NEW: Get detailed context analysis for debugging/insights
-   */
-  public getContextAnalysis(message: Message, context: ConversationContext): ContextAnalysis {
-    return this.analyzeContextAwareness(message, context);
-  }
-  
-  /**
-   * ✅ NEW: Update scoring weights for personalization
-   */
-  public updateWeights(newWeights: Partial<ScoringWeights>): void {
-    this.weights = { ...this.weights, ...newWeights };
-    
-    // Ensure weights sum to 1.0
-    const total = Object.values(this.weights).reduce((sum, weight) => sum + weight, 0);
-    if (Math.abs(total - 1.0) > 0.01) {
-      logger.warn(`Scoring weights sum to ${total}, not 1.0. Consider rebalancing.`);
-    }
-  }
-  
-  /**
-   * ✅ NEW: Get current scoring weights
-   */
-  public getWeights(): ScoringWeights {
-    return { ...this.weights };
-  }
 }
 
 export default LocalScoringEngine;
+

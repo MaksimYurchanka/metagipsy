@@ -1,6 +1,6 @@
 import { Request } from 'express';
 
-// ✅ CORE TYPES for MetaGipsy OWL Chess Engine API - UNIFIED & 5D READY
+// Core types for MetaGipsy OWL Chess Engine API
 
 export interface Message {
   id?: string;
@@ -11,7 +11,6 @@ export interface Message {
   metadata?: Record<string, any>;
 }
 
-// ✅ ENHANCED: 5D ChessScore with Context Dimension
 export interface ChessScore {
   overall: number;
   dimensions: {
@@ -19,13 +18,12 @@ export interface ChessScore {
     tactical: number;
     cognitive: number;
     innovation: number;
-    context: number; // ✅ NEW: 5th dimension for context awareness
   };
   classification: 'brilliant' | 'excellent' | 'good' | 'average' | 'mistake' | 'blunder';
   chessNotation: '!!' | '!' | '+' | '=' | '?' | '??';
   confidence: number;
   explanation?: string;
-  betterMove?: string;
+  betterMove?: string; // Optional
 }
 
 export interface ConversationContext {
@@ -50,12 +48,11 @@ export interface Pattern {
   metadata?: Record<string, any>;
 }
 
-// ✅ ENHANCED: 5D SessionSummary with Context Dimension
 export interface SessionSummary {
   sessionId?: string;
   messageCount: number;
   overallScore: number;
-  trend: 'improving' | 'declining' | 'stable' | 'volatile';
+  trend: 'improving' | 'declining' | 'stable' | 'volatile'; // Include volatile
   bestScore: number;
   worstScore: number;
   dimensionAverages: {
@@ -63,7 +60,6 @@ export interface SessionSummary {
     tactical: number;
     cognitive: number;
     innovation: number;
-    context: number; // ✅ NEW: 5th dimension average
   };
   patterns: Pattern[];
   insights: Insight[];
@@ -79,14 +75,13 @@ export interface Insight {
   metadata?: Record<string, any>;
 }
 
-// ✅ UNIFIED: Platform types - lowercase for frontend compatibility
-export type Platform = 'claude' | 'chatgpt' | 'other' | 'auto';
+export type Platform = 'CLAUDE' | 'CHATGPT' | 'OTHER' | 'AUTO';
 
 export type UserTier = 'free' | 'pro' | 'enterprise';
 
-// ✅ ENHANCED: SessionMetadata with 5D support
+// ✅ ИСПРАВЛЕНО: Добавлено поле title в SessionMetadata
 export interface SessionMetadata {
-  title?: string;
+  title?: string;           // ← ДОБАВЛЕНО!
   platform?: string;
   projectContext?: string;
   sessionGoal?: string;
@@ -99,15 +94,10 @@ export interface SessionMetadata {
     tactical: number;
     cognitive: number;
     innovation: number;
-    context: number; // ✅ NEW: 5th dimension in metadata
   };
   messages?: Message[];
   patterns?: Pattern[];
   insights?: Insight[];
-  // ✅ NEW: Enhanced parsing metadata
-  parsingMethod?: 'pattern' | 'haiku' | 'hybrid';
-  parsingConfidence?: number;
-  parsingCost?: number;
 }
 
 export interface AnalysisPattern {
@@ -120,7 +110,7 @@ export interface AnalysisPattern {
   metadata?: Record<string, any>;
 }
 
-// ✅ ENHANCED: API Request/Response types with parsing support
+// API Request/Response types
 export interface AnalyzeRequest {
   conversation: {
     messages: Message[];
@@ -130,10 +120,6 @@ export interface AnalyzeRequest {
     sessionGoal?: string;
     projectContext?: string;
     userId?: string;
-    // ✅ NEW: Enhanced parsing metadata
-    userSignature?: string;
-    parsingMethod?: 'pattern' | 'haiku' | 'hybrid';
-    originalText?: string;
   };
   options?: {
     useClaudeAnalysis?: boolean;
@@ -141,9 +127,6 @@ export interface AnalyzeRequest {
     enablePatternDetection?: boolean;
     projectContext?: string;
     sessionGoal?: string;
-    // ✅ NEW: Enhanced parsing options
-    forceHaiku?: boolean;
-    enableEnhancedParsing?: boolean;
   };
 }
 
@@ -153,9 +136,9 @@ export interface AnalyzeResponse {
   scores: Array<{
     messageIndex: number;
     role: string;
-    score: ChessScore; // ✅ Now includes 5D scoring
+    score: ChessScore;
   }>;
-  summary: SessionSummary; // ✅ Now includes 5D averages
+  summary: SessionSummary;
   metadata: {
     analysisMethod: string;
     analysisDepth: string;
@@ -163,10 +146,6 @@ export interface AnalyzeResponse {
     version: string;
     claudeAnalysisUsed?: boolean;
     cacheHit?: boolean;
-    // ✅ NEW: Enhanced parsing metadata
-    parsingMethod?: string;
-    parsingConfidence?: number;
-    parsingCost?: number;
   };
 }
 
@@ -176,45 +155,9 @@ export interface QuickAnalyzeRequest {
 }
 
 export interface QuickAnalyzeResponse {
-  score: ChessScore; // ✅ Now includes 5D scoring
+  score: ChessScore;
   processingTime: number;
   cached: boolean;
-}
-
-// ✅ NEW: Enhanced Parsing Types (Foundation for future integration)
-export interface ParseResult {
-  messages: Message[];
-  platform: Platform; // ✅ Uses unified lowercase platform
-  confidence: number;
-  method?: 'pattern' | 'haiku' | 'hybrid';
-  verification?: {
-    needed: boolean;
-    suggestions: string[];
-    ambiguousRanges?: Array<{ start: number; end: number; issue: string }>;
-  };
-  metadata?: {
-    originalLength: number;
-    processingTime: number;
-    cost?: number;
-    patternLearning?: string[];
-  };
-}
-
-export interface EnhancedParseRequest {
-  text: string;
-  options?: {
-    forceHaiku?: boolean;
-    userSignature?: string;
-    expectedPlatform?: Platform;
-    analysisDepth?: 'quick' | 'standard' | 'deep';
-  };
-  metadata?: {
-    userId?: string;
-    sessionId?: string;
-    projectContext?: string;
-    sessionGoal?: string;
-    timestamp?: string;
-  };
 }
 
 export interface SessionsQuery {
@@ -256,10 +199,10 @@ export interface SessionDetailResponse {
     updatedAt: string;
   };
   messages: Message[];
-  scores: ChessScore[]; // ✅ Now includes 5D scoring
+  scores: ChessScore[];
   patterns: Pattern[];
   insights: Insight[];
-  summary: SessionSummary; // ✅ Now includes 5D averages
+  summary: SessionSummary;
 }
 
 export interface AnalyticsQuery {
@@ -317,7 +260,7 @@ export interface AnalyticsResponse {
   };
 }
 
-// ✅ ENHANCED: SessionData type with 5D support
+// Session Data type for API responses
 export interface SessionData {
   id: string;
   title?: string;
@@ -334,18 +277,13 @@ export interface SessionData {
     tactical: number;
     cognitive: number;
     innovation: number;
-    context: number; // ✅ NEW: 5th dimension in session data
   };
   createdAt: string;
   updatedAt: string;
   messages?: Message[];
-  scores?: ChessScore[]; // ✅ Now includes 5D scoring
+  scores?: ChessScore[];
   patterns?: Pattern[];
   insights?: Insight[];
-  // ✅ NEW: Enhanced parsing data
-  parsingMethod?: string;
-  parsingConfidence?: number;
-  parsingCost?: number;
 }
 
 // Error types
@@ -396,11 +334,11 @@ export interface WebSocketEvents {
   analysisProgress: {
     current: number;
     total: number;
-    score?: ChessScore; // ✅ Now includes 5D scoring
+    score?: ChessScore;
   };
   scoreUpdated: {
     messageIndex: number;
-    score: ChessScore; // ✅ Now includes 5D scoring
+    score: ChessScore;
   };
   analysisComplete: AnalyzeResponse;
   analysisError: {
@@ -426,7 +364,7 @@ export interface AppConfig {
     url: string;
     anonKey: string;
     serviceRoleKey: string;
-    serviceKey?: string;
+    serviceKey?: string; // Alias
   };
   anthropic?: {
     apiKey?: string;
@@ -459,6 +397,8 @@ export interface User {
   tier?: UserTier;
 }
 
+// REMOVED: AuthenticatedRequest interface (using the one from middleware/auth.ts instead)
+
 // Utility types
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
@@ -468,13 +408,12 @@ export type RequiredFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
 
 export type OptionalFields<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>;
 
-// ✅ ENHANCED: Scoring related types with 5D support
+// Scoring related types
 export interface ScoringWeights {
   strategic: number;
   tactical: number;
   cognitive: number;
   innovation: number;
-  context: number; // ✅ NEW: 5th dimension weight
 }
 
 export interface ScoringOptions {
@@ -482,73 +421,4 @@ export interface ScoringOptions {
   analysisDepth?: 'quick' | 'standard' | 'deep';
   projectContext?: string;
   sessionGoal?: string;
-  // ✅ NEW: Enhanced parsing options in scoring
-  enableEnhancedParsing?: boolean;
-  userSignature?: string;
-  parsingMethod?: 'pattern' | 'haiku' | 'hybrid';
-}
-
-// ✅ NEW: Context Analysis Types (5th Dimension Support)
-export interface ContextAnalysis {
-  temporalUnderstanding: number; // 0-100: Understanding of conversation timeline
-  stateAwareness: number;        // 0-100: Recognition of current vs past state
-  redundancyPrevention: number;  // 0-100: Avoiding repeated suggestions
-  metaCommunication: number;     // 0-100: Clear about context limitations
-  progressRecognition: number;   // 0-100: Acknowledging user achievements
-}
-
-export interface ContextualScore {
-  overall: number;
-  components: ContextAnalysis;
-  explanation: string;
-  improvements: string[];
-}
-
-// ✅ NEW: Enhanced Parsing Integration Types
-export interface ParsingIntegration {
-  method: 'pattern' | 'haiku' | 'hybrid';
-  confidence: number;
-  cost: number;
-  processingTime: number;
-  userPatterns?: string[];
-  verification?: {
-    needed: boolean;
-    suggestions: string[];
-  };
-}
-
-// ✅ NEW: Database Integration Types (for schema updates)
-export interface DatabaseSession {
-  id: string;
-  userId: string;
-  title?: string;
-  platform: Platform;
-  messageCount: number;
-  overallScore: number;
-  strategicAvg: number;
-  tacticalAvg: number;
-  cognitiveAvg: number;
-  innovationAvg: number;
-  contextAvg: number; // ✅ NEW: 5th dimension for database
-  metadata?: Record<string, any>;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface DatabaseScore {
-  id: string;
-  messageId: string;
-  sessionId: string;
-  overall: number;
-  strategic: number;
-  tactical: number;
-  cognitive: number;
-  innovation: number;
-  context: number; // ✅ NEW: 5th dimension for database
-  classification: string;
-  chessNotation: string;
-  confidence: number;
-  explanation?: string;
-  betterMove?: string;
-  createdAt: Date;
 }
