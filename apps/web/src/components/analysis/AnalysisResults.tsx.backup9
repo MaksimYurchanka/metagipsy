@@ -7,15 +7,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import MessageAnalysis from './MessageAnalysis';
 import ScoreBadge from '@/components/common/ScoreBadge';
-import { useAnalysisStore, useContextAvg, useStrategicAvg, useTacticalAvg, useCognitiveAvg, useInnovationAvg } from '@/stores/analysisStore';
+import { useAnalysisStore } from '@/stores/analysisStore';
 import { cn } from '@/lib/utils';
 
 type FilterType = 'all' | 'low' | 'high';
 type SortType = 'index' | 'score';
 
-// ✅ POLISHED: Use proper 5D selectors for professional integration
+// ✅ CRITICAL FIX: Use individual primitive selectors to avoid object recreation
 const AnalysisResults: React.FC = () => {
-  console.log('🚀 ANALYSIS RESULTS 5D POLISHED: Starting render...');
+  console.log('🚀 ANALYSIS RESULTS 5D: Starting render...');
   
   // ✅ PRIMITIVE SELECTORS - Each returns a primitive value, no objects
   const messages = useAnalysisStore((state) => state.messages || []);
@@ -28,15 +28,14 @@ const AnalysisResults: React.FC = () => {
   const totalMessages = useAnalysisStore((state) => state._rawStats?.totalMessages || 0);
   const completedAnalysis = useAnalysisStore((state) => state._rawStats?.completedAnalysis || 0);
   const trend = useAnalysisStore((state) => state._rawStats?.trend || 'stable');
+  const strategicAvg = useAnalysisStore((state) => state._rawStats?.strategicAvg || 0);
+  const tacticalAvg = useAnalysisStore((state) => state._rawStats?.tacticalAvg || 0);
+  const cognitiveAvg = useAnalysisStore((state) => state._rawStats?.cognitiveAvg || 0);
+  const innovationAvg = useAnalysisStore((state) => state._rawStats?.innovationAvg || 0);
+  // ✅ CRITICAL NEW: Context dimension support
+  const contextAvg = useAnalysisStore((state) => state._rawStats?.contextAvg || 0);
   
-  // ✅ ENHANCED: Use proper 5D dimension selectors
-  const strategicAvg = useStrategicAvg();
-  const tacticalAvg = useTacticalAvg();
-  const cognitiveAvg = useCognitiveAvg();
-  const innovationAvg = useInnovationAvg();
-  const contextAvg = useContextAvg(); // ✅ NEW: Proper Context selector
-  
-  console.log('📊 5D POLISHED VALUES:', { 
+  console.log('📊 5D VALUES:', { 
     messagesCount: messages.length, 
     scoresCount: scores.length, 
     avgScore: averageScore,
@@ -52,7 +51,7 @@ const AnalysisResults: React.FC = () => {
   // ✅ NO EARLY RETURN - Always render something to avoid conditional hooks
   const hasData = messages.length > 0 && scores.length > 0;
   
-  console.log('✅ HAS DATA CHECK (5D POLISHED):', hasData, 'messages:', messages.length, 'scores:', scores.length);
+  console.log('✅ HAS DATA CHECK (5D):', hasData, 'messages:', messages.length, 'scores:', scores.length);
   
   // ✅ CRITICAL FIX: STABLE callbacks with ZERO dependencies
   const toggleExpanded = useCallback((index: number) => {
@@ -123,15 +122,15 @@ const AnalysisResults: React.FC = () => {
     });
   }, [filteredMessages, sortBy, messages, scores]);
   
-  // ✅ POLISHED: Professional 5D dimensions without special highlighting
+  // ✅ CRITICAL NEW: 5D Dimensions including Context!
   const dimensions = useMemo(() => {
-    console.log('📈 Computing professional 5D dimensions');
+    console.log('📈 Computing 5D dimensions from primitive values');
     return [
       { key: 'strategic', label: 'Strategic', value: strategicAvg, icon: '🎯' },
       { key: 'tactical', label: 'Tactical', value: tacticalAvg, icon: '⚔️' },
       { key: 'cognitive', label: 'Cognitive', value: cognitiveAvg, icon: '🧠' },
       { key: 'innovation', label: 'Innovation', value: innovationAvg, icon: '💡' },
-      { key: 'context', label: 'Context', value: contextAvg, icon: '🧭' } // ✅ POLISHED: No special treatment
+      { key: 'context', label: 'Context', value: contextAvg, icon: '🧭' } // ✅ NEW: 5th dimension!
     ];
   }, [strategicAvg, tacticalAvg, cognitiveAvg, innovationAvg, contextAvg]); // ✅ All 5D dependencies!
   
@@ -179,7 +178,7 @@ const AnalysisResults: React.FC = () => {
     }
   };
   
-  console.log('✅ ANALYSIS RESULTS 5D POLISHED: Rendering, hasData:', hasData);
+  console.log('✅ ANALYSIS RESULTS 5D: Rendering, hasData:', hasData);
   
   return (
     <div className="space-y-6">
@@ -261,7 +260,7 @@ const AnalysisResults: React.FC = () => {
             <div className="flex items-center justify-between">
               <TabsList>
                 <TabsTrigger value="messages">Messages</TabsTrigger>
-                <TabsTrigger value="dimensions">Dimensions</TabsTrigger>
+                <TabsTrigger value="dimensions">5D Dimensions</TabsTrigger>
                 <TabsTrigger value="insights">Insights</TabsTrigger>
               </TabsList>
               
@@ -328,11 +327,17 @@ const AnalysisResults: React.FC = () => {
             <TabsContent value="dimensions" className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {dimensions.map(({ key, label, value, icon }) => (
-                  <Card key={key} className="transition-all duration-200 hover:shadow-md">
+                  <Card key={key} className={cn(
+                    "transition-all duration-200 hover:shadow-md",
+                    key === 'context' && "ring-2 ring-blue-200 dark:ring-blue-800" // ✅ Highlight new dimension
+                  )}>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <span className="text-2xl">{icon}</span>
                         {label}
+                        {key === 'context' && (
+                          <Badge variant="secondary" className="text-xs">NEW</Badge> // ✅ Mark as new
+                        )}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -373,7 +378,7 @@ const AnalysisResults: React.FC = () => {
             <TabsContent value="insights" className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Session Insights</CardTitle>
+                  <CardTitle>5D Session Insights</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -398,25 +403,20 @@ const AnalysisResults: React.FC = () => {
                         <div className="text-2xl mb-2">🧭</div>
                         <h4 className="font-medium">Context Mastery</h4>
                         <p className="text-sm text-muted-foreground">
-                          Context awareness: {Math.round(contextAvg)}/100
+                          Excellent context awareness with score of {Math.round(contextAvg)}
                         </p>
                       </div>
                     </div>
                     
                     <div className="space-y-3">
-                      <h4 className="font-medium">Analysis Summary</h4>
+                      <h4 className="font-medium">5D Analysis</h4>
                       <div className="prose prose-sm max-w-none">
                         <p>
-                          Your conversation demonstrates strong multi-dimensional thinking. 
-                          {contextAvg > 0 && (
-                            <>Context awareness score of {Math.round(contextAvg)} shows {
-                              contextAvg >= 80 ? 'excellent' : 
-                              contextAvg >= 60 ? 'good' : 
-                              contextAvg >= 40 ? 'moderate' : 'developing'
-                            } temporal understanding. </>
-                          )}
-                          Strategic alignment remains strong with clear goal progression. 
-                          Consider enhancing tactical specificity for even better results.
+                          Your conversation demonstrates strong 5-dimensional chess thinking. 
+                          The Context awareness score of {Math.round(contextAvg)} shows excellent 
+                          temporal understanding and state awareness. Strategic alignment remains 
+                          strong with clear goal progression. Consider enhancing tactical 
+                          specificity for even better results.
                         </p>
                       </div>
                     </div>

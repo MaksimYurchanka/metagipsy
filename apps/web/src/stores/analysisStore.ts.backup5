@@ -24,7 +24,7 @@ interface AnalysisState {
     total: number;
   };
   
-  // ✅ ENHANCED: Store 5D raw stats to prevent object recreation
+  // ✅ CRITICAL FIX: Store raw stats to prevent object recreation
   _rawStats: {
     averageScore: number;
     bestScore: number;
@@ -35,7 +35,6 @@ interface AnalysisState {
     tacticalAvg: number;
     cognitiveAvg: number;
     innovationAvg: number;
-    contextAvg: number; // ✅ NEW: 5th dimension support
     trend: 'improving' | 'declining' | 'stable';
   };
   
@@ -68,9 +67,9 @@ interface AnalysisState {
   _recomputeStats: () => void;
 }
 
-// ✅ ENHANCED: Calculate 5D raw stats with stable values
+// ✅ CRITICAL FIX: Calculate raw stats with stable values
 const calculateRawStats = (messages: Message[], scores: ChessScore[]) => {
-  console.log('📊 CALCULATE STATS 5D: Computing for', messages.length, 'messages,', scores.length, 'scores');
+  console.log('📊 CALCULATE STATS: Computing for', messages.length, 'messages,', scores.length, 'scores');
   
   if (!scores || scores.length === 0) {
     return {
@@ -83,7 +82,6 @@ const calculateRawStats = (messages: Message[], scores: ChessScore[]) => {
       tacticalAvg: 0,
       cognitiveAvg: 0,
       innovationAvg: 0,
-      contextAvg: 0, // ✅ NEW: Context dimension default
       trend: 'stable' as const
     };
   }
@@ -102,15 +100,14 @@ const calculateRawStats = (messages: Message[], scores: ChessScore[]) => {
       tacticalAvg: 0,
       cognitiveAvg: 0,
       innovationAvg: 0,
-      contextAvg: 0, // ✅ NEW: Context dimension default
       trend: 'stable' as const
     };
   }
   
   const overallScores = validScores.map(s => s.overall || 0);
   
-  // ✅ ENHANCED: Calculate all 5 dimension totals safely
-  let strategicTotal = 0, tacticalTotal = 0, cognitiveTotal = 0, innovationTotal = 0, contextTotal = 0;
+  // ✅ Calculate dimension totals safely
+  let strategicTotal = 0, tacticalTotal = 0, cognitiveTotal = 0, innovationTotal = 0;
   
   validScores.forEach(score => {
     const dimensions = score?.dimensions || {};
@@ -118,7 +115,6 @@ const calculateRawStats = (messages: Message[], scores: ChessScore[]) => {
     tacticalTotal += typeof dimensions.tactical === 'number' ? dimensions.tactical : 0;
     cognitiveTotal += typeof dimensions.cognitive === 'number' ? dimensions.cognitive : 0;
     innovationTotal += typeof dimensions.innovation === 'number' ? dimensions.innovation : 0;
-    contextTotal += typeof dimensions.context === 'number' ? dimensions.context : 0; // ✅ NEW: Context calculation
   });
   
   const count = validScores.length;
@@ -137,7 +133,7 @@ const calculateRawStats = (messages: Message[], scores: ChessScore[]) => {
     }
   }
   
-  // ✅ ENHANCED: Return flat object with 5D stable values
+  // ✅ Return flat object with stable values
   const stats = {
     averageScore: Math.round(overallScores.reduce((sum, score) => sum + score, 0) / overallScores.length),
     bestScore: Math.max(...overallScores),
@@ -148,11 +144,10 @@ const calculateRawStats = (messages: Message[], scores: ChessScore[]) => {
     tacticalAvg: Math.round(tacticalTotal / count),
     cognitiveAvg: Math.round(cognitiveTotal / count),
     innovationAvg: Math.round(innovationTotal / count),
-    contextAvg: Math.round(contextTotal / count), // ✅ NEW: Context average calculation
     trend
   };
   
-  console.log('✅ CALCULATE STATS 5D: Result:', stats);
+  console.log('✅ CALCULATE STATS: Result:', stats);
   return stats;
 };
 
@@ -175,14 +170,14 @@ export const useAnalysisStore = create<AnalysisState>()(
       (set, get) => ({
         ...initialState,
 
-        // ✅ ENHANCED: Stable recompute with 5D comparison
+        // ✅ CRITICAL FIX: Stable recompute with comparison
         _recomputeStats: () => {
           try {
             const state = get();
             const newStats = calculateRawStats(state.messages, state.scores);
             const currentStats = state._rawStats;
             
-            // ✅ ENHANCED: Compare all 5D stats for changes
+            // ✅ CRITICAL: Only update if stats actually changed
             const hasChanged = (
               newStats.averageScore !== currentStats.averageScore ||
               newStats.bestScore !== currentStats.bestScore ||
@@ -192,18 +187,17 @@ export const useAnalysisStore = create<AnalysisState>()(
               newStats.tacticalAvg !== currentStats.tacticalAvg ||
               newStats.cognitiveAvg !== currentStats.cognitiveAvg ||
               newStats.innovationAvg !== currentStats.innovationAvg ||
-              newStats.contextAvg !== currentStats.contextAvg || // ✅ NEW: Context comparison
               newStats.trend !== currentStats.trend
             );
             
             if (hasChanged) {
-              console.log('📊 STATS 5D CHANGED: Updating store');
+              console.log('📊 STATS CHANGED: Updating store');
               set({ _rawStats: newStats });
             } else {
-              console.log('📊 STATS 5D UNCHANGED: Skipping update');
+              console.log('📊 STATS UNCHANGED: Skipping update');
             }
           } catch (error) {
-            console.error('❌ ANALYSIS STORE 5D: Stats calculation failed:', error);
+            console.error('❌ ANALYSIS STORE: Stats calculation failed:', error);
             // Set safe fallback stats
             set({
               _rawStats: {
@@ -216,7 +210,6 @@ export const useAnalysisStore = create<AnalysisState>()(
                 tacticalAvg: 0,
                 cognitiveAvg: 0,
                 innovationAvg: 0,
-                contextAvg: 0, // ✅ NEW: Context fallback
                 trend: 'stable' as const
               }
             });
@@ -225,7 +218,7 @@ export const useAnalysisStore = create<AnalysisState>()(
 
         // ✅ All mutations trigger stats recomputation
         setMessages: (messages) => {
-          console.log('📝 ANALYSIS STORE 5D: Setting messages:', messages?.length || 0);
+          console.log('📝 ANALYSIS STORE: Setting messages:', messages?.length || 0);
           set({ 
             messages: messages || [], 
             scores: [], 
@@ -263,27 +256,21 @@ export const useAnalysisStore = create<AnalysisState>()(
           get()._recomputeStats();
         },
 
-        // ✅ ENHANCED: Score actions with 5D validation
+        // ✅ Score actions with validation
         setScores: (scores) => {
-          console.log('🎯 ANALYSIS STORE 5D: Setting scores:', scores?.length || 0);
+          console.log('🎯 ANALYSIS STORE: Setting scores:', scores?.length || 0);
           if (!Array.isArray(scores)) {
-            console.error('❌ ANALYSIS STORE 5D: Invalid scores format, expected array:', scores);
+            console.error('❌ ANALYSIS STORE: Invalid scores format, expected array:', scores);
             return;
           }
           
-          // ✅ ENHANCED: Normalize scores with 5D support
+          // ✅ Normalize scores
           const normalizedScores = scores.map((score, index) => {
             if (!score || typeof score !== 'object') {
-              console.warn(`⚠️ ANALYSIS STORE 5D: Invalid score at index ${index}:`, score);
+              console.warn(`⚠️ ANALYSIS STORE: Invalid score at index ${index}:`, score);
               return {
                 overall: 50,
-                dimensions: { 
-                  strategic: 50, 
-                  tactical: 50, 
-                  cognitive: 50, 
-                  innovation: 50,
-                  context: 50 // ✅ NEW: Context default
-                },
+                dimensions: { strategic: 50, tactical: 50, cognitive: 50, innovation: 50 },
                 classification: 'average',
                 chessNotation: '=',
                 confidence: 0.5,
@@ -297,8 +284,7 @@ export const useAnalysisStore = create<AnalysisState>()(
                 strategic: score.dimensions?.strategic || 50,
                 tactical: score.dimensions?.tactical || 50,
                 cognitive: score.dimensions?.cognitive || 50,
-                innovation: score.dimensions?.innovation || 50,
-                context: score.dimensions?.context || 0 // ✅ NEW: Context dimension support
+                innovation: score.dimensions?.innovation || 50
               },
               classification: score.classification || 'average',
               chessNotation: score.chessNotation || '=',
@@ -356,7 +342,7 @@ export const useAnalysisStore = create<AnalysisState>()(
 
         // Reset actions
         clearSession: () => {
-          console.log('🧹 ANALYSIS STORE 5D: Clearing session data');
+          console.log('🧹 ANALYSIS STORE: Clearing session data');
           set({
             messages: [],
             scores: [],
@@ -370,7 +356,7 @@ export const useAnalysisStore = create<AnalysisState>()(
         },
         
         resetState: () => {
-          console.log('🔄 ANALYSIS STORE 5D: Resetting to initial state');
+          console.log('🔄 ANALYSIS STORE: Resetting to initial state');
           set(initialState);
         }
       }),
@@ -382,7 +368,7 @@ export const useAnalysisStore = create<AnalysisState>()(
       }
     ),
     {
-      name: 'analysis-store-5d'
+      name: 'analysis-store'
     }
   )
 );
@@ -406,11 +392,15 @@ export const useTotalMessages = () => useAnalysisStore((state) => state._rawStat
 export const useCompletedAnalysis = () => useAnalysisStore((state) => state._rawStats.completedAnalysis);
 export const useCurrentTrend = () => useAnalysisStore((state) => state._rawStats.trend);
 
-// ✅ ENHANCED: All 5D dimension selectors
+// ✅ CRITICAL FIX: Individual dimension selectors
 export const useStrategicAvg = () => useAnalysisStore((state) => state._rawStats.strategicAvg);
 export const useTacticalAvg = () => useAnalysisStore((state) => state._rawStats.tacticalAvg);
 export const useCognitiveAvg = () => useAnalysisStore((state) => state._rawStats.cognitiveAvg);
 export const useInnovationAvg = () => useAnalysisStore((state) => state._rawStats.innovationAvg);
-export const useContextAvg = () => useAnalysisStore((state) => state._rawStats.contextAvg); // ✅ NEW: Context selector
+
+// ✅ REMOVED COMPLETELY:
+// - useAnalysisStats (returned objects)
+// - useDimensionAverages (returned objects)
+// All replaced with individual primitive selectors
 
 export default useAnalysisStore;
