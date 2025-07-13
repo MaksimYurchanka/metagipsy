@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronUp, User, Bot, Lightbulb, AlertTriangle, Brain } from 'lucide-react';
+import { ChevronDown, ChevronUp, User, Bot, Lightbulb, AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -57,88 +57,17 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
     };
   }, [message.role]);
   
-  // ✅ ENHANCED: 5D dimensions array with Context support and custom styling!
+  // ✅ CRITICAL NEW: 5D dimensions array with Context support!
   const dimensions = useMemo(() => {
     console.log(`📊 MESSAGE ANALYSIS 5D ${index}: Computing 5D dimensions`);
     return [
-      { 
-        key: 'strategic', 
-        label: 'Strategic', 
-        value: score.dimensions?.strategic || 0,
-        icon: '🎯',
-        color: 'text-purple-600',
-        bgColor: 'bg-purple-50 dark:bg-purple-950/20',
-        borderColor: 'border-purple-200 dark:border-purple-800'
-      },
-      { 
-        key: 'tactical', 
-        label: 'Tactical', 
-        value: score.dimensions?.tactical || 0,
-        icon: '⚡',
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-50 dark:bg-blue-950/20',
-        borderColor: 'border-blue-200 dark:border-blue-800'
-      },
-      { 
-        key: 'cognitive', 
-        label: 'Cognitive', 
-        value: score.dimensions?.cognitive || 0,
-        icon: '🧠',
-        color: 'text-green-600',
-        bgColor: 'bg-green-50 dark:bg-green-950/20',
-        borderColor: 'border-green-200 dark:border-green-800'
-      },
-      { 
-        key: 'innovation', 
-        label: 'Innovation', 
-        value: score.dimensions?.innovation || 0,
-        icon: '💡',
-        color: 'text-yellow-600',
-        bgColor: 'bg-yellow-50 dark:bg-yellow-950/20',
-        borderColor: 'border-yellow-200 dark:border-yellow-800'
-      },
-      { 
-        key: 'context', 
-        label: 'Context', 
-        value: score.dimensions?.context || 0,
-        icon: '🧭', // ✅ Navigation compass icon (not compose!)
-        color: 'text-cyan-600',
-        bgColor: 'bg-cyan-50 dark:bg-cyan-950/20',
-        borderColor: 'border-cyan-200 dark:border-cyan-800',
-        isNew: true // ✅ Mark as new dimension
-      }
+      { key: 'strategic', label: 'Strategic', value: score.dimensions?.strategic || 0 },
+      { key: 'tactical', label: 'Tactical', value: score.dimensions?.tactical || 0 },
+      { key: 'cognitive', label: 'Cognitive', value: score.dimensions?.cognitive || 0 },
+      { key: 'innovation', label: 'Innovation', value: score.dimensions?.innovation || 0 },
+      { key: 'context', label: 'Context', value: score.dimensions?.context || 0 } // ✅ NEW: 5th dimension!
     ];
   }, [score.dimensions, index]); // ← Stable dependencies
-  
-  // ✅ NEW: Context dimension analysis
-  const contextAnalysis = useMemo(() => {
-    const contextScore = score.dimensions?.context || 0;
-    if (contextScore === 0) {
-      return {
-        level: 'none',
-        description: 'First message - no context available',
-        color: 'text-gray-500'
-      };
-    } else if (contextScore <= 40) {
-      return {
-        level: 'limited',
-        description: 'Basic temporal awareness',
-        color: 'text-orange-600'
-      };
-    } else if (contextScore <= 70) {
-      return {
-        level: 'good',
-        description: 'Strong context understanding',
-        color: 'text-blue-600'
-      };
-    } else {
-      return {
-        level: 'excellent',
-        description: 'Exceptional context mastery',
-        color: 'text-green-600'
-      };
-    }
-  }, [score.dimensions?.context]);
   
   // ✅ CRITICAL FIX 7: Memoized expanded content (expensive computation)
   const expandedContent = useMemo(() => {
@@ -158,24 +87,18 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
         <div className="space-y-3">
           <h4 className="text-sm font-medium">5D Dimension Breakdown</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {dimensions.map(({ key, label, value, icon, color, bgColor, borderColor, isNew }) => (
+            {dimensions.map(({ key, label, value }) => (
               <div key={key} className={cn(
-                "space-y-2 p-3 rounded-lg border transition-all duration-200",
-                bgColor,
-                borderColor,
-                // ✅ ENHANCED: Special styling for Context dimension
-                isNew && "ring-2 ring-cyan-300 dark:ring-cyan-700 shadow-lg transform hover:scale-105"
+                "space-y-1",
+                key === 'context' && "ring-1 ring-blue-200 dark:ring-blue-800 rounded p-2" // ✅ Highlight new dimension
               )}>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{icon}</span>
-                    <span className={cn("text-sm font-medium", color)}>
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm">{getDimensionIcon(key)}</span>
+                    <span className="text-sm font-medium">
                       {label}
-                      {/* ✅ NEW badge for Context dimension */}
-                      {isNew && (
-                        <Badge variant="secondary" className="ml-2 text-xs bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200">
-                          NEW
-                        </Badge>
+                      {key === 'context' && (
+                        <Badge variant="outline" className="ml-1 text-xs">NEW</Badge> // ✅ Mark as new
                       )}
                     </span>
                   </div>
@@ -190,68 +113,16 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
                   value={value} 
                   className="h-2"
                 />
-                {/* ✅ ENHANCED: Context dimension explanation */}
-                {key === 'context' && (
-                  <div className="mt-2 space-y-1">
-                    <p className={cn("text-xs font-medium", contextAnalysis.color)}>
-                      {contextAnalysis.level.toUpperCase()}: {contextAnalysis.description}
-                    </p>
-                    {value > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        Temporal understanding & state awareness
-                      </p>
-                    )}
-                  </div>
-                )}
-                {/* Standard dimension explanations */}
-                {key === 'strategic' && value > 70 && (
-                  <p className="text-xs text-purple-600 dark:text-purple-400">
-                    Strong goal alignment and strategic thinking
-                  </p>
-                )}
-                {key === 'tactical' && value > 70 && (
-                  <p className="text-xs text-blue-600 dark:text-blue-400">
-                    Clear, specific, and actionable communication
-                  </p>
-                )}
-                {key === 'cognitive' && value > 70 && (
-                  <p className="text-xs text-green-600 dark:text-green-400">
-                    Optimal timing and mental load management
-                  </p>
-                )}
-                {key === 'innovation' && value > 70 && (
-                  <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                    Creative and breakthrough-oriented thinking
+                {/* ✅ NEW: Context dimension explanation */}
+                {key === 'context' && value > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Temporal understanding & state awareness
                   </p>
                 )}
               </div>
             ))}
           </div>
         </div>
-        
-        {/* ✅ ENHANCED: Context Mastery section for high context scores */}
-        {score.dimensions?.context && score.dimensions.context > 70 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🧭</span>
-              <h4 className="text-sm font-medium text-cyan-700 dark:text-cyan-300">Context Mastery</h4>
-              <Badge variant="outline" className="text-xs border-cyan-300 text-cyan-700 dark:border-cyan-700 dark:text-cyan-300">
-                EXCELLENT
-              </Badge>
-            </div>
-            <div className="bg-cyan-50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-800 p-3 rounded-md">
-              <p className="text-sm text-cyan-800 dark:text-cyan-200">
-                Exceptional temporal understanding and state awareness! This message demonstrates 
-                strong context continuity with a score of <span className="font-bold">{Math.round(score.dimensions.context)}</span>.
-                {score.dimensions.context > 85 && (
-                  <span className="block mt-1 font-medium">
-                    🏆 This represents mastery-level context awareness!
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-        )}
         
         {/* Explanation */}
         {score.explanation && (
@@ -278,6 +149,22 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
           </div>
         )}
         
+        {/* ✅ NEW: Context awareness insights */}
+        {score.dimensions?.context && score.dimensions.context > 70 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🧭</span>
+              <h4 className="text-sm font-medium">Context Mastery</h4>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 p-3 rounded-md">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                Excellent temporal understanding and state awareness! This message demonstrates 
+                strong context continuity with a score of {Math.round(score.dimensions.context)}.
+              </p>
+            </div>
+          </div>
+        )}
+        
         {/* Low score warning */}
         {score.overall < 40 && (
           <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-3 rounded-md">
@@ -289,49 +176,22 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
           </div>
         )}
         
-        {/* ✅ ENHANCED: Context insights for different score ranges */}
-        {score.dimensions?.context && score.dimensions.context <= 40 && score.dimensions.context > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">💡</span>
-              <h4 className="text-sm font-medium text-orange-700 dark:text-orange-300">Context Improvement</h4>
-            </div>
-            <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 p-3 rounded-md">
-              <p className="text-sm text-orange-800 dark:text-orange-200">
-                <span className="font-medium">Limited context awareness detected.</span> Consider:
-              </p>
-              <ul className="mt-2 text-xs text-orange-700 dark:text-orange-300 space-y-1">
-                <li>• Reference previous discussion points</li>
-                <li>• Acknowledge completed tasks or decisions</li>
-                <li>• Show awareness of conversation timeline</li>
-                <li>• Build upon earlier established context</li>
-              </ul>
-            </div>
-          </div>
-        )}
-        
         {/* Enhanced Metadata with 5D info */}
         <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
           <div className="flex items-center gap-4">
             <span>Confidence: {Math.round((score.confidence || 0) * 100)}%</span>
             <span>Classification: {score.classification}</span>
-            {score.dimensions?.context !== undefined && (
-              <span className="text-cyan-600 font-medium">
-                Context: {Math.round(score.dimensions.context)}
-              </span>
+            {score.dimensions?.context && (
+              <span className="text-blue-600">Context: {Math.round(score.dimensions.context)}</span>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <span>{message.content.length} characters</span>
-            {/* ✅ 5D indicator */}
-            <Badge variant="outline" className="text-xs bg-gradient-to-r from-purple-100 to-cyan-100 dark:from-purple-900 dark:to-cyan-900">
-              5D Analysis
-            </Badge>
+          <div>
+            {message.content.length} characters
           </div>
         </div>
       </motion.div>
     );
-  }, [finalExpanded, dimensions, score, animationsEnabled, message.content.length, index, contextAnalysis]);
+  }, [finalExpanded, dimensions, score, animationsEnabled, message.content.length, index]);
   
   // ✅ CRITICAL FIX 8: Memoized card content (prevent unnecessary re-renders)
   const cardContent = useMemo(() => {
@@ -341,10 +201,7 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
       <Card className={cn(
         "transition-all duration-200",
         finalExpanded && "ring-2 ring-blue-200 dark:ring-blue-800",
-        compactMode && "p-2",
-        // ✅ ENHANCED: Special styling for high context scores
-        score.dimensions?.context && score.dimensions.context > 80 && 
-        "shadow-lg border-cyan-200 dark:border-cyan-800"
+        compactMode && "p-2"
       )}>
         <CardContent className={cn("p-4", compactMode && "p-3")}>
           {/* Header */}
@@ -360,7 +217,7 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
               </div>
               
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <div className="flex items-center gap-2 mb-1">
                   <span className="font-medium capitalize">{message.role}</span>
                   <Badge variant="outline" className="text-xs">
                     #{index + 1}
@@ -370,16 +227,10 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
                       {formatTimestamp(message.timestamp)}
                     </span>
                   )}
-                  {/* ✅ Enhanced 5D indicator with gradient */}
-                  <Badge variant="secondary" className="text-xs bg-gradient-to-r from-purple-100 to-cyan-100 dark:from-purple-900 dark:to-cyan-900 border-0">
+                  {/* ✅ NEW: 5D indicator */}
+                  <Badge variant="secondary" className="text-xs">
                     5D
                   </Badge>
-                  {/* ✅ Context excellence indicator */}
-                  {score.dimensions?.context && score.dimensions.context > 85 && (
-                    <Badge className="text-xs bg-cyan-500 text-white">
-                      Context Master
-                    </Badge>
-                  )}
                 </div>
                 
                 <p className={cn(
@@ -398,17 +249,13 @@ const MessageAnalysis: React.FC<MessageAnalysisProps> = ({
                 animated={animationsEnabled}
               />
               
-              {/* ✅ ENHANCED: Context score badge with special styling */}
+              {/* ✅ NEW: Context score badge if available */}
               {score.dimensions?.context && score.dimensions.context > 0 && (
                 <ScoreBadge 
                   score={score.dimensions.context} 
                   dimension="context"
                   size="sm"
                   animated={animationsEnabled}
-                  className={cn(
-                    "ring-1 ring-cyan-300 dark:ring-cyan-700",
-                    score.dimensions.context > 70 && "shadow-md"
-                  )}
                 />
               )}
               
