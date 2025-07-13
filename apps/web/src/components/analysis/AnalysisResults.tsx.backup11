@@ -13,9 +13,9 @@ import { cn } from '@/lib/utils';
 type FilterType = 'all' | 'low' | 'high';
 type SortType = 'index' | 'score';
 
-// ✅ ENHANCED: Natural 5D support with minimal changes
+// ✅ CRITICAL FIX: Use individual primitive selectors to avoid object recreation
 const AnalysisResults: React.FC = () => {
-  console.log('🚀 ANALYSIS RESULTS 5D: Starting render...');
+  console.log('🚀 ANALYSIS RESULTS PRIMITIVE: Starting render...');
   
   // ✅ PRIMITIVE SELECTORS - Each returns a primitive value, no objects
   const messages = useAnalysisStore((state) => state.messages || []);
@@ -32,13 +32,11 @@ const AnalysisResults: React.FC = () => {
   const tacticalAvg = useAnalysisStore((state) => state._rawStats?.tacticalAvg || 0);
   const cognitiveAvg = useAnalysisStore((state) => state._rawStats?.cognitiveAvg || 0);
   const innovationAvg = useAnalysisStore((state) => state._rawStats?.innovationAvg || 0);
-  const contextAvg = useAnalysisStore((state) => state._rawStats?.contextAvg || 0);
   
-  console.log('📊 5D VALUES:', { 
+  console.log('📊 PRIMITIVE VALUES:', { 
     messagesCount: messages.length, 
     scoresCount: scores.length, 
     avgScore: averageScore,
-    contextAvg: contextAvg,
     totalMsgs: totalMessages 
   });
   
@@ -121,17 +119,16 @@ const AnalysisResults: React.FC = () => {
     });
   }, [filteredMessages, sortBy, messages, scores]);
   
-  // ✅ ENHANCED: Natural 5D dimensions including Context
+  // ✅ CRITICAL FIX: Dimensions using individual primitive values
   const dimensions = useMemo(() => {
-    console.log('📈 Computing 5D dimensions');
+    console.log('📈 Computing dimensions from primitive values');
     return [
       { key: 'strategic', label: 'Strategic', value: strategicAvg, icon: '🎯' },
       { key: 'tactical', label: 'Tactical', value: tacticalAvg, icon: '⚔️' },
       { key: 'cognitive', label: 'Cognitive', value: cognitiveAvg, icon: '🧠' },
-      { key: 'innovation', label: 'Innovation', value: innovationAvg, icon: '💡' },
-      { key: 'context', label: 'Context', value: contextAvg, icon: '🧭' }
+      { key: 'innovation', label: 'Innovation', value: innovationAvg, icon: '💡' }
     ];
-  }, [strategicAvg, tacticalAvg, cognitiveAvg, innovationAvg, contextAvg]);
+  }, [strategicAvg, tacticalAvg, cognitiveAvg, innovationAvg]); // ← Primitive dependencies!
   
   // ✅ CRITICAL FIX: Memoized message components with stable toggleExpanded
   const messageComponents = useMemo(() => {
@@ -177,7 +174,7 @@ const AnalysisResults: React.FC = () => {
     }
   };
   
-  console.log('✅ ANALYSIS RESULTS 5D: Rendering, hasData:', hasData);
+  console.log('✅ ANALYSIS RESULTS PRIMITIVE: Rendering, hasData:', hasData);
   
   return (
     <div className="space-y-6">
@@ -188,7 +185,7 @@ const AnalysisResults: React.FC = () => {
             <div className="text-4xl mb-2">♟️</div>
             <p className="text-muted-foreground">No analysis data available</p>
             <p className="text-sm text-muted-foreground mt-2">
-              Paste a conversation to see detailed 5D chess-style scoring
+              Paste a conversation to see detailed chess-style scoring
             </p>
           </div>
         </div>
@@ -324,7 +321,7 @@ const AnalysisResults: React.FC = () => {
             </TabsContent>
             
             <TabsContent value="dimensions" className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {dimensions.map(({ key, label, value, icon }) => (
                   <Card key={key}>
                     <CardHeader>
