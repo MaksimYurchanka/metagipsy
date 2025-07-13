@@ -30,71 +30,63 @@ const ScoreBadge: React.FC<ScoreBadgeProps> = ({
     lg: 'h-10 px-4 text-base'
   };
   
-  // ✅ ENHANCED: Complete 5D dimension styling with enhanced dark theme support!
+  // ✅ ENHANCED: Complete 5D dimension styling with rich color schemes!
   const dimensionConfig = {
     overall: {
       bgColor: getScoreBgColor(score),
       icon: '',
       ring: '',
       tooltip: `Overall Score: ${Math.round(score)}/100 - ${name}`,
-      hoverEffect: 'scale',
-      darkEnhancement: ''
+      hoverEffect: 'scale'
     },
     strategic: {
-      bgColor: 'bg-purple-500 dark:bg-purple-600',
+      bgColor: 'bg-purple-500',
       icon: '🎯',
-      ring: 'ring-1 ring-purple-300 dark:ring-purple-600',
+      ring: 'ring-1 ring-purple-300 dark:ring-purple-700',
       tooltip: `Strategic: ${Math.round(score)}/100 - Goal alignment & progress`,
-      hoverEffect: 'scale',
-      darkEnhancement: 'shadow-purple-500/20 dark:shadow-purple-400/20'
+      hoverEffect: 'scale'
     },
     tactical: {
-      bgColor: 'bg-blue-500 dark:bg-blue-600',
+      bgColor: 'bg-blue-500',
       icon: '⚡',
-      ring: 'ring-1 ring-blue-300 dark:ring-blue-600',
+      ring: 'ring-1 ring-blue-300 dark:ring-blue-700',
       tooltip: `Tactical: ${Math.round(score)}/100 - Clarity & actionability`,
-      hoverEffect: 'scale',
-      darkEnhancement: 'shadow-blue-500/20 dark:shadow-blue-400/20'
+      hoverEffect: 'scale'
     },
     cognitive: {
-      bgColor: 'bg-green-500 dark:bg-green-600',
+      bgColor: 'bg-green-500',
       icon: '🧠',
-      ring: 'ring-1 ring-green-300 dark:ring-green-600',
+      ring: 'ring-1 ring-green-300 dark:ring-green-700',
       tooltip: `Cognitive: ${Math.round(score)}/100 - Mental load & timing`,
-      hoverEffect: 'scale',
-      darkEnhancement: 'shadow-green-500/20 dark:shadow-green-400/20'
+      hoverEffect: 'scale'
     },
     innovation: {
-      bgColor: 'bg-yellow-500 dark:bg-yellow-600',
+      bgColor: 'bg-yellow-500',
       icon: '💡',
-      ring: 'ring-1 ring-yellow-300 dark:ring-yellow-600',
+      ring: 'ring-1 ring-yellow-300 dark:ring-yellow-700',
       tooltip: `Innovation: ${Math.round(score)}/100 - Creativity & breakthroughs`,
-      hoverEffect: 'scale',
-      darkEnhancement: 'shadow-yellow-500/20 dark:shadow-yellow-400/20'
+      hoverEffect: 'scale'
     },
     context: {
-      bgColor: 'bg-cyan-500 dark:bg-cyan-600',
+      bgColor: 'bg-cyan-500',
       icon: '🧭',
-      ring: 'ring-2 ring-cyan-300 dark:ring-cyan-600', // ✅ ring-2 for emphasis
+      ring: 'ring-2 ring-cyan-300 dark:ring-cyan-700', // ✅ ring-2 for emphasis (NEW dimension)
       tooltip: `Context: ${Math.round(score)}/100 - Temporal understanding & state awareness`,
-      hoverEffect: 'compass', // ✅ Special effect for context
-      darkEnhancement: 'shadow-cyan-500/20 dark:shadow-cyan-400/20'
+      hoverEffect: 'compass' // ✅ Special effect for context
     }
   };
   
   const config = dimensionConfig[dimension] || dimensionConfig.overall;
   
-  // ✅ ENHANCED: Score-based styling adjustments for context with better dark theme
+  // ✅ ENHANCED: Score-based styling adjustments for context
   const contextEnhancements = dimension === 'context' ? {
-    shadowClass: score > 80 ? 'shadow-lg shadow-cyan-200 dark:shadow-cyan-400/30' : 'shadow-sm',
+    shadowClass: score > 80 ? 'shadow-lg shadow-cyan-200 dark:shadow-cyan-800' : 'shadow-sm',
     glowClass: score > 85 ? 'animate-pulse' : '',
-    specialIcon: score === 0 ? '⚪' : config.icon, // Special icon for zero context (first message)
-    gradientBg: score > 80 ? 'bg-gradient-to-r from-cyan-500 to-blue-500 dark:from-cyan-600 dark:to-blue-600' : config.bgColor
+    specialIcon: score === 0 ? '⚪' : config.icon // Special icon for zero context (first message)
   } : {
-    shadowClass: `shadow-sm ${config.darkEnhancement}`,
+    shadowClass: 'shadow-sm',
     glowClass: '',
-    specialIcon: config.icon,
-    gradientBg: config.bgColor
+    specialIcon: config.icon
   };
   
   console.log(`✅ SCORE BADGE 5D: Using config for ${dimension}:`, config);
@@ -105,37 +97,37 @@ const ScoreBadge: React.FC<ScoreBadgeProps> = ({
         'inline-flex items-center justify-center rounded-full font-semibold text-white',
         'transition-all duration-200',
         sizeClasses[size],
-        contextEnhancements.gradientBg,
+        config.bgColor,
         config.ring,
         contextEnhancements.shadowClass,
         contextEnhancements.glowClass,
-        'border border-white/20 dark:border-white/30',
-        // ✅ Enhanced dark theme text contrast
-        'text-white dark:text-gray-100',
+        'border border-white/20',
+        // ✅ Special styling for high context scores
+        dimension === 'context' && score > 80 && 'bg-gradient-to-r from-cyan-500 to-blue-500',
         className
       )}
     >
       {/* ✅ ENHANCED: Dimension-specific icons with smart display */}
       {config.icon && size !== 'sm' && (
-        <span className="mr-1 text-xs opacity-90">
+        <span className="mr-1 text-xs">
           {dimension === 'context' ? contextEnhancements.specialIcon : config.icon}
         </span>
       )}
       
-      <span className="mr-1 font-bold">{Math.round(score)}</span>
+      <span className="mr-1">{Math.round(score)}</span>
       
       {showNotation && showChessNotation && (
-        <span className="text-xs opacity-80">{symbol}</span>
+        <span className="text-xs opacity-90">{symbol}</span>
       )}
       
-      {/* ✅ NEW: Special indicator for context mastery with better dark theme */}
+      {/* ✅ NEW: Special indicator for context mastery */}
       {dimension === 'context' && score > 85 && size !== 'sm' && (
-        <span className="ml-1 text-xs opacity-90">✨</span>
+        <span className="ml-1 text-xs">✨</span>
       )}
     </div>
   );
   
-  // ✅ ENHANCED: Animation variations by dimension with improved dark theme
+  // ✅ ENHANCED: Animation variations by dimension
   const getAnimationProps = () => {
     const baseProps = {
       initial: { scale: 0, opacity: 0 },
@@ -154,20 +146,15 @@ const ScoreBadge: React.FC<ScoreBadgeProps> = ({
       return {
         ...baseProps,
         whileHover: { 
-          scale: 1.1,
-          rotate: [0, -5, 5, 0], // ✅ Enhanced compass wobble effect
-          transition: { duration: 0.6 },
-          // ✅ Enhanced glow on hover for dark theme
-          filter: "brightness(1.1) drop-shadow(0 0 8px rgba(34, 211, 238, 0.4))"
+          scale: 1.05,
+          rotate: [0, -3, 3, 0], // ✅ Compass wobble effect
+          transition: { duration: 0.6 }
         }
       };
     } else {
       return {
         ...baseProps,
-        whileHover: { 
-          scale: 1.05,
-          filter: "brightness(1.1)"
-        }
+        whileHover: { scale: 1.05 }
       };
     }
   };
