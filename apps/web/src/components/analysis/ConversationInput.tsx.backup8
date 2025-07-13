@@ -141,25 +141,28 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     console.log('🧠 SMART PARSING: Starting enhanced conversation analysis...');
 
     try {
-      // ✅ TRY /enhanced API via proper API client - but fallback gracefully if not available
+      // ✅ TRY /enhanced API - but fallback gracefully if not available
       try {
-        // ✅ FIX: Use api client instead of direct fetch to get correct backend URL
-        const { api } = await import('@/lib/api');
-        
-        const response = await api.post('/analyze/enhanced', {
-          text: conversationText,
-          options: {
-            expectedPlatform: platform === 'auto' ? detectedPlatform : platform,
-            analysisDepth: 'standard'
+        const response = await fetch('/api/analyze/enhanced', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
           },
-          metadata: {
-            sessionGoal: sessionGoal || undefined,
-            projectContext: projectContext || undefined
-          }
+          body: JSON.stringify({
+            text: conversationText,
+            options: {
+              expectedPlatform: platform === 'auto' ? detectedPlatform : platform,
+              analysisDepth: 'standard'
+            },
+            metadata: {
+              sessionGoal: sessionGoal || undefined,
+              projectContext: projectContext || undefined
+            }
+          })
         });
 
         if (response.ok) {
-          const data = response;
+          const data = await response.json();
           
           if (data.success && data.result) {
             const preview: ParsePreview = {
@@ -204,8 +207,6 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
 
   // ✅ LOCAL PARSING FALLBACK
   const createLocalPreview = (text: string): ParsePreview => {
-    console.log('📋 LOCAL PARSING: Starting fallback parsing for text length:', text.length);
-    
     const messages: ParsedMessage[] = [];
     
     try {
@@ -239,33 +240,23 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
           }
         });
       } else {
-        // ✅ Generic alternating parsing - IMPROVED LOGIC
-        parts = text.split(/\n\s*\n/).filter(p => p.trim().length > 20); // ✅ Increased minimum length
+        // ✅ Generic alternating parsing
+        parts = text.split(/\n\s*\n/).filter(p => p.trim());
         
-        // ✅ LIMIT MESSAGE COUNT to prevent 41 message issue
-        const maxMessages = Math.min(parts.length, 20); // Cap at 20 messages max
-        
-        for (let i = 0; i < maxMessages; i++) {
-          const part = parts[i];
-          if (part && part.trim()) {
+        parts.forEach((part, index) => {
+          if (part.trim()) {
             messages.push({
-              role: i % 2 === 0 ? 'user' : 'assistant',
+              role: index % 2 === 0 ? 'user' : 'assistant',
               content: part.trim(),
               confidence: 60,
               originalIndex: messages.length
             });
           }
-        }
+        });
       }
     } catch (error) {
-      console.error('❌ Local parsing error:', error);
+      console.error('Local parsing error:', error);
     }
-
-    console.log('📋 LOCAL PARSING COMPLETE:', {
-      totalMessages: messages.length,
-      detectedPlatform,
-      confidence: messages.length > 0 ? 0.7 : 0.3
-    });
 
     return {
       messages,
@@ -727,8 +718,8 @@ Example formats:
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* ✅ PARSING INFO */}
-                <div className="p-4 bg-muted/50 dark:bg-muted/80 rounded-lg border border-border">
-                  <div className="grid grid-cols-2 gap-4 text-sm text-foreground">
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="font-medium">Platform:</span> {parsePreview.platform}
                     </div>
@@ -761,18 +752,18 @@ Example formats:
                       className={cn(
                         'p-3 rounded-lg border',
                         message.role === 'user' 
-                          ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-700'
-                          : 'bg-green-50 dark:bg-green-950/50 border-green-200 dark:border-green-700'
+                          ? 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800'
+                          : 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800'
                       )}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           {message.role === 'user' ? (
-                            <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <User className="h-4 w-4 text-blue-600" />
                           ) : (
-                            <Bot className="h-4 w-4 text-green-600 dark:text-green-400" />
+                            <Bot className="h-4 w-4 text-green-600" />
                           )}
-                          <span className="font-medium capitalize text-foreground">{message.role}</span>
+                          <span className="font-medium capitalize">{message.role}</span>
                           <Badge variant="outline" size="sm">
                             #{index + 1}
                           </Badge>
@@ -793,7 +784,7 @@ Example formats:
                       <Textarea
                         value={message.content}
                         onChange={(e) => handleEditMessage(index, e.target.value)}
-                        className="min-h-[60px] text-sm bg-background border-input text-foreground"
+                        className="min-h-[60px] text-sm"
                       />
                     </div>
                   ))}
