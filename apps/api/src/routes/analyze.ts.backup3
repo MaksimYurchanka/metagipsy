@@ -1,4 +1,4 @@
-// ✅ ENHANCED 5D ANALYZE ROUTES with Enhanced Parsing Support - TYPE COMPATIBLE
+// ✅ ENHANCED 5D ANALYZE ROUTES with Enhanced Parsing Support
 // apps/api/src/routes/analyze.ts
 
 import { Router } from 'express';
@@ -213,7 +213,7 @@ router.post('/',
   }
 );
 
-// ✅ NEW: Enhanced parsing endpoint with AI support - TYPE COMPATIBLE
+// ✅ NEW: Enhanced parsing endpoint with AI support
 router.post('/enhanced',
   optionalAuth,
   rateLimiter.createLimiter('enhanced_analyze', 5, 60), // 5 requests per minute (more intensive)
@@ -242,9 +242,9 @@ router.post('/enhanced',
         hasUserSignature: !!options.userSignature
       });
 
-      // ✅ TYPE COMPATIBLE: Use forcePattern (opposite of forceHaiku for Haiku-first approach)
+      // ✅ ENHANCED: Use enhanced conversation parsing
       const parseResult: ParseResult = await parseConversationEnhanced(text, {
-        forcePattern: options.forceHaiku === true ? false : undefined, // Haiku-first unless explicitly forced to pattern
+        forceHaiku: options.forceHaiku,
         userSignature: options.userSignature,
         expectedPlatform: options.expectedPlatform,
         analysisDepth: options.analysisDepth,
@@ -286,7 +286,7 @@ router.post('/enhanced',
   }
 );
 
-// ✅ NEW: Reparse endpoint for different methods - TYPE COMPATIBLE
+// ✅ NEW: Reparse endpoint for different methods
 router.post('/reparse',
   optionalAuth,
   rateLimiter.createLimiter('reparse', 3, 60), // 3 requests per minute
@@ -315,9 +315,9 @@ router.post('/reparse',
         hasOriginalResult: !!originalResult
       });
 
-      // ✅ TYPE COMPATIBLE: Use forcePattern logic
+      // ✅ FOUNDATION: Enhanced parsing with specific method
       const parseResult = await parseConversationEnhanced(text, {
-        forcePattern: method === 'pattern', // Force pattern only if explicitly requested
+        forceHaiku: method === 'haiku',
         userSignature,
         userId: req.user?.id,
         requestId: `reparse_${method}_${Date.now()}`
