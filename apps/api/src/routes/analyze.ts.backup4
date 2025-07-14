@@ -181,13 +181,6 @@ router.post('/',
       // Update session with summary if authenticated
       if (sessionId && req.user) {
         await sessionService.updateSession(req.user.id, sessionId, sessionSummary);
-        // ✅ CREATE: messagesWithScores from separate arrays
-        const messagesWithScores = messages.map((message, index) => ({
-          ...message,
-          scores: scores[index] ? [scores[index]] : []
-        }));
-
-        await sessionService.saveSessionMessages(sessionId, req.user.id, messagesWithScores);
       }
 
       const response: AnalyzeResponse = {

@@ -173,7 +173,7 @@ export class SessionService {
           const savedMessage = await tx.message.create({
             data: {
               sessionId,
-              role: message.role.toUpperCase() as 'USER' | 'ASSISTANT',
+              role: message.role,
               content: message.content,
               index: message.index,
               timestamp: message.timestamp ? new Date(message.timestamp) : new Date()
@@ -187,7 +187,6 @@ export class SessionService {
             await tx.score.create({
               data: {
                 messageId: savedMessage.id,
-                sessionId: sessionId, // ✅ ADD: Required field
                 overall: score.overall,
                 strategic: score.dimensions.strategic,
                 tactical: score.dimensions.tactical,
@@ -195,7 +194,6 @@ export class SessionService {
                 innovation: score.dimensions.innovation,
                 context: score.dimensions.context, // ✅ NEW: 5th dimension
                 classification: score.classification,
-                chessNotation: score.chessNotation || '=', // ✅ ADD: Required field
                 explanation: score.explanation,
                 betterMove: score.betterMove,
                 confidence: score.confidence || 0.9
