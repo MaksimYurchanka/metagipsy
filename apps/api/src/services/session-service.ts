@@ -5,131 +5,110 @@ import { SessionSummary, SessionMetadata, AnalysisPattern, Platform } from '../t
 
 export class SessionService {
   /**
-   * ✅ CRITICAL FIX: Normalize platform values to match unified lowercase Prisma enum
+   * ✅ ENHANCED: Create new analysis session with metadata support
    */
-  private normalizePlatform(platform?: string): Platform {
-    if (!platform) return 'other';
-    
-    // ✅ UNIFIED: All platforms mapped to lowercase for database compatibility
-    const platformMap: Record<string, Platform> = {
-      // Handle lowercase input (from frontend/parser) - direct mapping
-      'claude': 'claude',
-      'chatgpt': 'chatgpt', 
-      'other': 'other',
-      'auto': 'auto',
-      // Handle legacy uppercase input - convert to lowercase
-      'CLAUDE': 'claude',
-      'CHATGPT': 'chatgpt',
-      'OTHER': 'other',
-      'AUTO': 'auto'
-    };
-    
-    // ✅ ENHANCED: Safe conversion with fallback
-    const normalizedPlatform = platformMap[platform] || platformMap[platform.toLowerCase()];
-    return normalizedPlatform || 'other';
-  }
-
-  async createSession(userId: string, userEmail: string, metadata: SessionMetadata): Promise<string> {
+  async createSession(
+    userId: string, 
+    userEmail: string,
+    metadata: {
+      platform?: Platform;
+      projectContext?: string;
+      sessionGoal?: string;
+    } = {}
+  ): Promise<string> {
     try {
-      // ✅ ENHANCED: Auto-create user if not exists with better error handling
-      console.log('👤 ENSURING USER EXISTS:', userId, userEmail);
+      console.log('🚀 CREATING SESSION:', { userId, userEmail, metadata });
       
-      try {
-        await prisma.user.upsert({
-          where: { id: userId },
-          update: {
-            // Update email if changed
-            email: userEmail || 'unknown@example.com',
-            updatedAt: new Date()
-          },
-          create: {
-            id: userId,
-            email: userEmail || 'unknown@example.com',
-            name: userEmail?.split('@')[0] || 'Anonymous User',
-            tier: 'FREE'
-          }
-        });
-        
-        console.log('✅ USER ENSURED:', userId);
-      } catch (userError) {
-        console.error('❌ User upsert failed:', userError);
-        logger.error('User upsert failed', { 
-          error: userError, 
-          userId, 
-          userEmail 
-        });
-        // Continue execution - user might already exist
-      }
-
-      // ✅ CRITICAL FIX: Use normalized lowercase platform
-      const normalizedPlatform = this.normalizePlatform(metadata.platform);
-      console.log('🔄 PLATFORM NORMALIZED:', metadata.platform, '→', normalizedPlatform);
-
-      // Create session with unified platform and 5D support
       const session = await prisma.session.create({
         data: {
           userId,
-          title: metadata.title || `${normalizedPlatform} Analysis - ${new Date().toLocaleDateString()}`,
-          platform: normalizedPlatform, // ✅ UNIFIED: lowercase platform
-          
-          // ✅ ENHANCED: Initialize 5D performance fields
-          messageCount: metadata.messageCount || 0,
-          overallScore: metadata.overallScore || 0,
-          strategicAvg: metadata.dimensionAverages?.strategic || 0,
-          tacticalAvg: metadata.dimensionAverages?.tactical || 0,
-          cognitiveAvg: metadata.dimensionAverages?.cognitive || 0,
-          innovationAvg: metadata.dimensionAverages?.innovation || 0,
-          contextAvg: metadata.dimensionAverages?.context || 0, // ✅ NEW: 5th dimension
-          trend: metadata.trend || 'stable',
-          
-          // ✅ ENHANCED: Parsing metadata support
-          parsingMethod: metadata.parsingMethod,
-          parsingConfidence: metadata.parsingConfidence,
-          parsingCost: metadata.parsingCost,
-          
-          // Detailed data in metadata JSON
+          userEmail,
+          platform: metadata.platform || 'other',
+          title: `Analysis ${new Date().toLocaleDateString()}`,
+          status: 'active',
+          messageCount: 0,
+          overallScore: 0,
+          // ✅ ENHANCED: Initialize 5D averages with Context dimension
+          strategicAvg: 0,
+          tacticalAvg: 0,
+          cognitiveAvg: 0,
+          innovationAvg: 0,
+          contextAvg: 0, // ✅ NEW: 5th dimension for database
           metadata: {
-            ...metadata,
+            projectContext: metadata.projectContext,
+            sessionGoal: metadata.sessionGoal,
             createdAt: new Date().toISOString()
-          } as any
+          }
         }
       });
 
-      console.log('✅ SESSION CREATED with 5D support:', session.id, 'Platform:', session.platform);
+      console.log('✅ SESSION CREATED:', session.id);
       logger.info('Session created successfully', { 
         sessionId: session.id, 
-        userId,
-        userEmail,
-        platform: session.platform,
-        contextAvg: session.contextAvg // ✅ NEW: Log 5th dimension
-      });
-      
-      return session.id;
-    } catch (error) {
-      console.error('❌ SESSION CREATION FAILED:', error);
-      logger.error('Failed to create session', { 
-        error, 
         userId, 
-        userEmail,
-        metadata: metadata.title,
         platform: metadata.platform 
       });
       
-      // ✅ ENHANCED: Better error diagnostics
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorCode = (error as any)?.code;
+      return session.id;
       
-      if (errorMessage.includes('Foreign key constraint')) {
-        throw new Error('User synchronization failed. Please refresh and try again.');
-      } else if (errorCode === 'P2002') {
-        throw new Error('Session already exists');
-      } else {
-        throw new Error('Failed to create session');
-      }
+    } catch (error) {
+      console.error('❌ SESSION CREATION FAILED:', error);
+      logger.error('Failed to create session', { error, userId });
+      throw new Error('Failed to create session');
     }
   }
 
-  // ✅ NEW: Save individual messages and scores to database
+  /**
+   * ✅ ENHANCED: Update session with analysis summary and 5D averages
+   */
+  async updateSession(
+    userId: string, 
+    sessionId: string, 
+    summary: SessionSummary
+  ): Promise<void> {
+    try {
+      console.log('🔄 UPDATING SESSION:', { sessionId, userId });
+      
+      await prisma.session.update({
+        where: {
+          id: sessionId,
+          userId // Ensure user owns this session
+        },
+        data: {
+          messageCount: summary.messageCount,
+          overallScore: summary.overallScore,
+          // ✅ ENHANCED: Store 5D dimension averages including Context
+          strategicAvg: summary.dimensionAverages.strategic,
+          tacticalAvg: summary.dimensionAverages.tactical,
+          cognitiveAvg: summary.dimensionAverages.cognitive,
+          innovationAvg: summary.dimensionAverages.innovation,
+          contextAvg: summary.dimensionAverages.context, // ✅ NEW: 5th dimension
+          status: 'completed',
+          completedAt: new Date(),
+          metadata: {
+            ...summary,
+            updatedAt: new Date().toISOString(),
+            // ✅ ENHANCED: Store patterns and insights in metadata
+            patterns: summary.patterns || [],
+            insights: summary.insights || [],
+            trend: summary.trend
+          }
+        }
+      });
+
+      console.log('✅ SESSION UPDATED:', sessionId);
+      logger.info('Session updated successfully', { sessionId, userId, summary });
+      
+    } catch (error) {
+      console.error('❌ SESSION UPDATE FAILED:', error);
+      logger.error('Failed to update session', { error, sessionId, userId });
+      throw new Error('Failed to update session');
+    }
+  }
+
+  /**
+   * ✅ CRITICAL: Save individual messages with 5D scores to database
+   */
   async saveSessionMessages(
     sessionId: string,
     userId: string,
@@ -167,7 +146,7 @@ export class SessionService {
         await tx.message.deleteMany({
           where: { sessionId }
         });
-
+        
         // Save all messages with their scores
         for (const message of messagesWithScores) {
           const savedMessage = await tx.message.create({
@@ -179,7 +158,7 @@ export class SessionService {
               timestamp: message.timestamp ? new Date(message.timestamp) : new Date()
             }
           });
-
+          
           // Save score for this message (if exists)
           if (message.scores && message.scores.length > 0) {
             const score = message.scores[0]; // Take first score
@@ -187,7 +166,7 @@ export class SessionService {
             await tx.score.create({
               data: {
                 messageId: savedMessage.id,
-                sessionId: sessionId, // ✅ ADD: Required field
+                sessionId: sessionId,
                 overall: score.overall,
                 strategic: score.dimensions.strategic,
                 tactical: score.dimensions.tactical,
@@ -195,21 +174,20 @@ export class SessionService {
                 innovation: score.dimensions.innovation,
                 context: score.dimensions.context, // ✅ NEW: 5th dimension
                 classification: score.classification,
-                chessNotation: score.chessNotation || '=', // ✅ ADD: Required field
-                explanation: score.explanation,
-                betterMove: score.betterMove,
+                chessNotation: this.getChessNotationFromScore(score), // ✅ FIXED: Safe chessNotation generation
+                explanation: score.explanation || '',
+                betterMove: score.betterMove || '',
                 confidence: score.confidence || 0.9
               }
             });
           }
         }
       });
-
+      
       console.log('✅ SESSION MESSAGES SAVED:', {
         sessionId,
         savedCount: messagesWithScores.length
       });
-
       logger.info('Session messages saved successfully', {
         sessionId,
         userId,
@@ -233,113 +211,32 @@ export class SessionService {
     }
   }
 
-  async updateSession(
-    userId: string,
-    sessionId: string, 
-    summary: SessionSummary
-  ): Promise<void> {
+  /**
+   * ✅ FIXED: Safe chessNotation generation from score
+   */
+  private getChessNotationFromScore(score: any): string {
+    // First try to get chessNotation from score (if exists)
+    if (score.chessNotation) {
+      return score.chessNotation;
+    }
+    
+    // Generate from overall score if chessNotation missing (Claude analysis case)
+    if (score.overall >= 80) return '!!';
+    if (score.overall >= 70) return '!';
+    if (score.overall >= 60) return '+';
+    if (score.overall >= 40) return '=';
+    if (score.overall >= 20) return '?';
+    return '??';
+  }
+
+  /**
+   * ✅ ENHANCED: Get session with individual messages and 5D scores
+   */
+  async getSession(userId: string, sessionId: string): Promise<any> {
     try {
-      // ✅ ENHANCED: Update with 5D dimension averages
-      const updatedData = {
-        // 5D performance fields for fast access
-        messageCount: summary.messageCount,
-        overallScore: summary.overallScore,
-        strategicAvg: summary.dimensionAverages.strategic,
-        tacticalAvg: summary.dimensionAverages.tactical,
-        cognitiveAvg: summary.dimensionAverages.cognitive,
-        innovationAvg: summary.dimensionAverages.innovation,
-        contextAvg: summary.dimensionAverages.context, // ✅ NEW: 5th dimension update
-        bestScore: summary.bestScore,
-        worstScore: summary.worstScore,
-        trend: summary.trend,
-        
-        // ✅ FIXED: Proper status setting without type errors
-        status: 'COMPLETED' as const,
-        
-        // ✅ ENHANCED: 5D metadata with context dimension
-        metadata: {
-          messageCount: summary.messageCount,
-          overallScore: summary.overallScore,
-          bestScore: summary.bestScore,
-          worstScore: summary.worstScore,
-          trend: summary.trend,
-          dimensionAverages: summary.dimensionAverages, // ✅ NOW includes context
-          patterns: summary.patterns,
-          insights: summary.insights,
-          completedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        } as any
-      };
-
-      const updatedSession = await prisma.session.update({
-        where: { 
-          id: sessionId,
-          userId // Ensure user owns the session
-        },
-        data: updatedData
-      });
-
-      // ✅ ENHANCED: Log 5D update
-      console.log('✅ SESSION 5D UPDATE COMPLETE:', {
-        sessionId,
-        userId,
-        status: updatedSession.status,
-        messageCount: updatedSession.messageCount,
-        overallScore: updatedSession.overallScore,
-        contextAvg: updatedSession.contextAvg // ✅ NEW: Log context dimension
-      });
-
-      // Cache session summary with 5D data
-      await redis.setex(
-        `session:${sessionId}:summary`,
-        3600, // 1 hour
-        JSON.stringify(summary)
-      );
-
-      logger.info('Session updated with 5D support', { 
-        sessionId, 
-        userId, 
-        status: updatedSession.status,
-        contextAvg: updatedSession.contextAvg // ✅ NEW: Log context dimension
-      });
-    } catch (error) {
-      console.error('❌ SESSION 5D UPDATE FAILED:', {
-        error: error instanceof Error ? error.message : String(error),
-        sessionId,
-        userId,
-        summaryMessageCount: summary.messageCount,
-        summaryScore: summary.overallScore,
-        summaryContext: summary.dimensionAverages.context // ✅ NEW: Log context in error
-      });
+      console.log('📖 GETTING SESSION:', { sessionId, userId });
       
-      logger.error('Failed to update session', { error, sessionId, userId });
-      throw new Error('Failed to update session');
-    }
-  }
-
-  // ✅ PRESERVED: Update session title method
-  async updateSessionTitle(sessionId: string, userId: string, title: string): Promise<void> {
-    try {
-      await prisma.session.update({
-        where: {
-          id: sessionId,
-          userId // Ensure user owns the session
-        },
-        data: {
-          title: title.trim()
-        }
-      });
-
-      logger.info('Session title updated', { sessionId, userId, title });
-    } catch (error) {
-      logger.error('Failed to update session title', { error, sessionId, userId });
-      throw new Error('Failed to update session title');
-    }
-  }
-
-  // ✅ ENHANCED: Get session with proper messages and scores loading
-  async getSession(sessionId: string, userId: string) {
-    try {
+      // Get session with related messages and scores
       const session = await prisma.session.findFirst({
         where: {
           id: sessionId,
@@ -348,7 +245,7 @@ export class SessionService {
         include: {
           messages: {
             include: {
-              score: true
+              scores: true
             },
             orderBy: {
               index: 'asc'
@@ -358,307 +255,192 @@ export class SessionService {
       });
 
       if (!session) {
-        throw new Error('Session not found');
+        console.log('❌ SESSION NOT FOUND:', sessionId);
+        return { success: false, error: 'Session not found' };
       }
 
-      // Enhance session object with metadata properties for backward compatibility
-      const metadata = (session.metadata as any) || {};
-      
+      // ✅ ENHANCED: Transform database records to frontend format with 5D support
+      const messages = session.messages.map(msg => ({
+        id: msg.id,
+        role: msg.role.toLowerCase() as 'user' | 'assistant',
+        content: msg.content,
+        index: msg.index,
+        timestamp: msg.timestamp.toISOString(),
+        scores: msg.scores.map(score => ({
+          overall: score.overall,
+          dimensions: {
+            strategic: score.strategic,
+            tactical: score.tactical,
+            cognitive: score.cognitive,
+            innovation: score.innovation,
+            context: score.context // ✅ NEW: 5th dimension from database
+          },
+          classification: score.classification,
+          chessNotation: score.chessNotation,
+          confidence: score.confidence,
+          explanation: score.explanation || undefined,
+          betterMove: score.betterMove || undefined
+        }))
+      }));
+
+      console.log('✅ SESSION RETRIEVED:', {
+        sessionId,
+        messageCount: messages.length,
+        averageScore: session.overallScore
+      });
+
       return {
-        ...session,
-        // ✅ ENHANCED: Use 5D performance fields where possible
-        projectContext: metadata.projectContext,
-        sessionGoal: metadata.sessionGoal,
-        completedAt: metadata.completedAt,
-        // Use new 5D fields instead of metadata
-        messageCount: session.messageCount,
-        overallScore: session.overallScore,
-        trend: session.trend,
-        dimensionAverages: {
-          strategic: session.strategicAvg,
-          tactical: session.tacticalAvg,
-          cognitive: session.cognitiveAvg,
-          innovation: session.innovationAvg,
-          context: session.contextAvg // ✅ NEW: 5th dimension in response
-        },
-        patterns: metadata.patterns || [],
-        insights: metadata.insights || [],
-        // ✅ CRITICAL FIX: Transform messages to include scores array for frontend compatibility
-        messages: session.messages.map(msg => ({
-          ...msg,
-          role: msg.role as 'user' | 'assistant',
-          timestamp: msg.timestamp.toISOString(),
-          scores: msg.score ? [{
-            overall: msg.score.overall,
-            dimensions: {
-              strategic: msg.score.strategic,
-              tactical: msg.score.tactical,
-              cognitive: msg.score.cognitive,
-              innovation: msg.score.innovation,
-              context: msg.score.context // ✅ NEW: 5th dimension in scores
-            },
-            classification: msg.score.classification,
-            explanation: msg.score.explanation,
-            betterMove: msg.score.betterMove,
-            confidence: msg.score.confidence
-          }] : []
-        })),
-        // ✅ NEW: Success flag for frontend compatibility
-        success: true
-      };
-    } catch (error) {
-      logger.error('Failed to get session', { error, sessionId, userId });
-      throw new Error('Failed to get session');
-    }
-  }
-
-  async getUserSessions(
-    userId: string, 
-    limit: number = 20, 
-    offset: number = 0
-  ) {
-    try {
-      // ✅ OPTIMIZED: Fast queries using 5D performance fields
-      const sessions = await prisma.session.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-        select: {
-          id: true,
-          title: true,
-          platform: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          // ✅ ENHANCED: 5D performance fields
-          messageCount: true,
-          overallScore: true,
-          strategicAvg: true,
-          tacticalAvg: true,
-          cognitiveAvg: true,
-          innovationAvg: true,
-          contextAvg: true, // ✅ NEW: 5th dimension in list
-          bestScore: true,
-          worstScore: true,
-          trend: true,
-          // Enhanced parsing fields
-          parsingMethod: true,
-          parsingConfidence: true,
-          parsingCost: true,
-          // Metadata only for additional data
-          metadata: true
-        }
-      });
-
-      const total = await prisma.session.count({
-        where: { userId }
-      });
-
-      // ✅ ENHANCED: Use 5D performance fields directly
-      const transformedSessions = sessions.map(session => {
-        const metadata = (session.metadata as any) || {};
-        return {
-          ...session,
-          projectContext: metadata.projectContext,
-          sessionGoal: metadata.sessionGoal,
-          completedAt: metadata.completedAt,
-          // ✅ ENHANCED: 5D dimension averages from performance fields
+        success: true,
+        session: {
+          id: session.id,
+          title: session.title,
+          platform: session.platform.toLowerCase(),
+          status: session.status,
+          createdAt: session.createdAt.toISOString(),
+          updatedAt: session.updatedAt.toISOString(),
+          messageCount: session.messageCount,
+          overallScore: session.overallScore,
+          // ✅ ENHANCED: Include 5D dimension averages
           dimensionAverages: {
             strategic: session.strategicAvg,
             tactical: session.tacticalAvg,
             cognitive: session.cognitiveAvg,
             innovation: session.innovationAvg,
-            context: session.contextAvg // ✅ NEW: 5th dimension in session list
+            context: session.contextAvg // ✅ NEW: 5th dimension from database
           }
-        };
-      });
-
-      return {
-        sessions: transformedSessions,
-        total,
-        hasMore: offset + limit < total
-      };
-    } catch (error) {
-      logger.error('Failed to get user sessions', { error, userId });
-      throw new Error('Failed to get user sessions');
-    }
-  }
-
-  async deleteSession(sessionId: string, userId: string): Promise<void> {
-    try {
-      await prisma.session.delete({
-        where: {
-          id: sessionId,
-          userId
-        }
-      });
-
-      // Clean up cache
-      await redis.del(`session:${sessionId}:summary`);
-
-      logger.info('Session deleted', { sessionId, userId });
-    } catch (error) {
-      logger.error('Failed to delete session', { error, sessionId, userId });
-      throw new Error('Failed to delete session');
-    }
-  }
-
-  async getSessionAnalytics(userId: string, days: number = 30) {
-    try {
-      const since = new Date();
-      since.setDate(since.getDate() - days);
-
-      console.log('📊 5D ANALYTICS: Starting enhanced analytics calculation...', {
-        userId,
-        days,
-        since: since.toISOString()
-      });
-
-      // ✅ ENHANCED: Include both ACTIVE and COMPLETED sessions for 5D analytics
-      const sessions = await prisma.session.findMany({
-        where: {
-          userId,
-          createdAt: {
-            gte: since
-          },
-          // ✅ ENHANCED: Include sessions with 5D analysis data
-          OR: [
-            { status: 'COMPLETED' },
-            { 
-              status: 'ACTIVE',
-              messageCount: { gt: 0 },
-              overallScore: { gt: 0 }
-            }
-          ]
         },
+        messages,
+        metadata: session.metadata || {}
+      };
+      
+    } catch (error) {
+      console.error('❌ GET SESSION FAILED:', error);
+      logger.error('Failed to get session', { error, sessionId, userId });
+      return { success: false, error: 'Failed to retrieve session' };
+    }
+  }
+
+  /**
+   * ✅ Get user sessions with pagination and filtering
+   */
+  async getUserSessions(
+    userId: string,
+    options: {
+      limit?: number;
+      offset?: number;
+      platform?: Platform;
+      sortBy?: 'createdAt' | 'updatedAt' | 'overallScore';
+      sortOrder?: 'asc' | 'desc';
+    } = {}
+  ): Promise<any> {
+    try {
+      const {
+        limit = 20,
+        offset = 0,
+        platform,
+        sortBy = 'updatedAt',
+        sortOrder = 'desc'
+      } = options;
+
+      const where: any = { userId };
+      if (platform && platform !== 'auto') {
+        where.platform = platform.toUpperCase();
+      }
+
+      const sessions = await prisma.session.findMany({
+        where,
         select: {
           id: true,
-          status: true,
-          createdAt: true,
+          title: true,
           platform: true,
           messageCount: true,
           overallScore: true,
+          // ✅ ENHANCED: Include 5D averages in session list
           strategicAvg: true,
           tacticalAvg: true,
           cognitiveAvg: true,
           innovationAvg: true,
-          contextAvg: true, // ✅ NEW: 5th dimension in analytics
-          trend: true
+          contextAvg: true, // ✅ NEW: 5th dimension
+          status: true,
+          createdAt: true,
+          updatedAt: true
+        },
+        orderBy: {
+          [sortBy]: sortOrder
+        },
+        skip: offset,
+        take: limit
+      });
+
+      const totalCount = await prisma.session.count({ where });
+
+      // Transform to frontend format
+      const transformedSessions = sessions.map(session => ({
+        ...session,
+        platform: session.platform.toLowerCase(),
+        // ✅ ENHANCED: Include 5D dimension averages
+        dimensionAverages: {
+          strategic: session.strategicAvg,
+          tactical: session.tacticalAvg,
+          cognitive: session.cognitiveAvg,
+          innovation: session.innovationAvg,
+          context: session.contextAvg // ✅ NEW: 5th dimension
         }
-      });
+      }));
 
-      console.log('📊 5D ANALYTICS: Found sessions for enhanced analytics:', {
-        totalFound: sessions.length,
-        statuses: sessions.reduce((acc, s) => {
-          acc[s.status] = (acc[s.status] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>),
-        avg5DScores: sessions.length > 0 ? {
-          context: sessions.reduce((sum, s) => sum + s.contextAvg, 0) / sessions.length,
-          strategic: sessions.reduce((sum, s) => sum + s.strategicAvg, 0) / sessions.length
-        } : null
-      });
-
-      if (sessions.length === 0) {
-        console.log('📊 5D ANALYTICS: No sessions found, returning 5D zeros');
-        return {
-          totalSessions: 0,
-          totalMessages: 0,
-          averageScore: 0,
-          improvementRate: 0,
-          dimensionAverages: {
-            strategic: 0,
-            tactical: 0,
-            cognitive: 0,
-            innovation: 0,
-            context: 0 // ✅ NEW: 5th dimension in analytics response
-          },
-          trendDistribution: {},
-          platformDistribution: {},
-          scoreHistory: []
-        };
-      }
-
-      // ✅ ENHANCED: Use 5D performance fields for calculations
-      const totalSessions = sessions.length;
-      const totalMessages = sessions.reduce((sum, s) => sum + s.messageCount, 0);
-      const averageScore = sessions.reduce((sum, s) => sum + s.overallScore, 0) / totalSessions;
-
-      // Calculate improvement rate (comparing first half vs second half)
-      const midpoint = Math.floor(sessions.length / 2);
-      const firstHalf = sessions.slice(0, midpoint);
-      const secondHalf = sessions.slice(midpoint);
-      
-      const firstHalfAvg = firstHalf.length > 0 
-        ? firstHalf.reduce((sum, s) => sum + s.overallScore, 0) / firstHalf.length 
-        : 0;
-      const secondHalfAvg = secondHalf.length > 0 
-        ? secondHalf.reduce((sum, s) => sum + s.overallScore, 0) / secondHalf.length 
-        : 0;
-      
-      const improvementRate = firstHalfAvg > 0 
-        ? ((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100 
-        : 0;
-
-      // ✅ ENHANCED: 5D dimension averages from performance fields
-      const dimensionAverages = {
-        strategic: sessions.reduce((sum, s) => sum + s.strategicAvg, 0) / totalSessions,
-        tactical: sessions.reduce((sum, s) => sum + s.tacticalAvg, 0) / totalSessions,
-        cognitive: sessions.reduce((sum, s) => sum + s.cognitiveAvg, 0) / totalSessions,
-        innovation: sessions.reduce((sum, s) => sum + s.innovationAvg, 0) / totalSessions,
-        context: sessions.reduce((sum, s) => sum + s.contextAvg, 0) / totalSessions // ✅ NEW: 5th dimension average
+      return {
+        success: true,
+        sessions: transformedSessions,
+        pagination: {
+          total: totalCount,
+          limit,
+          offset,
+          hasMore: offset + limit < totalCount
+        }
       };
 
-      // Trend and platform distributions
-      const trendDistribution = sessions.reduce((acc, s) => {
-        const trend = s.trend || 'stable';
-        acc[trend] = (acc[trend] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      const platformDistribution = sessions.reduce((acc, s) => {
-        acc[s.platform] = (acc[s.platform] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      // Score history (last 30 data points)
-      const scoreHistory = sessions
-        .slice(-30)
-        .map(s => ({
-          date: s.createdAt.toISOString().split('T')[0],
-          score: s.overallScore
-        }));
-
-      const analytics = {
-        totalSessions,
-        totalMessages,
-        averageScore: Math.round(averageScore),
-        improvementRate: Math.round(improvementRate),
-        dimensionAverages, // ✅ NOW includes context dimension
-        trendDistribution,
-        platformDistribution,
-        scoreHistory
-      };
-
-      console.log('📊 5D ANALYTICS: Calculated enhanced analytics:', {
-        totalSessions: analytics.totalSessions,
-        totalMessages: analytics.totalMessages,
-        averageScore: analytics.averageScore,
-        contextAvg: analytics.dimensionAverages.context, // ✅ NEW: Log context average
-        allDimensionAverages: analytics.dimensionAverages
-      });
-
-      return analytics;
     } catch (error) {
-      console.error('❌ 5D ANALYTICS: Failed to get enhanced session analytics:', {
-        error: error instanceof Error ? error.message : String(error),
-        userId,
-        days
+      logger.error('Failed to get user sessions', { error, userId });
+      return { success: false, error: 'Failed to retrieve sessions' };
+    }
+  }
+
+  /**
+   * ✅ Delete session and all related data
+   */
+  async deleteSession(userId: string, sessionId: string): Promise<boolean> {
+    try {
+      // Use transaction to ensure all related data is deleted
+      await prisma.$transaction(async (tx) => {
+        // Delete scores first (foreign key constraint)
+        await tx.score.deleteMany({
+          where: {
+            sessionId
+          }
+        });
+
+        // Delete messages
+        await tx.message.deleteMany({
+          where: {
+            sessionId
+          }
+        });
+
+        // Finally delete session
+        await tx.session.delete({
+          where: {
+            id: sessionId,
+            userId // Ensure user owns this session
+          }
+        });
       });
-      
-      logger.error('Failed to get session analytics', { error, userId });
-      throw new Error('Failed to get session analytics');
+
+      logger.info('Session deleted successfully', { sessionId, userId });
+      return true;
+
+    } catch (error) {
+      logger.error('Failed to delete session', { error, sessionId, userId });
+      return false;
     }
   }
 }

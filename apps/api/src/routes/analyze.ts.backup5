@@ -181,17 +181,11 @@ router.post('/',
       // Update session with summary if authenticated
       if (sessionId && req.user) {
         await sessionService.updateSession(req.user.id, sessionId, sessionSummary);
-        
-        // ✅ FIXED: Clean messagesWithScores mapping without type conflicts
-        const messagesWithScores = messages
-          .filter(message => message.role !== 'system') // ✅ Filter out 'system' messages
-          .map((message, index) => ({
-            role: message.role as 'user' | 'assistant', // ✅ Type assertion for clean types
-            content: message.content,
-            index: message.index || index, // ✅ Use message.index or fallback to array index
-            timestamp: message.timestamp,
-            scores: scores[index] ? [scores[index]] : [] // ✅ Attach corresponding score
-          }));
+        // ✅ CREATE: messagesWithScores from separate arrays
+        const messagesWithScores = messages.map((message, index) => ({
+          ...message,
+          scores: scores[index] ? [scores[index]] : []
+        }));
 
         await sessionService.saveSessionMessages(sessionId, req.user.id, messagesWithScores);
       }
