@@ -1,3 +1,4 @@
+// apps/web/src/App.tsx
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
@@ -6,8 +7,6 @@ import Layout from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import HomePage from '@/pages/HomePage';
 import AnalysisPage from '@/pages/AnalysisPage';
-import VerifyPage from '@/pages/VerifyPage';
-import ResultsPage from '@/pages/ResultsPage';
 import DashboardPage from '@/pages/DashboardPage';
 import SettingsPage from '@/pages/SettingsPage';
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
@@ -32,7 +31,7 @@ function App() {
                 {/* Публичная страница - доступна всем */}
                 <Route path="/" element={<HomePage />} />
                 
-                {/* ✅ ПОЛНЫЙ АНАЛИЗ WORKFLOW - все защищенные */}
+                {/* ЗАЩИЩЕННЫЕ МАРШРУТЫ - требуют авторизации */}
                 <Route 
                   path="/analyze" 
                   element={
@@ -41,24 +40,6 @@ function App() {
                     </ProtectedRoute>
                   } 
                 />
-                <Route 
-                  path="/analyze/verify" 
-                  element={
-                    <ProtectedRoute>
-                      <VerifyPage />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/analyze/results/:sessionId" 
-                  element={
-                    <ProtectedRoute>
-                      <ResultsPage />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* ОСТАЛЬНЫЕ ЗАЩИЩЕННЫЕ МАРШРУТЫ */}
                 <Route 
                   path="/dashboard" 
                   element={

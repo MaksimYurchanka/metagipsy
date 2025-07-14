@@ -1,610 +1,232 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, Wand2, Eye, AlertCircle, CheckCircle, Edit3, RefreshCw, User, Bot, Sparkles, Settings } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Upload, Eye, Brain, CheckCircle, Sparkles, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { ConversationInputProps, Platform } from '@/types';
-import { cn } from '@/lib/utils';
-import {
-  useAnalysisDepth,
-  usePatternDetection,
-  useClaudeAnalysis,
-  useAutoDetectPlatform,
-  useAnimationsEnabled
-} from '@/stores/settingsStore';
+import { useConversationStore } from '@/stores/conversationStore';
+import { api } from '@/lib/api';
 
-// ✅ SMART PARSING INTERFACES
-interface ParsedMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  confidence: number;
-  originalIndex: number;
-}
-
-interface ParsePreview {
-  messages: ParsedMessage[];
-  confidence: number;
-  method: 'haiku' | 'pattern';
-  platform: Platform;
-  needsVerification: boolean;
-  suggestions?: string[];
-}
-
-// ✅ ENHANCED CONVERSATION INPUT - Drop-in replacement
 const ConversationInput: React.FC<ConversationInputProps> = ({
   onAnalyze,
   isAnalyzing = false
 }) => {
-  // ✅ CORE STATE MANAGEMENT
+  const navigate = useNavigate();
+  
+  // ✅ ELEGANT STATE - только необходимое
   const [conversationText, setConversationText] = useState('');
   const [platform, setPlatform] = useState<Platform>('auto');
   const [sessionGoal, setSessionGoal] = useState('');
-  const [projectContext, setProjectContext] = useState('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [enableAIAnalysis, setEnableAIAnalysis] = useState(true);
+  const [isParsing, setIsParsing] = useState(false);
   
-  // ✅ SMART PARSING STATE
-  const [parsePreview, setParsePreview] = useState<ParsePreview | null>(null);
-  const [isParsingPreview, setIsParsingPreview] = useState(false);
-  const [showVerification, setShowVerification] = useState(false);
+  // ✅ DETECTION STATE
   const [detectedPlatform, setDetectedPlatform] = useState<Platform | null>(null);
   const [messageCount, setMessageCount] = useState(0);
-  const [localClaudeEnabled, setLocalClaudeEnabled] = useState(true);
-  
-  // ✅ SETTINGS from store - stable
-  const defaultAnalysisDepth = useAnalysisDepth();
-  const enablePatternDetection = usePatternDetection();
-  const enableClaudeAnalysis = useClaudeAnalysis();
-  const autoDetectPlatform = useAutoDetectPlatform();
-  const animationsEnabled = useAnimationsEnabled();
-  
-  // ✅ REFS for stable callbacks
-  const currentDataRef = useRef({
-    conversationText: '',
-    platform: 'auto' as Platform,
-    detectedPlatform: null as Platform | null,
-    sessionGoal: '',
-    projectContext: '',
-    localClaudeEnabled: true,
-    enableClaudeAnalysis: true,
-    defaultAnalysisDepth: 'standard' as const,
-    enablePatternDetection: true
-  });
+  const [hasRetryEditFormat, setHasRetryEditFormat] = useState(false);
 
-  // ✅ UPDATE REFS
-  currentDataRef.current = {
-    conversationText,
-    platform,
-    detectedPlatform,
-    sessionGoal,
-    projectContext,
-    localClaudeEnabled,
-    enableClaudeAnalysis,
-    defaultAnalysisDepth,
-    enablePatternDetection
-  };
-
-  // ✅ ENHANCED PLATFORM DETECTION with Claude.ai Copy-Paste Intelligence
+  // ✅ SMART DETECTION - Claude.ai copy-paste + Retry→Edit
   const analyzeText = useCallback((text: string) => {
     if (!text.trim()) {
       setDetectedPlatform(null);
       setMessageCount(0);
+      setHasRetryEditFormat(false);
       return;
     }
     
-    let detected: Platform = 'other';
-    let estimatedMessages = 0;
+    // Claude.ai Retry→Edit format detection
+    const retryMatches = text.match(/^Retry\s*$/gm) || [];
+    const editMatches = text.match(/^Edit\s*$/gm) || [];
     
-    // ✅ DETECT CLAUDE.AI COPY-PASTE FORMAT
-    const claudeAICopyPattern = detectClaudeAICopyFormat(text);
-    
-    if (claudeAICopyPattern.isClaudeAICopy) {
-      detected = 'claude';
-      estimatedMessages = claudeAICopyPattern.messageCount;
-      console.log('🎯 CLAUDE.AI COPY DETECTED:', {
-        userInitials: claudeAICopyPattern.userInitials,
-        messageCount: claudeAICopyPattern.messageCount,
-        hasThoughtProcess: claudeAICopyPattern.hasThoughtProcess
-      });
-    } else {
-      // ✅ FALLBACK: Traditional detection
-      const content = text.toLowerCase();
-      
-      if (content.includes('human:') && content.includes('assistant:')) {
-        detected = 'claude';
-      } else if (content.includes('user:') && (content.includes('chatgpt:') || content.includes('openai'))) {
-        detected = 'chatgpt';
-      } else if (content.match(/^(you|me|user|assistant|ai):/mi)) {
-        detected = 'other';
-      }
-      
-      // ✅ TRADITIONAL MESSAGE COUNTING
-      const messageMarkers = text.match(/(Human:|Assistant:|User:|ChatGPT:|AI:|\*\*User\*\*|\*\*Assistant\*\*)/gmi);
-      const alternatingBlocks = text.split(/\n\s*\n/).filter(block => block.trim().length > 10);
-      
-      estimatedMessages = messageMarkers ? messageMarkers.length : Math.min(alternatingBlocks.length, Math.ceil(text.length / 200));
+    if (retryMatches.length > 0 && editMatches.length > 0) {
+      setHasRetryEditFormat(true);
+      setDetectedPlatform('claude');
+      setMessageCount(Math.min(retryMatches.length, editMatches.length) * 2);
+      return;
     }
+    
+    setHasRetryEditFormat(false);
+    
+    // Standard platform detection
+    const content = text.toLowerCase();
+    let detected: Platform = 'other';
+    
+    if (content.includes('human:') && content.includes('assistant:')) {
+      detected = 'claude';
+    } else if (content.includes('user:') && content.includes('chatgpt:')) {
+      detected = 'chatgpt';
+    }
+    
+    // Message counting
+    const messageMarkers = text.match(/(Human:|Assistant:|User:|ChatGPT:)/gmi);
+    const alternatingBlocks = text.split(/\n\s*\n/).filter(block => block.trim().length > 20);
+    
+    const estimatedMessages = messageMarkers ? 
+      messageMarkers.length : 
+      Math.min(alternatingBlocks.length, 10);
     
     setDetectedPlatform(detected);
     setMessageCount(estimatedMessages);
   }, []);
 
-  // ✅ CLAUDE.AI COPY-PASTE FORMAT DETECTION
-  const detectClaudeAICopyFormat = useCallback((text: string) => {
-    // ✅ LOOK FOR BOLD INITIALS PATTERN: **INITIALS** at start of lines
-    const boldInitialsPattern = /^\*\*([A-Z0-9]{1,4})\*\*/gm;
-    const initialsMatches = [...text.matchAll(boldInitialsPattern)];
-    
-    // ✅ LOOK FOR EDIT MARKERS
-    const hasEditMarkers = /Edit\s*$/m.test(text) || text.includes('Edit');
-    
-    // ✅ LOOK FOR THOUGHT PROCESS MARKERS
-    const hasThoughtProcess = /Thought process \d+s/.test(text);
-    
-    if (initialsMatches.length >= 2 && hasEditMarkers) {
-      // ✅ FIND REPEATING INITIALS
-      const initialsGroups = {};
-      initialsMatches.forEach(match => {
-        const initials = match[1];
-        initialsGroups[initials] = (initialsGroups[initials] || 0) + 1;
-      });
-      
-      // ✅ FIND MOST COMMON INITIALS (user's initials)
-      const userInitials = Object.entries(initialsGroups)
-        .sort(([,a], [,b]) => b - a)[0]?.[0];
-      
-      if (userInitials && initialsGroups[userInitials] >= 2) {
-        console.log('🎯 CLAUDE.AI COPY FORMAT DETECTED:', {
-          userInitials,
-          occurrences: initialsGroups[userInitials],
-          hasEdit: hasEditMarkers,
-          hasThought: hasThoughtProcess
-        });
-        
-        return {
-          isClaudeAICopy: true,
-          userInitials,
-          messageCount: initialsGroups[userInitials] * 2, // Each user message + assistant response
-          hasThoughtProcess,
-          hasEditMarkers
-        };
-      }
-    }
-    
-    return {
-      isClaudeAICopy: false,
-      userInitials: null,
-      messageCount: 0,
-      hasThoughtProcess: false,
-      hasEditMarkers: false
-    };
-  }, []);
-
-  const handleTextChange = (value: string) => {
+  const handleTextChange = useCallback((value: string) => {
     setConversationText(value);
     analyzeText(value);
-    // ✅ RESET PREVIEW when text changes
-    if (parsePreview) {
-      setParsePreview(null);
-      setShowVerification(false);
-    }
-  };
+  }, [analyzeText]);
 
-  // ✅ SMART PARSING with /enhanced API - FALLBACK IMPLEMENTATION
-  const handleSmartParse = useCallback(async () => {
+  // ✅ PARSE & VERIFY - navigate to verification page
+  const handleParseAndVerify = useCallback(async () => {
     if (!conversationText.trim()) {
       toast.error('Please paste your conversation first');
       return;
     }
 
-    setIsParsingPreview(true);
-    console.log('🧠 SMART PARSING: Starting enhanced conversation analysis...');
-
-    try {
-      // ✅ TRY /enhanced API via proper API client - but fallback gracefully if not available
-      try {
-        // ✅ FIX: Use api client instead of direct fetch to get correct backend URL
-        const { api } = await import('@/lib/api');
-        
-        const response = await api.post('/analyze/enhanced', {
-          text: conversationText,
-          options: {
-            expectedPlatform: platform === 'auto' ? detectedPlatform : platform,
-            analysisDepth: 'standard'
-          },
-          metadata: {
-            sessionGoal: sessionGoal || undefined,
-            projectContext: projectContext || undefined
-          }
-        });
-
-        if (response.ok) {
-          const data = response;
-          
-          if (data.success && data.result) {
-            const preview: ParsePreview = {
-              messages: data.result.messages.map((msg: any, index: number) => ({
-                role: msg.role,
-                content: msg.content,
-                confidence: 85,
-                originalIndex: index
-              })),
-              confidence: data.result.confidence || 0.8,
-              method: data.result.method || 'haiku',
-              platform: data.result.platform || detectedPlatform || 'other',
-              needsVerification: data.metadata?.needsVerification || false,
-              suggestions: data.result.verification?.suggestions || []
-            };
-
-            setParsePreview(preview);
-            setShowVerification(true);
-            
-            toast.success(`Smart parsing completed! ${preview.messages.length} messages found.`);
-            return;
-          }
-        }
-      } catch (apiError) {
-        console.log('🔄 Enhanced API not available, using fallback parsing');
-      }
-      
-      // ✅ FALLBACK to local parsing if API fails
-      const fallbackPreview = createLocalPreview(conversationText);
-      setParsePreview(fallbackPreview);
-      setShowVerification(true);
-      
-      toast.success(`Parsed ${fallbackPreview.messages.length} messages with local method`);
-
-    } catch (error) {
-      console.error('❌ SMART PARSING ERROR:', error);
-      toast.error('Parsing failed. Please try direct analysis.');
-    } finally {
-      setIsParsingPreview(false);
-    }
-  }, [conversationText, platform, detectedPlatform, sessionGoal, projectContext]);
-
-  // ✅ ENHANCED LOCAL PARSING with Claude.ai Copy-Paste Intelligence
-  const createLocalPreview = (text: string): ParsePreview => {
-    console.log('📋 LOCAL PARSING: Starting enhanced parsing for text length:', text.length);
-    
-    const messages: ParsedMessage[] = [];
-    
-    try {
-      // ✅ FIRST: Try Claude.ai Copy-Paste Format
-      const claudeAIFormat = detectClaudeAICopyFormat(text);
-      
-      if (claudeAIFormat.isClaudeAICopy) {
-        console.log('🎯 USING CLAUDE.AI COPY PARSING:', claudeAIFormat);
-        return parseClaudeAICopyFormat(text, claudeAIFormat);
-      }
-      
-      // ✅ FALLBACK: Traditional parsing methods
-      let parts: string[] = [];
-      
-      if (detectedPlatform === 'claude') {
-        parts = text.split(/(?=(?:Human:|Assistant:))/i).filter(p => p.trim());
-        
-        parts.forEach((part, index) => {
-          const trimmed = part.trim();
-          if (!trimmed) return;
-          
-          let role: 'user' | 'assistant' = 'user';
-          let content = trimmed;
-          
-          if (trimmed.match(/^Human:/i)) {
-            role = 'user';
-            content = trimmed.replace(/^Human:\s*/i, '').trim();
-          } else if (trimmed.match(/^Assistant:/i)) {
-            role = 'assistant';
-            content = trimmed.replace(/^Assistant:\s*/i, '').trim();
-          }
-          
-          if (content) {
-            messages.push({
-              role,
-              content,
-              confidence: 80,
-              originalIndex: messages.length
-            });
-          }
-        });
-      } else {
-        // ✅ Generic alternating parsing - IMPROVED LOGIC
-        parts = text.split(/\n\s*\n/).filter(p => p.trim().length > 20); // ✅ Increased minimum length
-        
-        // ✅ LIMIT MESSAGE COUNT to prevent overflow
-        const maxMessages = Math.min(parts.length, 20); // Cap at 20 messages max
-        
-        for (let i = 0; i < maxMessages; i++) {
-          const part = parts[i];
-          if (part && part.trim()) {
-            messages.push({
-              role: i % 2 === 0 ? 'user' : 'assistant',
-              content: part.trim(),
-              confidence: 60,
-              originalIndex: messages.length
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.error('❌ Local parsing error:', error);
-    }
-
-    console.log('📋 LOCAL PARSING COMPLETE:', {
-      totalMessages: messages.length,
-      detectedPlatform,
-      confidence: messages.length > 0 ? 0.7 : 0.3
-    });
-
-    return {
-      messages,
-      confidence: messages.length > 0 ? 0.7 : 0.3,
-      method: 'pattern',
-      platform: detectedPlatform || 'other',
-      needsVerification: true,
-      suggestions: messages.length === 0 ? ['Consider adding role markers like "Human:" and "Assistant:"'] : []
-    };
-  };
-
-  // ✅ CLAUDE.AI COPY-PASTE FORMAT PARSER
-  const parseClaudeAICopyFormat = (text: string, formatInfo: any): ParsePreview => {
-    console.log('🎯 PARSING CLAUDE.AI COPY FORMAT...');
-    
-    const messages: ParsedMessage[] = [];
-    const userInitials = formatInfo.userInitials;
-    
-    try {
-      // ✅ SPLIT BY USER INITIALS
-      const boldPattern = `\\*\\*${userInitials}\\*\\*`;
-      const sections = text.split(new RegExp(boldPattern, 'g')).filter(s => s.trim());
-      
-      console.log(`🔍 Found ${sections.length} sections for initials: ${userInitials}`);
-      
-      sections.forEach((section, index) => {
-        const trimmedSection = section.trim();
-        if (!trimmedSection) return;
-        
-        // ✅ FIND USER MESSAGE (from start to "Edit")
-        const editIndex = trimmedSection.indexOf('Edit');
-        
-        if (editIndex > 0) {
-          // ✅ USER MESSAGE: Everything before "Edit"
-          const userMessage = trimmedSection.substring(0, editIndex).trim();
-          
-          if (userMessage) {
-            messages.push({
-              role: 'user',
-              content: userMessage,
-              confidence: 90,
-              originalIndex: messages.length
-            });
-          }
-          
-          // ✅ ASSISTANT MESSAGE: Everything after "Edit" (and optional "Thought process")
-          let assistantStart = editIndex + 4; // After "Edit"
-          const remainingText = trimmedSection.substring(assistantStart);
-          
-          // ✅ SKIP THOUGHT PROCESS if present
-          const thoughtMatch = remainingText.match(/^[\s\n]*Thought process \d+s[\s\n]*/);
-          if (thoughtMatch) {
-            assistantStart += thoughtMatch[0].length;
-          }
-          
-          const assistantMessage = trimmedSection.substring(assistantStart).trim();
-          
-          if (assistantMessage) {
-            messages.push({
-              role: 'assistant',
-              content: assistantMessage,
-              confidence: 90,
-              originalIndex: messages.length
-            });
-          }
-        } else if (index === 0) {
-          // ✅ FIRST SECTION might be assistant response without "Edit"
-          messages.push({
-            role: index % 2 === 0 ? 'user' : 'assistant',
-            content: trimmedSection,
-            confidence: 80,
-            originalIndex: messages.length
-          });
-        }
-      });
-      
-    } catch (error) {
-      console.error('❌ Claude.ai copy parsing error:', error);
-    }
-    
-    console.log('🎯 CLAUDE.AI PARSING COMPLETE:', {
-      userInitials,
-      totalMessages: messages.length,
-      confidence: 0.9
-    });
-    
-    return {
-      messages,
-      confidence: 0.9, // High confidence for Claude.ai copy format
-      method: 'haiku', // Mark as advanced method
-      platform: 'claude',
-      needsVerification: false, // High confidence, less verification needed
-      suggestions: messages.length === 0 ? ['Claude.ai copy format detected but no messages parsed'] : []
-    };
-  };
-
-  // ✅ MESSAGE EDITING
-  const handleEditMessage = useCallback((index: number, newContent: string) => {
-    if (!parsePreview) return;
-    
-    const updatedMessages = [...parsePreview.messages];
-    updatedMessages[index] = { ...updatedMessages[index], content: newContent };
-    
-    setParsePreview({
-      ...parsePreview,
-      messages: updatedMessages
-    });
-  }, [parsePreview]);
-
-  // ✅ ROLE SWITCHING
-  const handleSwitchRole = useCallback((index: number) => {
-    if (!parsePreview) return;
-    
-    const updatedMessages = [...parsePreview.messages];
-    updatedMessages[index] = { 
-      ...updatedMessages[index], 
-      role: updatedMessages[index].role === 'user' ? 'assistant' : 'user'
-    };
-    
-    setParsePreview({
-      ...parsePreview,
-      messages: updatedMessages
-    });
-  }, [parsePreview]);
-
-  // ✅ FINAL ANALYSIS - Perfect AnalysisPage Compatibility
-  const handleConfirmAndAnalyze = useCallback(() => {
-    if (!parsePreview) return;
-
-    // ✅ EXACT FORMAT expected by AnalysisPage.handleAnalyze
-    const analysisRequest = {
-      conversation: {
-        messages: parsePreview.messages.map(msg => ({
-          role: msg.role,
-          content: msg.content,
-          index: msg.originalIndex,
-          timestamp: new Date().toISOString()
-        })),
-        platform: parsePreview.platform
-      },
-      metadata: {
-        projectContext: projectContext || undefined,
-        sessionGoal: sessionGoal || undefined,
-        parsingMethod: parsePreview.method,
-        parsingConfidence: parsePreview.confidence
-      },
-      options: {
-        useClaudeAnalysis: localClaudeEnabled && enableClaudeAnalysis,
-        analysisDepth: defaultAnalysisDepth,
-        enablePatternDetection: enablePatternDetection,
-        generateSuggestions: true,
-        detectPatterns: enablePatternDetection
-      }
-    };
-
-    console.log('🚀 SMART INPUT: Calling onAnalyze with enhanced data');
-    
-    // ✅ CALL PARENT: Exact same interface as original ConversationInput
-    onAnalyze(analysisRequest);
-  }, [parsePreview, projectContext, sessionGoal, localClaudeEnabled, enableClaudeAnalysis, 
-      defaultAnalysisDepth, enablePatternDetection, onAnalyze]);
-
-  // ✅ DIRECT ANALYSIS (skip verification) - STABLE with ZERO dependencies
-  const handleDirectAnalyze = useCallback(() => {
-    const data = currentDataRef.current;
-    
-    if (!data.conversationText.trim()) return;
-
-    console.log('🚀 DIRECT ANALYZE: Using ref data:', {
-      textLength: data.conversationText.length,
-      platform: data.platform,
-      claudeEnabled: data.localClaudeEnabled && data.enableClaudeAnalysis
-    });
-
-    // ✅ SIMPLE PARSING for direct analysis
-    const messages = parseConversation(
-      data.conversationText, 
-      data.platform === 'auto' ? data.detectedPlatform || 'other' : data.platform
-    );
-    
-    if (messages.length < 2) {
-      toast.error('Please provide at least 2 messages (one exchange) to analyze.');
+    if (messageCount < 2) {
+      toast.error('Need at least 2 messages to verify');
       return;
     }
 
-    // ✅ EXACT FORMAT expected by AnalysisPage
+    console.log('🔍 NAVIGATING TO VERIFY PAGE...');
+    
+    // Enhanced parsing with AI if enabled
+    let parsedMessages = null;
+    let parsingMethod = 'local';
+    
+    if (enableAIAnalysis) {
+      setIsParsing(true);
+      toast.info('Using AI for smart parsing...');
+      
+      try {
+        const response = await api.analyzeEnhanced(conversationText, {
+          expectedPlatform: platform === 'auto' ? detectedPlatform || 'auto' : platform,
+          analysisDepth: 'standard'
+        });
+        
+        if (response.success && response.result?.messages?.length >= 2) {
+          parsedMessages = response.result.messages;
+          parsingMethod = 'ai_enhanced';
+          console.log('✅ AI PARSING SUCCESS:', parsedMessages.length, 'messages');
+          toast.success(`AI parsing completed! Found ${parsedMessages.length} messages.`);
+        } else {
+          throw new Error('AI parsing returned insufficient messages');
+        }
+      } catch (error) {
+        console.log('🔄 AI PARSING FAILED, will use local parsing on verify page');
+        toast.warning('AI parsing failed, will use local parsing...');
+      } finally {
+        setIsParsing(false);
+      }
+    }
+    
+    // Prepare data for verify page
+    const verifyData = {
+      conversationText,
+      platform: platform === 'auto' ? detectedPlatform || 'other' : platform,
+      sessionGoal,
+      hasRetryEditFormat,
+      messageCount,
+      enableAIAnalysis,
+      parsedMessages, // Pre-parsed messages if AI succeeded
+      parsingMethod,
+      timestamp: Date.now()
+    };
+    
+    // Save to sessionStorage and navigate
+    sessionStorage.setItem('metagipsy_verify_data', JSON.stringify(verifyData));
+    navigate('/analyze/verify');
+  }, [conversationText, platform, detectedPlatform, sessionGoal, hasRetryEditFormat, messageCount, enableAIAnalysis, navigate]);
+
+  // ✅ DIRECT ANALYZE - skip verification
+  const handleDirectAnalyze = useCallback(async () => {
+    if (!conversationText.trim()) {
+      toast.error('Please paste your conversation first');
+      return;
+    }
+
+    if (messageCount < 2) {
+      toast.error('Need at least 2 messages to analyze');
+      return;
+    }
+
+    console.log('🚀 DIRECT ANALYZE: Creating analysis request...');
+
+    // Simple local parsing for direct analysis
+    const messages = parseSimple(conversationText);
+    
+    if (messages.length === 0) {
+      toast.error('Could not parse any messages from the conversation');
+      return;
+    }
+    
     const analysisRequest = {
       conversation: {
         messages,
-        platform: data.platform === 'auto' ? data.detectedPlatform || 'other' : data.platform
-      },
-      options: {
-        useClaudeAnalysis: data.localClaudeEnabled && data.enableClaudeAnalysis,
-        analysisDepth: data.defaultAnalysisDepth,
-        enablePatternDetection: data.enablePatternDetection,
-        generateSuggestions: true,
-        detectPatterns: data.enablePatternDetection
+        platform: platform === 'auto' ? detectedPlatform || 'other' : platform
       },
       metadata: {
-        projectContext: data.projectContext || undefined,
-        sessionGoal: data.sessionGoal || undefined,
+        sessionGoal: sessionGoal || undefined,
+        hasRetryEditFormat,
         messageCount: messages.length,
-        detectedPlatform: data.detectedPlatform,
+        parsingMethod: 'direct_local',
         timestamp: new Date().toISOString()
+      },
+      options: {
+        useClaudeAnalysis: enableAIAnalysis,
+        analysisDepth: 'standard',
+        generateSuggestions: true,
+        detectPatterns: true
       }
     };
 
-    console.log('🚀 DIRECT ANALYZE: Analysis request prepared, calling onAnalyze');
-    
-    // ✅ CALL PARENT: Same interface as original
-    onAnalyze(analysisRequest);
-  }, []); // ZERO DEPENDENCIES = STABLE
+    console.log('🚀 CALLING onAnalyze with:', {
+      messageCount: messages.length,
+      platform: analysisRequest.conversation.platform,
+      useAIAnalysis: enableAIAnalysis
+    });
 
-  // ✅ ENHANCED SIMPLE PARSING with Claude.ai Copy Intelligence
-  const parseConversation = (text: string, detectedPlatform: Platform) => {
-    console.log('🔄 SIMPLE PARSING: Starting with platform:', detectedPlatform);
-    
+    onAnalyze(analysisRequest);
+  }, [conversationText, platform, detectedPlatform, sessionGoal, hasRetryEditFormat, messageCount, enableAIAnalysis, onAnalyze]);
+
+  // ✅ SIMPLE PARSING for direct analyze
+  const parseSimple = (text: string) => {
     const messages: any[] = [];
     
-    // ✅ FIRST: Try Claude.ai Copy-Paste Format
-    const claudeAIFormat = detectClaudeAICopyFormat(text);
-    
-    if (claudeAIFormat.isClaudeAICopy) {
-      console.log('🎯 SIMPLE PARSING: Using Claude.ai copy format');
-      const preview = parseClaudeAICopyFormat(text, claudeAIFormat);
-      return preview.messages.map((msg, index) => ({
-        role: msg.role,
-        content: msg.content,
-        index,
-        timestamp: new Date().toISOString()
-      }));
+    if (hasRetryEditFormat) {
+      return parseRetryEdit(text);
     }
     
-    // ✅ FALLBACK: Traditional parsing
+    // Standard parsing
     let parts: string[] = [];
     
     if (detectedPlatform === 'claude') {
       parts = text.split(/(?=(?:Human:|Assistant:))/i).filter(p => p.trim());
     } else if (detectedPlatform === 'chatgpt') {
-      parts = text.split(/(?=(?:User:|ChatGPT:|\*\*User\*\*|\*\*Assistant\*\*))/i).filter(p => p.trim());
+      parts = text.split(/(?=(?:User:|ChatGPT:))/i).filter(p => p.trim());
     } else {
-      parts = text.split(/(?=(?:Human:|Assistant:|User:|AI:|You:|Me:))/i).filter(p => p.trim());
-      
-      if (parts.length <= 1) {
-        parts = text.split(/\n\s*\n/).filter(p => p.trim().length > 10);
-      }
+      parts = text.split(/\n\s*\n/).filter(p => p.trim().length > 20);
     }
     
     parts.forEach((part, index) => {
       const trimmed = part.trim();
       if (!trimmed) return;
       
-      let role: 'user' | 'assistant' = 'user';
+      let role: 'user' | 'assistant' = index % 2 === 0 ? 'user' : 'assistant';
       let content = trimmed;
       
-      if (trimmed.match(/^(Human:|User:|\*\*User\*\*|You:)/i)) {
+      // Role detection
+      if (trimmed.match(/^(Human:|User:)/i)) {
         role = 'user';
-        content = trimmed.replace(/^(Human:|User:|\*\*User\*\*|You:)\s*/i, '').trim();
-      } else if (trimmed.match(/^(Assistant:|ChatGPT:|AI:|\*\*Assistant\*\*|Me:)/i)) {
+        content = trimmed.replace(/^(Human:|User:)\s*/i, '').trim();
+      } else if (trimmed.match(/^(Assistant:|ChatGPT:)/i)) {
         role = 'assistant';
-        content = trimmed.replace(/^(Assistant:|ChatGPT:|AI:|\*\*Assistant\*\*|Me:)\s*/i, '').trim();
-      } else {
-        role = index % 2 === 0 ? 'user' : 'assistant';
+        content = trimmed.replace(/^(Assistant:|ChatGPT:)\s*/i, '').trim();
       }
       
       if (content.trim()) {
@@ -612,395 +234,265 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
           role,
           content: content.trim(),
           index: messages.length,
-          timestamp: new Date(Date.now() - (parts.length - index) * 60000).toISOString()
+          timestamp: new Date().toISOString()
         });
       }
     });
     
-    console.log('🔄 SIMPLE PARSING COMPLETE:', messages.length, 'messages');
+    return messages;
+  };
+
+  // ✅ RETRY→EDIT PARSER
+  const parseRetryEdit = (text: string) => {
+    const messages: any[] = [];
+    const lines = text.split('\n');
+    
+    const retryLines: number[] = [];
+    const editLines: number[] = [];
+    
+    lines.forEach((line, index) => {
+      const trimmed = line.trim();
+      if (trimmed === 'Retry') retryLines.push(index);
+      if (trimmed === 'Edit') editLines.push(index);
+    });
+    
+    for (let i = 0; i < retryLines.length; i++) {
+      const retryLine = retryLines[i];
+      const nextEdit = editLines.find(edit => edit > retryLine);
+      
+      if (nextEdit) {
+        // User message
+        const userMessage = lines.slice(retryLine + 1, nextEdit).join('\n').trim();
+        
+        if (userMessage && userMessage.length > 10) {
+          messages.push({
+            role: 'user',
+            content: userMessage,
+            index: messages.length,
+            timestamp: new Date().toISOString()
+          });
+          
+          // Assistant response
+          const nextRetry = retryLines[i + 1] || lines.length;
+          const assistantLines = lines.slice(nextEdit + 1, nextRetry);
+          let assistantMessage = assistantLines.join('\n').trim();
+          
+          // Clean metadata
+          assistantMessage = assistantMessage
+            .replace(/^[A-Z][a-z].*?\.\s*\n\d+s\s*\n*/g, '')
+            .replace(/^Thought process \d+s\s*\n*/g, '')
+            .trim();
+          
+          if (assistantMessage && assistantMessage.length > 10) {
+            messages.push({
+              role: 'assistant',
+              content: assistantMessage,
+              index: messages.length,
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+      }
+    }
+    
     return messages;
   };
 
   const canAnalyze = conversationText.trim().length > 50 && messageCount >= 2;
-  const hasPreview = parsePreview && parsePreview.messages.length > 0;
-  const claudeAnalysisEnabled = localClaudeEnabled && enableClaudeAnalysis;
+  const canVerify = conversationText.trim().length > 20;
 
   return (
-    <div className="w-full space-y-6">
-      {/* ✅ MAIN INPUT SECTION */}
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Smart Conversation Analysis
-            {claudeAnalysisEnabled && (
-              <Badge variant="secondary" className="bg-purple-500/20 text-purple-400 border-purple-500/30">
-                <Sparkles className="h-3 w-3 mr-1" />
-                AI Enhanced
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* ✅ AI ANALYSIS TOGGLE */}
-          <motion.div 
-            className="p-3 bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-lg border border-purple-700/40"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-purple-400" />
-                <span className="font-medium text-purple-200">AI-Powered Analysis</span>
+    <div className="space-y-6">
+      {/* ✅ ELEGANT HEADER */}
+      <div className="text-center space-y-3">
+        <h2 className="text-2xl font-bold text-slate-100">Analyze Conversation</h2>
+        <p className="text-slate-400 max-w-2xl mx-auto">
+          Paste your conversation below for intelligent 5D analysis. Choose to verify parsing or analyze directly.
+        </p>
+      </div>
+
+      {/* ✅ AI ENHANCEMENT TOGGLE - Dark Theme Optimized */}
+      <Card className="bg-gradient-to-r from-purple-950/30 to-blue-950/30 border-purple-800/40">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Brain className="h-5 w-5 text-purple-400" />
+              <div>
+                <Label className="text-sm font-medium text-purple-300">
+                  Enhanced AI Analysis
+                </Label>
+                <p className="text-xs text-purple-400/80 mt-1">
+                  Use Claude AI for superior conversation parsing and 5D insights
+                </p>
               </div>
-              <Switch
-                checked={localClaudeEnabled}
-                onCheckedChange={setLocalClaudeEnabled}
-                disabled={isAnalyzing}
-                className="data-[state=checked]:bg-purple-500"
-              />
             </div>
-            <p className="text-sm text-purple-300 mt-1">
-              {claudeAnalysisEnabled 
-                ? "Using Claude AI for sophisticated 5-dimension scoring"
-                : "Using local analysis engine (faster but simpler)"
-              }
-            </p>
-          </motion.div>
-
-          {/* ✅ MAIN TEXTAREA */}
-          <div className="space-y-2">
-            <Textarea
-              placeholder="Paste your conversation here...
-
-Example formats:
-• Claude: Human: ... / Assistant: ...
-• ChatGPT: User: ... / ChatGPT: ...
-• Custom: Any clear dialogue format"
-              value={conversationText}
-              onChange={(e) => handleTextChange(e.target.value)}
-              className="min-h-[200px] resize-y font-mono text-sm"
-              disabled={isAnalyzing || isParsingPreview}
+            <Switch
+              checked={enableAIAnalysis}
+              onCheckedChange={setEnableAIAnalysis}
+              disabled={isAnalyzing || isParsing}
+              className="data-[state=checked]:bg-purple-600"
             />
-            
-            {/* ✅ STATUS INDICATORS */}
-            <div className="flex items-center justify-between text-sm text-muted-foreground flex-wrap gap-2">
-              <div className="flex items-center gap-4 flex-wrap">
-                {detectedPlatform && (
-                  <div className="flex items-center gap-1">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="capitalize">
-                      Detected: {detectedPlatform}
-                      {detectedPlatform === 'claude' && detectClaudeAICopyFormat(conversationText).isClaudeAICopy && (
-                        <span className="text-cyan-400 font-medium"> (Copy Format)</span>
-                      )}
-                    </span>
-                  </div>
-                )}
-                {messageCount > 0 && (
-                  <Badge variant="secondary">
-                    {messageCount} messages
-                  </Badge>
-                )}
-                {hasPreview && (
-                  <Badge variant="outline" className="text-green-400 border-green-500/30">
-                    ✅ Parsed & Ready
-                  </Badge>
-                )}
-                {claudeAnalysisEnabled && (
-                  <Badge variant="outline" className="text-purple-400 border-purple-500/30">
-                    AI Analysis Ready
-                  </Badge>
-                )}
-              </div>
-            </div>
           </div>
-
-          {/* ✅ PLATFORM AND SETTINGS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="platform">Platform</Label>
-              <Select value={platform} onValueChange={(value: Platform) => setPlatform(value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select platform" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">
-                    🔍 Auto-detect
-                    {detectedPlatform && ` (${detectedPlatform})`}
-                  </SelectItem>
-                  <SelectItem value="claude">🤖 Claude</SelectItem>
-                  <SelectItem value="chatgpt">💬 ChatGPT</SelectItem>
-                  <SelectItem value="other">📝 Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="goal">Session Goal (Optional)</Label>
-              <Input
-                id="goal"
-                placeholder="e.g., Debug React component, Plan project..."
-                value={sessionGoal}
-                onChange={(e) => setSessionGoal(e.target.value)}
-                disabled={isAnalyzing || isParsingPreview}
-              />
-            </div>
-          </div>
-
-          {/* ✅ ADVANCED SETTINGS */}
-          <div className="space-y-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-2"
-            >
-              <Settings className="h-4 w-4" />
-              Advanced Settings
-            </Button>
-            
-            {showAdvanced && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                className="space-y-3 border-l-2 border-muted pl-4"
-              >
-                <div className="space-y-2">
-                  <Label htmlFor="context">Project Context (Optional)</Label>
-                  <Textarea
-                    id="context"
-                    placeholder="Describe your project, goals, or context..."
-                    value={projectContext}
-                    onChange={(e) => setProjectContext(e.target.value)}
-                    className="min-h-[80px]"
-                    disabled={isAnalyzing || isParsingPreview}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="pattern-detection"
-                      checked={enablePatternDetection}
-                      disabled={isAnalyzing}
-                      className="data-[state=checked]:bg-blue-500"
-                    />
-                    <Label htmlFor="pattern-detection">Pattern Detection</Label>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="analysis-depth">Analysis Depth</Label>
-                    <Select value={defaultAnalysisDepth} disabled={isAnalyzing}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="quick">⚡ Quick</SelectItem>
-                        <SelectItem value="standard">🎯 Standard</SelectItem>
-                        <SelectItem value="deep">🔍 Deep</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </div>
-
-          {/* ✅ ACTION BUTTONS */}
-          <div className="flex flex-col gap-3">
-            {/* Smart Parse Button */}
-            {!hasPreview && (
-              <Button
-                onClick={handleSmartParse}
-                disabled={!canAnalyze || isAnalyzing || isParsingPreview}
-                variant="outline"
-                className="w-full"
-              >
-                {isParsingPreview ? (
-                  <div className="flex items-center gap-2">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    >
-                      <Wand2 className="h-4 w-4" />
-                    </motion.div>
-                    Smart Parsing...
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Eye className="h-4 w-4" />
-                    Parse & Preview Messages
-                  </div>
-                )}
-              </Button>
-            )}
-
-            {/* Main Analyze Button */}
-            <Button
-              onClick={hasPreview ? handleConfirmAndAnalyze : handleDirectAnalyze}
-              disabled={!canAnalyze || isAnalyzing}
-              className={cn(
-                "w-full h-12 text-base font-semibold transition-all duration-200",
-                canAnalyze && !isAnalyzing && claudeAnalysisEnabled && 
-                  "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg hover:shadow-xl",
-                canAnalyze && !isAnalyzing && !claudeAnalysisEnabled && 
-                  "bg-gradient-to-r from-gray-600 to-slate-600 hover:from-gray-700 hover:to-slate-700"
-              )}
-            >
-              {isAnalyzing ? (
-                <div className="flex items-center gap-2">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  >
-                    <Sparkles className="h-5 w-5" />
-                  </motion.div>
-                  {claudeAnalysisEnabled ? "AI Analyzing..." : "Analyzing..."}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  {claudeAnalysisEnabled ? <Sparkles className="h-5 w-5" /> : <Upload className="h-5 w-5" />}
-                  {hasPreview ? 'Confirm & Analyze' : claudeAnalysisEnabled ? 'Analyze with AI' : 'Analyze Conversation'}
-                </div>
-              )}
-            </Button>
-          </div>
-
-          {/* ✅ VALIDATION MESSAGES */}
-          {!canAnalyze && conversationText.length > 0 && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {messageCount < 2 
-                  ? "Need at least 2 messages (one conversation exchange)" 
-                  : "Conversation too short (minimum 50 characters)"
-                }
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {canAnalyze && claudeAnalysisEnabled && !hasPreview && (
-            <div className="text-center text-sm text-purple-400">
-              ✨ Ready for AI-powered 5D chess analysis with Claude
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {/* ✅ VERIFICATION SECTION */}
-      <AnimatePresence>
-        {showVerification && parsePreview && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-          >
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Eye className="h-5 w-5" />
-                    Parsed Messages Preview
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={parsePreview.confidence > 0.8 ? 'default' : 'secondary'}>
-                      {parsePreview.method} • {Math.round(parsePreview.confidence * 100)}% confidence
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* ✅ PARSING INFO */}
-                <div className="p-4 bg-muted/50 dark:bg-muted/80 rounded-lg border border-border">
-                  <div className="grid grid-cols-2 gap-4 text-sm text-foreground">
-                    <div>
-                      <span className="font-medium">Platform:</span> {parsePreview.platform}
-                      {parsePreview.platform === 'claude' && parsePreview.method === 'haiku' && (
-                        <span className="text-cyan-400 ml-1">(Copy Format)</span>
-                      )}
-                    </div>
-                    <div>
-                      <span className="font-medium">Messages:</span> {parsePreview.messages.length}
-                    </div>
-                    {parsePreview.method === 'haiku' && parsePreview.platform === 'claude' && (
-                      <>
-                        <div className="col-span-2">
-                          <span className="font-medium text-cyan-400">✨ Claude.ai copy-paste format detected!</span>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Smart parsing used initials and Edit markers for precise message boundaries.
-                          </p>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
+      {/* ✅ MAIN INPUT - Dark Theme Optimized */}
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="conversation" className="text-base font-medium text-slate-200">
+            Conversation Text
+          </Label>
+          <Textarea
+            id="conversation"
+            value={conversationText}
+            onChange={(e) => handleTextChange(e.target.value)}
+            placeholder="Paste your conversation here...
 
-                {/* ✅ SUGGESTIONS */}
-                {parsePreview.suggestions && parsePreview.suggestions.length > 0 && (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      <div className="space-y-1">
-                        <p className="font-medium">Suggestions:</p>
-                        {parsePreview.suggestions.map((suggestion, i) => (
-                          <p key={i} className="text-sm">• {suggestion}</p>
-                        ))}
-                      </div>
-                    </AlertDescription>
-                  </Alert>
-                )}
+Supported formats:
+• Claude.ai: Copy multiple messages (Retry/Edit format auto-detected)
+• ChatGPT: Copy with User:/ChatGPT: labels
+• Other: Any clear dialogue format
 
-                {/* ✅ MESSAGES PREVIEW */}
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {parsePreview.messages.map((message, index) => (
-                    <div
-                      key={index}
-                      className={cn(
-                        'p-3 rounded-lg border',
-                        message.role === 'user' 
-                          ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-700'
-                          : 'bg-green-50 dark:bg-green-950/50 border-green-200 dark:border-green-700'
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {message.role === 'user' ? (
-                            <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                          ) : (
-                            <Bot className="h-4 w-4 text-green-600 dark:text-green-400" />
-                          )}
-                          <span className="font-medium capitalize text-foreground">{message.role}</span>
-                          <Badge variant="outline" size="sm">
-                            #{index + 1}
-                          </Badge>
-                          {message.confidence < 70 && (
-                            <Badge variant="destructive" size="sm">
-                              Low confidence
-                            </Badge>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleSwitchRole(index)}
-                        >
-                          <RefreshCw className="h-3 w-3" />
-                        </Button>
-                      </div>
-                      <Textarea
-                        value={message.content}
-                        onChange={(e) => handleEditMessage(index, e.target.value)}
-                        className="min-h-[60px] text-sm bg-background border-input text-foreground"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+AI parsing will extract precise message boundaries automatically."
+            className="min-h-80 mt-2 bg-slate-900/50 border-slate-700 text-slate-100 placeholder:text-slate-500 resize-none text-base leading-relaxed focus:border-purple-500 focus:ring-purple-500/20"
+            disabled={isAnalyzing || isParsing}
+          />
+        </div>
+
+        {/* ✅ STATUS INDICATORS - Dark Theme */}
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-4 flex-wrap">
+            {detectedPlatform && (
+              <div className="flex items-center gap-1">
+                <CheckCircle className="h-4 w-4 text-green-400" />
+                <span className="text-slate-300 capitalize">
+                  Detected: {detectedPlatform}
+                  {hasRetryEditFormat && (
+                    <span className="text-cyan-400 font-medium"> (Retry→Edit)</span>
+                  )}
+                </span>
+              </div>
+            )}
+            {messageCount > 0 && (
+              <Badge variant="secondary" className="bg-slate-800 text-slate-300 border-slate-600">
+                ~{messageCount} messages
+              </Badge>
+            )}
+            {enableAIAnalysis && (
+              <Badge variant="outline" className="text-purple-400 border-purple-500/50 bg-purple-950/20">
+                <Sparkles className="h-3 w-3 mr-1" />
+                AI Ready
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {/* ✅ ESSENTIAL FIELDS ONLY - согласно roadmap */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="platform" className="text-slate-200">Platform</Label>
+            <Select value={platform} onValueChange={(value: Platform) => setPlatform(value)}>
+              <SelectTrigger className="bg-slate-900/50 border-slate-700 text-slate-100">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-900 border-slate-700">
+                <SelectItem value="auto">
+                  🔍 Auto-detect {detectedPlatform && `(${detectedPlatform})`}
+                </SelectItem>
+                <SelectItem value="claude">🤖 Claude</SelectItem>
+                <SelectItem value="chatgpt">💬 ChatGPT</SelectItem>
+                <SelectItem value="other">📝 Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div>
+            <Label htmlFor="goal" className="text-slate-200">Session Goal (Optional)</Label>
+            <Input
+              id="goal"
+              placeholder="e.g., Debug code, Plan project..."
+              value={sessionGoal}
+              onChange={(e) => setSessionGoal(e.target.value)}
+              disabled={isAnalyzing || isParsing}
+              className="bg-slate-900/50 border-slate-700 text-slate-100 placeholder:text-slate-500"
+            />
+          </div>
+        </div>
+
+        {/* ✅ MINIMAL DISTRACTION - согласно документации */}
+        <div className="text-center">
+          <p className="text-xs text-slate-500">
+            📝 <strong>Advanced settings</strong> like project context and analysis depth will be available on the verification page
+          </p>
+        </div>
+      </div>
+
+      {/* ✅ ACTION BUTTONS - Elegant Dark Theme */}
+      <div className="flex gap-3">
+        <Button
+          onClick={handleParseAndVerify}
+          disabled={!canVerify || isAnalyzing || isParsing}
+          variant="outline"
+          className="flex-1 border-blue-600/50 text-blue-400 hover:bg-blue-950/30 hover:border-blue-500 bg-blue-950/10"
+        >
+          {isParsing ? (
+            <>
+              <Brain className="h-4 w-4 mr-2 animate-spin" />
+              AI Parsing...
+            </>
+          ) : (
+            <>
+              <Eye className="h-4 w-4 mr-2" />
+              Parse & Preview
+            </>
+          )}
+        </Button>
+        
+        <Button
+          onClick={handleDirectAnalyze}
+          disabled={!canAnalyze || isAnalyzing || isParsing}
+          className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+        >
+          {isAnalyzing ? (
+            <>
+              <Zap className="h-4 w-4 mr-2 animate-spin" />
+              Analyzing...
+            </>
+          ) : (
+            <>
+              <Upload className="h-4 w-4 mr-2" />
+              Direct Analyze
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* ✅ HELPFUL HINTS - Dark Theme */}
+      <div className="space-y-2">
+        {conversationText.trim() && hasRetryEditFormat && (
+          <div className="text-center p-3 bg-cyan-950/20 border border-cyan-800/30 rounded-lg">
+            <p className="text-sm text-cyan-300">
+              🎯 <strong>Claude.ai format detected!</strong> Retry→Edit parsing will extract precise message boundaries.
+            </p>
+          </div>
         )}
-      </AnimatePresence>
+        
+        {conversationText.trim() && !canAnalyze && canVerify && (
+          <div className="text-center p-3 bg-orange-950/20 border border-orange-800/30 rounded-lg">
+            <p className="text-sm text-orange-300">
+              💡 You can verify parsing with current text, but need more content for full analysis
+            </p>
+          </div>
+        )}
+        
+        {!conversationText.trim() && (
+          <div className="text-center p-3 bg-slate-800/30 border border-slate-700/50 rounded-lg">
+            <p className="text-sm text-slate-400">
+              ✨ Paste your conversation above to get started with 5D chess analysis
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
