@@ -129,108 +129,6 @@ export class SessionService {
     }
   }
 
-  // ✅ NEW: Save individual messages and scores to database
-  async saveSessionMessages(
-    sessionId: string,
-    userId: string,
-    messagesWithScores: Array<{
-      role: 'user' | 'assistant';
-      content: string;
-      index: number;
-      timestamp?: string;
-      scores?: Array<{
-        overall: number;
-        dimensions: {
-          strategic: number;
-          tactical: number;
-          cognitive: number;
-          innovation: number;
-          context: number; // ✅ NEW: 5th dimension
-        };
-        classification: string;
-        explanation?: string;
-        betterMove?: string;
-        confidence?: number;
-      }>;
-    }>
-  ): Promise<void> {
-    try {
-      console.log('💾 SAVING SESSION MESSAGES:', {
-        sessionId,
-        userId,
-        messageCount: messagesWithScores.length
-      });
-
-      // ✅ TRANSACTION: Ensure all messages saved or none
-      await prisma.$transaction(async (tx) => {
-        // Delete existing messages for this session (in case of re-analysis)
-        await tx.message.deleteMany({
-          where: { sessionId }
-        });
-
-        // Save all messages with their scores
-        for (const message of messagesWithScores) {
-          const savedMessage = await tx.message.create({
-            data: {
-              sessionId,
-              role: message.role,
-              content: message.content,
-              index: message.index,
-              timestamp: message.timestamp ? new Date(message.timestamp) : new Date()
-            }
-          });
-
-          // Save score for this message (if exists)
-          if (message.scores && message.scores.length > 0) {
-            const score = message.scores[0]; // Take first score
-            
-            await tx.score.create({
-              data: {
-                messageId: savedMessage.id,
-                overall: score.overall,
-                strategic: score.dimensions.strategic,
-                tactical: score.dimensions.tactical,
-                cognitive: score.dimensions.cognitive,
-                innovation: score.dimensions.innovation,
-                context: score.dimensions.context, // ✅ NEW: 5th dimension
-                classification: score.classification,
-                explanation: score.explanation,
-                betterMove: score.betterMove,
-                confidence: score.confidence || 0.9
-              }
-            });
-          }
-        }
-      });
-
-      console.log('✅ SESSION MESSAGES SAVED:', {
-        sessionId,
-        savedCount: messagesWithScores.length
-      });
-
-      logger.info('Session messages saved successfully', {
-        sessionId,
-        userId,
-        messageCount: messagesWithScores.length
-      });
-      
-    } catch (error) {
-      console.error('❌ FAILED TO SAVE SESSION MESSAGES:', {
-        error: error instanceof Error ? error.message : String(error),
-        sessionId,
-        userId,
-        messageCount: messagesWithScores.length
-      });
-      
-      logger.error('Failed to save session messages', { 
-        error, 
-        sessionId, 
-        userId 
-      });
-      throw new Error('Failed to save session messages');
-    }
-  }
-
   async updateSession(
     userId: string,
     sessionId: string, 
@@ -335,7 +233,6 @@ export class SessionService {
     }
   }
 
-  // ✅ ENHANCED: Get session with proper messages and scores loading
   async getSession(sessionId: string, userId: string) {
     try {
       const session = await prisma.session.findFirst({
@@ -381,28 +278,11 @@ export class SessionService {
         },
         patterns: metadata.patterns || [],
         insights: metadata.insights || [],
-        // ✅ CRITICAL FIX: Transform messages to include scores array for frontend compatibility
+        // Transform messages to include scores array for compatibility
         messages: session.messages.map(msg => ({
           ...msg,
-          role: msg.role as 'user' | 'assistant',
-          timestamp: msg.timestamp.toISOString(),
-          scores: msg.score ? [{
-            overall: msg.score.overall,
-            dimensions: {
-              strategic: msg.score.strategic,
-              tactical: msg.score.tactical,
-              cognitive: msg.score.cognitive,
-              innovation: msg.score.innovation,
-              context: msg.score.context // ✅ NEW: 5th dimension in scores
-            },
-            classification: msg.score.classification,
-            explanation: msg.score.explanation,
-            betterMove: msg.score.betterMove,
-            confidence: msg.score.confidence
-          }] : []
-        })),
-        // ✅ NEW: Success flag for frontend compatibility
-        success: true
+          scores: msg.score ? [msg.score] : []
+        }))
       };
     } catch (error) {
       logger.error('Failed to get session', { error, sessionId, userId });
