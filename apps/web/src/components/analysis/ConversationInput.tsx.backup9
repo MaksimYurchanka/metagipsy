@@ -91,7 +91,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     enablePatternDetection
   };
 
-  // ✅ ENHANCED PLATFORM DETECTION with Claude.ai Copy-Paste Intelligence
+  // ✅ PLATFORM DETECTION - Enhanced
   const analyzeText = useCallback((text: string) => {
     if (!text.trim()) {
       setDetectedPlatform(null);
@@ -100,91 +100,24 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     }
     
     let detected: Platform = 'other';
-    let estimatedMessages = 0;
+    const content = text.toLowerCase();
     
-    // ✅ DETECT CLAUDE.AI COPY-PASTE FORMAT
-    const claudeAICopyPattern = detectClaudeAICopyFormat(text);
-    
-    if (claudeAICopyPattern.isClaudeAICopy) {
+    if (content.includes('human:') && content.includes('assistant:')) {
       detected = 'claude';
-      estimatedMessages = claudeAICopyPattern.messageCount;
-      console.log('🎯 CLAUDE.AI COPY DETECTED:', {
-        userInitials: claudeAICopyPattern.userInitials,
-        messageCount: claudeAICopyPattern.messageCount,
-        hasThoughtProcess: claudeAICopyPattern.hasThoughtProcess
-      });
-    } else {
-      // ✅ FALLBACK: Traditional detection
-      const content = text.toLowerCase();
-      
-      if (content.includes('human:') && content.includes('assistant:')) {
-        detected = 'claude';
-      } else if (content.includes('user:') && (content.includes('chatgpt:') || content.includes('openai'))) {
-        detected = 'chatgpt';
-      } else if (content.match(/^(you|me|user|assistant|ai):/mi)) {
-        detected = 'other';
-      }
-      
-      // ✅ TRADITIONAL MESSAGE COUNTING
-      const messageMarkers = text.match(/(Human:|Assistant:|User:|ChatGPT:|AI:|\*\*User\*\*|\*\*Assistant\*\*)/gmi);
-      const alternatingBlocks = text.split(/\n\s*\n/).filter(block => block.trim().length > 10);
-      
-      estimatedMessages = messageMarkers ? messageMarkers.length : Math.min(alternatingBlocks.length, Math.ceil(text.length / 200));
+    } else if (content.includes('user:') && (content.includes('chatgpt:') || content.includes('openai'))) {
+      detected = 'chatgpt';
+    } else if (content.match(/^(you|me|user|assistant|ai):/mi)) {
+      detected = 'other';
     }
     
     setDetectedPlatform(detected);
+    
+    // ✅ SMART MESSAGE COUNTING
+    const messageMarkers = text.match(/(Human:|Assistant:|User:|ChatGPT:|AI:|\*\*User\*\*|\*\*Assistant\*\*)/gmi);
+    const alternatingBlocks = text.split(/\n\s*\n/).filter(block => block.trim().length > 10);
+    
+    const estimatedMessages = messageMarkers ? messageMarkers.length : Math.min(alternatingBlocks.length, Math.ceil(text.length / 200));
     setMessageCount(estimatedMessages);
-  }, []);
-
-  // ✅ CLAUDE.AI COPY-PASTE FORMAT DETECTION
-  const detectClaudeAICopyFormat = useCallback((text: string) => {
-    // ✅ LOOK FOR BOLD INITIALS PATTERN: **INITIALS** at start of lines
-    const boldInitialsPattern = /^\*\*([A-Z0-9]{1,4})\*\*/gm;
-    const initialsMatches = [...text.matchAll(boldInitialsPattern)];
-    
-    // ✅ LOOK FOR EDIT MARKERS
-    const hasEditMarkers = /Edit\s*$/m.test(text) || text.includes('Edit');
-    
-    // ✅ LOOK FOR THOUGHT PROCESS MARKERS
-    const hasThoughtProcess = /Thought process \d+s/.test(text);
-    
-    if (initialsMatches.length >= 2 && hasEditMarkers) {
-      // ✅ FIND REPEATING INITIALS
-      const initialsGroups = {};
-      initialsMatches.forEach(match => {
-        const initials = match[1];
-        initialsGroups[initials] = (initialsGroups[initials] || 0) + 1;
-      });
-      
-      // ✅ FIND MOST COMMON INITIALS (user's initials)
-      const userInitials = Object.entries(initialsGroups)
-        .sort(([,a], [,b]) => b - a)[0]?.[0];
-      
-      if (userInitials && initialsGroups[userInitials] >= 2) {
-        console.log('🎯 CLAUDE.AI COPY FORMAT DETECTED:', {
-          userInitials,
-          occurrences: initialsGroups[userInitials],
-          hasEdit: hasEditMarkers,
-          hasThought: hasThoughtProcess
-        });
-        
-        return {
-          isClaudeAICopy: true,
-          userInitials,
-          messageCount: initialsGroups[userInitials] * 2, // Each user message + assistant response
-          hasThoughtProcess,
-          hasEditMarkers
-        };
-      }
-    }
-    
-    return {
-      isClaudeAICopy: false,
-      userInitials: null,
-      messageCount: 0,
-      hasThoughtProcess: false,
-      hasEditMarkers: false
-    };
   }, []);
 
   const handleTextChange = (value: string) => {
@@ -269,22 +202,13 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     }
   }, [conversationText, platform, detectedPlatform, sessionGoal, projectContext]);
 
-  // ✅ ENHANCED LOCAL PARSING with Claude.ai Copy-Paste Intelligence
+  // ✅ LOCAL PARSING FALLBACK
   const createLocalPreview = (text: string): ParsePreview => {
-    console.log('📋 LOCAL PARSING: Starting enhanced parsing for text length:', text.length);
+    console.log('📋 LOCAL PARSING: Starting fallback parsing for text length:', text.length);
     
     const messages: ParsedMessage[] = [];
     
     try {
-      // ✅ FIRST: Try Claude.ai Copy-Paste Format
-      const claudeAIFormat = detectClaudeAICopyFormat(text);
-      
-      if (claudeAIFormat.isClaudeAICopy) {
-        console.log('🎯 USING CLAUDE.AI COPY PARSING:', claudeAIFormat);
-        return parseClaudeAICopyFormat(text, claudeAIFormat);
-      }
-      
-      // ✅ FALLBACK: Traditional parsing methods
       let parts: string[] = [];
       
       if (detectedPlatform === 'claude') {
@@ -318,7 +242,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
         // ✅ Generic alternating parsing - IMPROVED LOGIC
         parts = text.split(/\n\s*\n/).filter(p => p.trim().length > 20); // ✅ Increased minimum length
         
-        // ✅ LIMIT MESSAGE COUNT to prevent overflow
+        // ✅ LIMIT MESSAGE COUNT to prevent 41 message issue
         const maxMessages = Math.min(parts.length, 20); // Cap at 20 messages max
         
         for (let i = 0; i < maxMessages; i++) {
@@ -350,91 +274,6 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       platform: detectedPlatform || 'other',
       needsVerification: true,
       suggestions: messages.length === 0 ? ['Consider adding role markers like "Human:" and "Assistant:"'] : []
-    };
-  };
-
-  // ✅ CLAUDE.AI COPY-PASTE FORMAT PARSER
-  const parseClaudeAICopyFormat = (text: string, formatInfo: any): ParsePreview => {
-    console.log('🎯 PARSING CLAUDE.AI COPY FORMAT...');
-    
-    const messages: ParsedMessage[] = [];
-    const userInitials = formatInfo.userInitials;
-    
-    try {
-      // ✅ SPLIT BY USER INITIALS
-      const boldPattern = `\\*\\*${userInitials}\\*\\*`;
-      const sections = text.split(new RegExp(boldPattern, 'g')).filter(s => s.trim());
-      
-      console.log(`🔍 Found ${sections.length} sections for initials: ${userInitials}`);
-      
-      sections.forEach((section, index) => {
-        const trimmedSection = section.trim();
-        if (!trimmedSection) return;
-        
-        // ✅ FIND USER MESSAGE (from start to "Edit")
-        const editIndex = trimmedSection.indexOf('Edit');
-        
-        if (editIndex > 0) {
-          // ✅ USER MESSAGE: Everything before "Edit"
-          const userMessage = trimmedSection.substring(0, editIndex).trim();
-          
-          if (userMessage) {
-            messages.push({
-              role: 'user',
-              content: userMessage,
-              confidence: 90,
-              originalIndex: messages.length
-            });
-          }
-          
-          // ✅ ASSISTANT MESSAGE: Everything after "Edit" (and optional "Thought process")
-          let assistantStart = editIndex + 4; // After "Edit"
-          const remainingText = trimmedSection.substring(assistantStart);
-          
-          // ✅ SKIP THOUGHT PROCESS if present
-          const thoughtMatch = remainingText.match(/^[\s\n]*Thought process \d+s[\s\n]*/);
-          if (thoughtMatch) {
-            assistantStart += thoughtMatch[0].length;
-          }
-          
-          const assistantMessage = trimmedSection.substring(assistantStart).trim();
-          
-          if (assistantMessage) {
-            messages.push({
-              role: 'assistant',
-              content: assistantMessage,
-              confidence: 90,
-              originalIndex: messages.length
-            });
-          }
-        } else if (index === 0) {
-          // ✅ FIRST SECTION might be assistant response without "Edit"
-          messages.push({
-            role: index % 2 === 0 ? 'user' : 'assistant',
-            content: trimmedSection,
-            confidence: 80,
-            originalIndex: messages.length
-          });
-        }
-      });
-      
-    } catch (error) {
-      console.error('❌ Claude.ai copy parsing error:', error);
-    }
-    
-    console.log('🎯 CLAUDE.AI PARSING COMPLETE:', {
-      userInitials,
-      totalMessages: messages.length,
-      confidence: 0.9
-    });
-    
-    return {
-      messages,
-      confidence: 0.9, // High confidence for Claude.ai copy format
-      method: 'haiku', // Mark as advanced method
-      platform: 'claude',
-      needsVerification: false, // High confidence, less verification needed
-      suggestions: messages.length === 0 ? ['Claude.ai copy format detected but no messages parsed'] : []
     };
   };
 
@@ -555,27 +394,9 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     onAnalyze(analysisRequest);
   }, []); // ZERO DEPENDENCIES = STABLE
 
-  // ✅ ENHANCED SIMPLE PARSING with Claude.ai Copy Intelligence
+  // ✅ SIMPLE PARSING FUNCTION
   const parseConversation = (text: string, detectedPlatform: Platform) => {
-    console.log('🔄 SIMPLE PARSING: Starting with platform:', detectedPlatform);
-    
     const messages: any[] = [];
-    
-    // ✅ FIRST: Try Claude.ai Copy-Paste Format
-    const claudeAIFormat = detectClaudeAICopyFormat(text);
-    
-    if (claudeAIFormat.isClaudeAICopy) {
-      console.log('🎯 SIMPLE PARSING: Using Claude.ai copy format');
-      const preview = parseClaudeAICopyFormat(text, claudeAIFormat);
-      return preview.messages.map((msg, index) => ({
-        role: msg.role,
-        content: msg.content,
-        index,
-        timestamp: new Date().toISOString()
-      }));
-    }
-    
-    // ✅ FALLBACK: Traditional parsing
     let parts: string[] = [];
     
     if (detectedPlatform === 'claude') {
@@ -617,7 +438,6 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       }
     });
     
-    console.log('🔄 SIMPLE PARSING COMPLETE:', messages.length, 'messages');
     return messages;
   };
 
@@ -689,12 +509,7 @@ Example formats:
                 {detectedPlatform && (
                   <div className="flex items-center gap-1">
                     <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="capitalize">
-                      Detected: {detectedPlatform}
-                      {detectedPlatform === 'claude' && detectClaudeAICopyFormat(conversationText).isClaudeAICopy && (
-                        <span className="text-cyan-400 font-medium"> (Copy Format)</span>
-                      )}
-                    </span>
+                    <span className="capitalize">Detected: {detectedPlatform}</span>
                   </div>
                 )}
                 {messageCount > 0 && (
@@ -916,23 +731,10 @@ Example formats:
                   <div className="grid grid-cols-2 gap-4 text-sm text-foreground">
                     <div>
                       <span className="font-medium">Platform:</span> {parsePreview.platform}
-                      {parsePreview.platform === 'claude' && parsePreview.method === 'haiku' && (
-                        <span className="text-cyan-400 ml-1">(Copy Format)</span>
-                      )}
                     </div>
                     <div>
                       <span className="font-medium">Messages:</span> {parsePreview.messages.length}
                     </div>
-                    {parsePreview.method === 'haiku' && parsePreview.platform === 'claude' && (
-                      <>
-                        <div className="col-span-2">
-                          <span className="font-medium text-cyan-400">✨ Claude.ai copy-paste format detected!</span>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Smart parsing used initials and Edit markers for precise message boundaries.
-                          </p>
-                        </div>
-                      </>
-                    )}
                   </div>
                 </div>
 
