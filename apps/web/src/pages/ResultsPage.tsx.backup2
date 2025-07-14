@@ -65,8 +65,7 @@ const ResultsPage: React.FC = () => {
         if (!response || !response.session) {
           throw new Error('Session not found or failed to load');
         }
-        
-        console.log('🔍 FULL API RESPONSE STRUCTURE:', JSON.stringify(response, null, 2));
+
         const sessionData = response.session;
         console.log('✅ SESSION DATA LOADED:', {
           sessionId,
