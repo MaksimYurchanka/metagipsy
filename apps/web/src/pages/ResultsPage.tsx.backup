@@ -62,7 +62,7 @@ const ResultsPage: React.FC = () => {
         // Load session data from API
         const response = await api.getSession(sessionId);
         
-        if (!response || !response.session) {
+        if (!response || !response.success) {
           throw new Error('Session not found or failed to load');
         }
 
