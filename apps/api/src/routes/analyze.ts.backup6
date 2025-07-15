@@ -1,4 +1,4 @@
-// ✅ COMPLETE ENHANCED 5D ANALYZE ROUTES with Fixed Enhanced Parsing Support
+// ✅ ENHANCED 5D ANALYZE ROUTES with Enhanced Parsing Support - TYPE COMPATIBLE
 // apps/api/src/routes/analyze.ts
 
 import { Router } from 'express';
@@ -18,7 +18,7 @@ import {
   ChessScore,
   SessionSummary,
   Platform
-} from '../types';
+} from '../types'; // ✅ UNIFIED: Import from ../types
 
 const router = Router();
 const scoringEngine = new LocalScoringEngine(); // ✅ NOW supports 5D scoring
@@ -226,7 +226,7 @@ router.post('/',
   }
 );
 
-// ✅ FIXED: Enhanced parsing endpoint with ROBUST ERROR HANDLING & CORRECTED LOGIC
+// ✅ NEW: Enhanced parsing endpoint with AI support - TYPE COMPATIBLE
 router.post('/enhanced',
   optionalAuth,
   rateLimiter.createLimiter('enhanced_analyze', 5, 60), // 5 requests per minute (more intensive)
@@ -234,40 +234,11 @@ router.post('/enhanced',
     const startTime = Date.now();
     
     try {
-      // ✅ ROBUST: Request validation with detailed logging
-      logger.info('🚀 ENHANCED ENDPOINT REQUEST:', {
-        hasBody: !!req.body,
-        bodyKeys: req.body ? Object.keys(req.body) : [],
-        contentType: req.get('content-type'),
-        userId: req.user?.id
-      });
-
-      if (!req.body) {
-        logger.error('❌ ENHANCED ENDPOINT: No request body');
-        return res.status(400).json({
-          error: 'Request body is required',
-          expected: 'JSON with { text, options?, metadata? }'
-        });
-      }
-
       const { text, options = {}, metadata = {} }: EnhancedParseRequest = req.body;
 
-      // ✅ ROBUST: Text validation
-      if (!text || typeof text !== 'string') {
-        logger.error('❌ ENHANCED ENDPOINT: Invalid text parameter', {
-          hasText: !!text,
-          textType: typeof text
-        });
+      if (!text || typeof text !== 'string' || text.trim().length < 10) {
         return res.status(400).json({
-          error: 'Invalid text parameter',
-          received: { hasText: !!text, textType: typeof text },
-          required: 'text: string (minimum 10 characters)'
-        });
-      }
-
-      if (text.trim().length < 10) {
-        return res.status(400).json({
-          error: 'Text too short. Minimum 10 characters required.'
+          error: 'Invalid text input. Minimum 10 characters required.'
         });
       }
 
@@ -277,106 +248,31 @@ router.post('/enhanced',
         });
       }
 
-      logger.info('✅ ENHANCED ENDPOINT: Starting enhanced parsing...', {
+      logger.info('Enhanced parsing request', {
         userId: req.user?.id,
         textLength: text.length,
         forceHaiku: options.forceHaiku,
-        expectedPlatform: options.expectedPlatform
+        hasUserSignature: !!options.userSignature
       });
 
-      // ✅ FIXED: Correct forcePattern logic for Haiku-first approach
-      let parseResult: ParseResult;
+      // ✅ TYPE COMPATIBLE: Use forcePattern (opposite of forceHaiku for Haiku-first approach)
+      const parseResult: ParseResult = await parseConversationEnhanced(text, {
+        forcePattern: options.forceHaiku === true ? false : undefined, // Haiku-first unless explicitly forced to pattern
+        userSignature: options.userSignature,
+        expectedPlatform: options.expectedPlatform,
+        analysisDepth: options.analysisDepth,
+        userId: req.user?.id,
+        requestId: `enhanced_${Date.now()}`
+      });
+
+      // ✅ FOUNDATION: Prepare for verification workflow
+      const needsVerification = parseResult.confidence < 0.8 || options.forceHaiku;
       
-      try {
-        parseResult = await parseConversationEnhanced(text, {
-          // ✅ CORRECTED LOGIC: 
-          // - If forceHaiku === false, then forcePattern = true (skip Haiku, use pattern)
-          // - If forceHaiku === true OR undefined, then forcePattern = false (try Haiku first)
-          forcePattern: options.forceHaiku === false, // Simple and clear logic
-          userSignature: options.userSignature,
-          expectedPlatform: options.expectedPlatform,
-          analysisDepth: options.analysisDepth || 'standard',
-          userId: req.user?.id,
-          requestId: `enhanced_${Date.now()}`,
-          enableContextScoring: true
-        });
-
-        logger.info('✅ ENHANCED PARSING SUCCESS:', {
-          messageCount: parseResult.messages.length,
-          confidence: parseResult.confidence,
-          method: parseResult.method,
-          platform: parseResult.platform
-        });
-
-      } catch (parseError) {
-        logger.error('❌ ENHANCED PARSING FAILED:', {
-          error: parseError instanceof Error ? parseError.message : 'Unknown parse error',
-          stack: parseError instanceof Error ? parseError.stack : undefined,
-          textLength: text.length,
-          userId: req.user?.id
-        });
-
-        // ✅ ROBUST FALLBACK: Use basic pattern parsing
-        logger.info('🔄 FALLING BACK TO PATTERN PARSING...');
-        
-        try {
-          // Use the basic parseConversation function as fallback
-          const fallbackResult = parseConversation(text, {
-            expectedPlatform: options.expectedPlatform
-          });
-          
-          parseResult = {
-            messages: Array.isArray(fallbackResult) ? fallbackResult : fallbackResult.messages || [],
-            platform: (Array.isArray(fallbackResult) ? 'other' : fallbackResult.platform) || 'other',
-            confidence: 0.3, // Lower confidence for fallback
-            method: 'pattern',
-            metadata: {
-              originalLength: text.length,
-              processingTime: Date.now() - startTime,
-              fallbackUsed: true,
-              parseError: parseError instanceof Error ? parseError.message : 'Unknown error'
-            }
-          };
-          
-          logger.info('✅ FALLBACK PARSING SUCCESS:', {
-            messageCount: parseResult.messages.length
-          });
-          
-        } catch (fallbackError) {
-          logger.error('❌ FALLBACK PARSING ALSO FAILED:', fallbackError);
-          
-          // ✅ LAST RESORT: Create minimal result
-          parseResult = {
-            messages: [{
-              role: 'user',
-              content: text.substring(0, 1000) + (text.length > 1000 ? '...' : ''),
-              index: 0,
-              timestamp: new Date().toISOString()
-            }],
-            platform: 'other',
-            confidence: 0.1,
-            method: 'pattern',
-            metadata: {
-              originalLength: text.length,
-              processingTime: Date.now() - startTime,
-              lastResortUsed: true,
-              errors: [
-                parseError instanceof Error ? parseError.message : 'Parse error',
-                fallbackError instanceof Error ? fallbackError.message : 'Fallback error'
-              ]
-            }
-          };
-        }
-      }
-
-      // ✅ FOUNDATION: Prepare verification workflow
-      const needsVerification = parseResult.confidence < 0.8 || options.forceHaiku === false;
-      
-      if (needsVerification && !parseResult.verification) {
+      if (needsVerification) {
         parseResult.verification = {
           needed: true,
           suggestions: generateParsingSuggestions(parseResult),
-          ambiguousRanges: []
+          ambiguousRanges: [] // Will be enhanced with Haiku integration
         };
       }
 
@@ -387,40 +283,17 @@ router.post('/enhanced',
           processingTime: Date.now() - startTime,
           needsVerification,
           canProceedToAnalysis: parseResult.messages.length >= 2,
-          estimatedAnalysisTime: parseResult.messages.length * 0.5,
-          debugInfo: {
-            requestValidated: true,
-            parseMethod: parseResult.method,
-            fallbackUsed: parseResult.metadata?.fallbackUsed || false,
-            haikuAttempted: options.forceHaiku !== false
-          }
+          estimatedAnalysisTime: parseResult.messages.length * 0.5 // seconds
         }
       };
-
-      logger.info('✅ ENHANCED ENDPOINT SUCCESS:', {
-        responseSuccess: true,
-        messageCount: parseResult.messages.length,
-        confidence: parseResult.confidence,
-        method: parseResult.method,
-        processingTime: response.metadata.processingTime
-      });
 
       res.json(response);
 
     } catch (error) {
-      logger.error('❌ ENHANCED ENDPOINT CRITICAL ERROR:', { 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        userId: req.user?.id
-      });
-      
+      logger.error('Enhanced parsing error', { error, userId: req.user?.id });
       res.status(500).json({
         error: 'Enhanced parsing failed. Please try again.',
-        canFallback: true,
-        debugInfo: {
-          timestamp: new Date().toISOString(),
-          errorType: error instanceof Error ? error.constructor.name : 'Unknown'
-        }
+        canFallback: true
       });
     }
   }
