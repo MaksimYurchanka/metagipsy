@@ -68,13 +68,11 @@ const ResultsPage: React.FC = () => {
         
         console.log('🔍 FULL API RESPONSE STRUCTURE:', JSON.stringify(response, null, 2));
         const sessionData = response.session;
-        
         console.log('✅ SESSION DATA LOADED:', {
           sessionId,
           messageCount: sessionData.messageCount,
           overallScore: sessionData.overallScore,
-          platform: sessionData.platform,
-          messagesInResponse: response.messages?.length || 0
+          platform: sessionData.platform
         });
 
         // Set session results for display
@@ -85,69 +83,31 @@ const ResultsPage: React.FC = () => {
           messageCount: sessionData.messageCount,
           overallScore: sessionData.overallScore,
           createdAt: sessionData.createdAt,
-          metadata: response.metadata || {}
+          metadata: sessionData.metadata || {}
         });
 
-        // ✅ CRITICAL FIX: POPULATE STORE from correct API response structure
+        // ✅ POPULATE STORE for AnalysisResults component
         clearSession(); // Clear previous data
         
-        // ✅ FIXED: Extract messages from response.messages (not metadata.messages)
-        if (response.messages && Array.isArray(response.messages)) {
-          console.log('📝 SETTING MESSAGES:', response.messages.length);
-          setMessages(response.messages);
-          
-          // ✅ FIXED: Extract scores from messages.scores arrays
-          const scoresArray = response.messages.map((message: any) => {
-            if (message.scores && Array.isArray(message.scores) && message.scores.length > 0) {
-              return message.scores[0]; // Take first score
-            }
-            // Fallback score if none exists
-            return {
-              overall: 50,
-              dimensions: {
-                strategic: 50,
-                tactical: 50,
-                cognitive: 50,
-                innovation: 50,
-                context: 50
-              },
-              classification: 'average',
-              chessNotation: '=',
-              confidence: 0.5,
-              explanation: 'No analysis available'
-            };
-          });
-          
-          console.log('🎯 SETTING SCORES:', scoresArray.length);
-          setScores(scoresArray);
-        } else {
-          console.warn('⚠️ NO MESSAGES in response:', response);
+        if (sessionData.metadata?.messages) {
+          setMessages(sessionData.metadata.messages);
         }
         
-        // ✅ Create session summary from session data
-        if (sessionData.dimensionAverages) {
-          const sessionSummary = {
-            sessionId,
-            messageCount: sessionData.messageCount,
-            overallScore: sessionData.overallScore,
-            trend: 'stable' as const,
-            bestScore: sessionData.overallScore,
-            worstScore: sessionData.overallScore,
-            dimensionAverages: sessionData.dimensionAverages,
-            patterns: [],
-            insights: []
-          };
-          
-          console.log('📊 SETTING SESSION SUMMARY:', sessionSummary);
-          setSessionSummary(sessionSummary);
+        if (sessionData.metadata?.scores) {
+          setScores(sessionData.metadata.scores);
+        }
+        
+        if (sessionData.metadata?.sessionSummary) {
+          setSessionSummary(sessionData.metadata.sessionSummary);
         }
         
         // Set session metadata
         setSessionMetadata({
           sessionId,
           platform: sessionData.platform,
-          projectContext: response.metadata?.projectContext,
-          sessionGoal: response.metadata?.sessionGoal
+          projectContext: sessionData.metadata?.projectContext,
+          sessionGoal: sessionData.metadata?.sessionGoal,
+          timestamp: sessionData.createdAt
         });
 
         console.log('✅ STORE POPULATED with session data');
