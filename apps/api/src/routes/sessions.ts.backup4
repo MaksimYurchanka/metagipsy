@@ -11,7 +11,7 @@ const sessionService = new SessionService();
 router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user!.id;
-    const userEmail = req.user!.email;
+    const userEmail = req.user!.email; // ✅ PRESERVED: Email for user upsert
     const {
       title,
       platform,
@@ -21,7 +21,7 @@ router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) =>
       tacticalAvg,
       cognitiveAvg,
       innovationAvg,
-      contextAvg, // ✅ 5D: Context dimension support
+      contextAvg, // ✅ NEW: 5th dimension support
       metadata
     } = req.body;
 
@@ -40,7 +40,7 @@ router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) =>
       sessionGoal: metadata?.sessionGoal,
       timestamp: metadata?.timestamp || new Date().toISOString(),
       
-      // ✅ 5D: Enhanced performance fields
+      // ✅ ENHANCED: 5D performance fields
       messageCount,
       overallScore,
       dimensionAverages: {
@@ -48,11 +48,11 @@ router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) =>
         tactical: tacticalAvg || 0,
         cognitive: cognitiveAvg || 0,
         innovation: innovationAvg || 0,
-        context: contextAvg || 0 // ✅ 5D: Context dimension
+        context: contextAvg || 0 // ✅ CRITICAL FIX: 5th dimension added
       },
       trend: metadata?.trend || 'stable',
       
-      // ✅ Enhanced: Parsing metadata support
+      // ✅ ENHANCED: Parsing metadata support
       parsingMethod: metadata?.parsingMethod,
       parsingConfidence: metadata?.parsingConfidence,
       parsingCost: metadata?.parsingCost,
@@ -63,6 +63,7 @@ router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) =>
       insights: metadata?.insights || []
     };
 
+    // ✅ ENHANCED: Pass userEmail for user upsert
     const sessionId = await sessionService.createSession(userId, userEmail, sessionMetadata);
 
     // Step 2: Update session with 5D analysis results
@@ -78,7 +79,7 @@ router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) =>
         tactical: tacticalAvg || 0,
         cognitive: cognitiveAvg || 0,
         innovation: innovationAvg || 0,
-        context: contextAvg || 0 // ✅ 5D: Context dimension
+        context: contextAvg || 0 // ✅ CRITICAL FIX: 5th dimension added
       },
       patterns: metadata?.patterns || [],
       insights: metadata?.insights || []
@@ -97,7 +98,7 @@ router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) =>
       userEmail,
       messageCount, 
       overallScore,
-      contextAvg, // ✅ 5D: Log context dimension
+      contextAvg, // ✅ NEW: Log context dimension
       platform 
     });
 
@@ -122,13 +123,12 @@ router.post('/save', authenticateUser, async (req: AuthenticatedRequest, res) =>
   }
 });
 
-// ✅ GET / - Get user sessions with pagination
+// ✅ PRESERVED: GET / - Get user sessions with pagination
 router.get('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
     const offset = parseInt(req.query.offset as string) || 0;
 
-    // ✅ VERIFIED: Correct parameter order for getUserSessions overload
     const result = await sessionService.getUserSessions(
       req.user!.id,
       limit,
@@ -144,28 +144,14 @@ router.get('/', authenticateUser, async (req: AuthenticatedRequest, res) => {
   }
 });
 
-// ✅ CRITICAL FIX: GET /:sessionId - Get specific session with CORRECT parameter order
+// ✅ PRESERVED: GET /:sessionId - Get specific session
 router.get('/:sessionId', authenticateUser, async (req: AuthenticatedRequest, res) => {
   try {
     const { sessionId } = req.params;
 
-    // ✅ CRITICAL FIX: Correct parameter order (userId first, sessionId second)
-    const session = await sessionService.getSession(req.user!.id, sessionId);
+    const session = await sessionService.getSession(sessionId, req.user!.id);
 
-    // ✅ Handle SessionService response format
-    if (!session.success) {
-      logger.warn('Session not found or access denied', { 
-        sessionId, 
-        userId: req.user!.id,
-        error: session.error 
-      });
-      
-      return res.status(404).json({
-        error: session.error || 'Session not found'
-      });
-    }
-
-    res.json(session);
+    res.json({ session });
   } catch (error) {
     logger.error('Failed to get session', { 
       error, 
@@ -173,25 +159,24 @@ router.get('/:sessionId', authenticateUser, async (req: AuthenticatedRequest, re
       userId: req.user!.id 
     });
     
+    if (error instanceof Error && error.message === 'Session not found') {
+      return res.status(404).json({
+        error: 'Session not found'
+      });
+    }
+
     res.status(500).json({
       error: 'Failed to get session'
     });
   }
 });
 
-// ✅ DELETE /:sessionId - Delete session with CORRECT parameter order
+// ✅ PRESERVED: DELETE /:sessionId - Delete session
 router.delete('/:sessionId', authenticateUser, async (req: AuthenticatedRequest, res) => {
   try {
     const { sessionId } = req.params;
 
-    // ✅ VERIFIED: deleteSession uses correct parameter order (userId, sessionId)
-    const success = await sessionService.deleteSession(req.user!.id, sessionId);
-
-    if (!success) {
-      return res.status(404).json({
-        error: 'Session not found or could not be deleted'
-      });
-    }
+    await sessionService.deleteSession(sessionId, req.user!.id);
 
     res.json({
       message: 'Session deleted successfully'
@@ -203,13 +188,19 @@ router.delete('/:sessionId', authenticateUser, async (req: AuthenticatedRequest,
       userId: req.user!.id 
     });
     
+    if (error instanceof Error && error.message === 'Session not found') {
+      return res.status(404).json({
+        error: 'Session not found'
+      });
+    }
+
     res.status(500).json({
       error: 'Failed to delete session'
     });
   }
 });
 
-// ✅ PUT /:sessionId - Update session title with CORRECT parameter order
+// ✅ PRESERVED: PUT /:sessionId - Update session title
 router.put('/:sessionId', authenticateUser, async (req: AuthenticatedRequest, res) => {
   try {
     const { sessionId } = req.params;
@@ -221,7 +212,6 @@ router.put('/:sessionId', authenticateUser, async (req: AuthenticatedRequest, re
       });
     }
 
-    // ✅ VERIFIED: updateSessionTitle uses correct parameter order (sessionId, userId, title)
     await sessionService.updateSessionTitle(sessionId, req.user!.id, title);
 
     res.json({
@@ -246,12 +236,11 @@ router.put('/:sessionId', authenticateUser, async (req: AuthenticatedRequest, re
   }
 });
 
-// ✅ GET /analytics/overview - Get session analytics with 5D support
+// ✅ PRESERVED: GET /analytics/overview - Get session analytics
 router.get('/analytics/overview', authenticateUser, async (req: AuthenticatedRequest, res) => {
   try {
     const days = Math.min(parseInt(req.query.days as string) || 30, 365);
 
-    // ✅ VERIFIED: getSessionAnalytics uses correct parameter order (userId, days)
     const analytics = await sessionService.getSessionAnalytics(req.user!.id, days);
 
     res.json({ analytics });
@@ -263,24 +252,15 @@ router.get('/analytics/overview', authenticateUser, async (req: AuthenticatedReq
   }
 });
 
-// ✅ GET /:sessionId/export - Export session data with 5D support
+// ✅ ENHANCED: GET /:sessionId/export - Export session data with 5D support
 router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequest, res) => {
   try {
     const { sessionId } = req.params;
     const format = req.query.format as string || 'json';
 
-    // ✅ CRITICAL FIX: Correct parameter order for getSession
-    const sessionResponse = await sessionService.getSession(req.user!.id, sessionId);
+    const session = await sessionService.getSession(sessionId, req.user!.id);
 
-    if (!sessionResponse.success) {
-      return res.status(404).json({
-        error: 'Session not found'
-      });
-    }
-
-    const session = sessionResponse.session;
-    const messages = sessionResponse.messages || [];
-    const metadata = sessionResponse.metadata || {};
+    const metadata = session.metadata as any || {};
 
     // Transform data for export with 5D support
     const exportData = {
@@ -288,40 +268,39 @@ router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequ
         id: session.id,
         title: session.title,
         platform: session.platform,
-        projectContext: metadata.projectContext,
-        sessionGoal: metadata.sessionGoal,
+        projectContext: session.projectContext,
+        sessionGoal: session.sessionGoal,
         createdAt: session.createdAt,
-        completedAt: session.updatedAt,
+        completedAt: session.completedAt,
         overallScore: session.overallScore,
         messageCount: session.messageCount,
         trend: session.trend,
-        // ✅ 5D: Include all dimension averages including context
-        dimensionAverages: session.dimensionAverages
+        dimensionAverages: session.dimensionAverages // ✅ NOW includes context dimension
       },
-      messages: messages.map((msg: any) => ({
+      messages: metadata.messages?.map((msg: any) => ({
         index: msg.index,
         role: msg.role,
         content: msg.content,
         timestamp: msg.timestamp,
         scores: msg.scores?.map((score: any) => ({
           overall: score.overall,
-          dimensions: score.dimensions, // ✅ 5D: All dimensions including context
+          dimensions: score.dimensions, // ✅ NOW includes 5D scoring
           classification: score.classification,
           explanation: score.explanation,
           betterMove: score.betterMove
         })) || []
-      })),
+      })) || [],
       summary: {
-        dimensionAverages: session.dimensionAverages, // ✅ 5D: Context included
-        patterns: metadata.patterns || [],
-        insights: metadata.insights || []
+        dimensionAverages: session.dimensionAverages, // ✅ NOW includes context
+        patterns: session.patterns,
+        insights: session.insights
       }
     };
 
     switch (format) {
       case 'csv':
-        // ✅ 5D: Convert to CSV format with context dimension
-        const csvData = messages.map((msg: any) => {
+        // Convert to CSV format with 5D support
+        const csvData = (metadata.messages || []).map((msg: any) => {
           const score = msg.scores?.[0];
           return {
             message_index: msg.index,
@@ -332,7 +311,7 @@ router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequ
             tactical_score: score?.dimensions?.tactical || 0,
             cognitive_score: score?.dimensions?.cognitive || 0,
             innovation_score: score?.dimensions?.innovation || 0,
-            context_score: score?.dimensions?.context || 0, // ✅ 5D: Context in CSV
+            context_score: score?.dimensions?.context || 0, // ✅ NEW: 5th dimension in CSV
             classification: score?.classification || '',
             explanation: score?.explanation?.replace(/"/g, '""') || ''
           };
@@ -349,7 +328,7 @@ router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequ
         return res.send(csvContent);
 
       case 'markdown':
-        // ✅ 5D: Convert to Markdown format with context dimension
+        // Convert to Markdown format with 5D support
         let markdown = `# Session Analysis Report\n\n`;
         markdown += `**Session ID:** ${session.id}\n`;
         markdown += `**Title:** ${session.title || 'Untitled'}\n`;
@@ -357,22 +336,12 @@ router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequ
         markdown += `**Created:** ${session.createdAt}\n`;
         markdown += `**Overall Score:** ${session.overallScore || 0}/100\n\n`;
 
-        if (metadata.projectContext) {
-          markdown += `**Project Context:** ${metadata.projectContext}\n\n`;
-        }
-
-        // ✅ 5D: Include all dimension averages in markdown
-        if (session.dimensionAverages) {
-          markdown += `## 5D Dimension Averages\n\n`;
-          markdown += `- Strategic: ${session.dimensionAverages.strategic || 0}\n`;
-          markdown += `- Tactical: ${session.dimensionAverages.tactical || 0}\n`;
-          markdown += `- Cognitive: ${session.dimensionAverages.cognitive || 0}\n`;
-          markdown += `- Innovation: ${session.dimensionAverages.innovation || 0}\n`;
-          markdown += `- Context: ${session.dimensionAverages.context || 0}\n\n`;
+        if (session.projectContext) {
+          markdown += `**Project Context:** ${session.projectContext}\n\n`;
         }
 
         markdown += `## Messages\n\n`;
-        messages.forEach((msg: any) => {
+        (metadata.messages || []).forEach((msg: any) => {
           const score = msg.scores?.[0];
           markdown += `### Message ${msg.index + 1} (${msg.role})\n\n`;
           markdown += `${msg.content}\n\n`;
@@ -382,7 +351,7 @@ router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequ
             markdown += `- Tactical: ${score.dimensions?.tactical || 0}\n`;
             markdown += `- Cognitive: ${score.dimensions?.cognitive || 0}\n`;
             markdown += `- Innovation: ${score.dimensions?.innovation || 0}\n`;
-            markdown += `- Context: ${score.dimensions?.context || 0}\n\n`; // ✅ 5D: Context in markdown
+            markdown += `- Context: ${score.dimensions?.context || 0}\n\n`; // ✅ NEW: 5th dimension in Markdown
             if (score.explanation) {
               markdown += `**Analysis:** ${score.explanation}\n\n`;
             }
@@ -405,6 +374,12 @@ router.get('/:sessionId/export', authenticateUser, async (req: AuthenticatedRequ
       userId: req.user!.id 
     });
     
+    if (error instanceof Error && error.message === 'Session not found') {
+      return res.status(404).json({
+        error: 'Session not found'
+      });
+    }
+
     res.status(500).json({
       error: 'Failed to export session'
     });

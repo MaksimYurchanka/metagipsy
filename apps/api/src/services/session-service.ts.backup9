@@ -25,7 +25,7 @@ export class SessionService {
           userEmail,
           platform: metadata.platform || 'other',
           title: `Analysis ${new Date().toLocaleDateString()}`,
-          status: 'ACTIVE', // ✅ FIXED: Uppercase enum value
+          status: 'active',
           messageCount: 0,
           overallScore: 0,
           // ✅ ENHANCED: Initialize 5D averages with Context dimension
@@ -83,14 +83,14 @@ export class SessionService {
           cognitiveAvg: summary.dimensionAverages.cognitive,
           innovationAvg: summary.dimensionAverages.innovation,
           contextAvg: summary.dimensionAverages.context, // ✅ NEW: 5th dimension
-          status: 'COMPLETED', // ✅ FIXED: Uppercase enum value
+          status: 'completed',
           completedAt: new Date(),
           metadata: {
             ...summary,
             updatedAt: new Date().toISOString(),
-            // ✅ FIXED: JSON serialize complex objects for Prisma
-            patterns: JSON.stringify(summary.patterns || []),
-            insights: JSON.stringify(summary.insights || []),
+            // ✅ ENHANCED: Store patterns and insights in metadata
+            patterns: summary.patterns || [],
+            insights: summary.insights || [],
             trend: summary.trend
           }
         }
@@ -103,232 +103,6 @@ export class SessionService {
       console.error('❌ SESSION UPDATE FAILED:', error);
       logger.error('Failed to update session', { error, sessionId, userId });
       throw new Error('Failed to update session');
-    }
-  }
-
-  /**
-   * ✅ NEW: Update session title only (lightweight operation)
-   */
-  async updateSessionTitle(sessionId: string, userId: string, title: string): Promise<void> {
-    try {
-      console.log('📝 UPDATING SESSION TITLE:', { sessionId, userId, title });
-      
-      await prisma.session.update({
-        where: {
-          id: sessionId,
-          userId // Ensure user owns this session
-        },
-        data: {
-          title: title.trim(),
-          updatedAt: new Date()
-        }
-      });
-
-      console.log('✅ SESSION TITLE UPDATED:', sessionId);
-      logger.info('Session title updated successfully', { sessionId, userId, title });
-      
-    } catch (error) {
-      console.error('❌ SESSION TITLE UPDATE FAILED:', error);
-      logger.error('Failed to update session title', { error, sessionId, userId });
-      
-      if (error instanceof Error && error.message.includes('Record to update not found')) {
-        throw new Error('Session not found');
-      }
-      
-      throw new Error('Failed to update session title');
-    }
-  }
-
-  /**
-   * ✅ NEW: Get session analytics for Dashboard
-   */
-  async getSessionAnalytics(userId: string, days: number = 30): Promise<{
-    totalSessions: number;
-    totalMessages: number;
-    averageScore: number;
-    improvementRate: number;
-    bestScore: number;
-    worstScore: number;
-    dimensionAverages: {
-      strategic: number;
-      tactical: number;
-      cognitive: number;
-      innovation: number;
-      context: number; // ✅ NEW: 5th dimension analytics
-    };
-    trendDistribution: Record<string, number>;
-    platformDistribution: Record<string, number>;
-    scoreHistory: Array<{
-      date: string;
-      score: number;
-    }>;
-    recentSessions: Array<{
-      id: string;
-      title: string;
-      overallScore: number;
-      createdAt: string;
-      platform: string;
-    }>;
-  }> {
-    try {
-      console.log('📊 GETTING SESSION ANALYTICS:', { userId, days });
-      
-      // Calculate date range
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
-      
-      // Get sessions within date range
-      const sessions = await prisma.session.findMany({
-        where: {
-          userId,
-          createdAt: {
-            gte: startDate
-          },
-          status: 'COMPLETED'
-        },
-        select: {
-          id: true,
-          title: true,
-          platform: true,
-          messageCount: true,
-          overallScore: true,
-          strategicAvg: true,
-          tacticalAvg: true,
-          cognitiveAvg: true,
-          innovationAvg: true,
-          contextAvg: true, // ✅ NEW: 5th dimension
-          trend: true,
-          createdAt: true,
-          completedAt: true
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
-
-      // Calculate basic metrics
-      const totalSessions = sessions.length;
-      const totalMessages = sessions.reduce((sum, s) => sum + s.messageCount, 0);
-      const averageScore = totalSessions > 0 
-        ? Math.round(sessions.reduce((sum, s) => sum + s.overallScore, 0) / totalSessions)
-        : 0;
-
-      // Calculate best/worst scores
-      const scores = sessions.map(s => s.overallScore);
-      const bestScore = scores.length > 0 ? Math.max(...scores) : 0;
-      const worstScore = scores.length > 0 ? Math.min(...scores) : 0;
-
-      // Calculate 5D dimension averages
-      const dimensionAverages = {
-        strategic: totalSessions > 0 
-          ? Math.round(sessions.reduce((sum, s) => sum + s.strategicAvg, 0) / totalSessions)
-          : 0,
-        tactical: totalSessions > 0 
-          ? Math.round(sessions.reduce((sum, s) => sum + s.tacticalAvg, 0) / totalSessions)
-          : 0,
-        cognitive: totalSessions > 0 
-          ? Math.round(sessions.reduce((sum, s) => sum + s.cognitiveAvg, 0) / totalSessions)
-          : 0,
-        innovation: totalSessions > 0 
-          ? Math.round(sessions.reduce((sum, s) => sum + s.innovationAvg, 0) / totalSessions)
-          : 0,
-        context: totalSessions > 0 
-          ? Math.round(sessions.reduce((sum, s) => sum + s.contextAvg, 0) / totalSessions)
-          : 0 // ✅ NEW: 5th dimension average
-      };
-
-      // Calculate improvement rate (compare first half vs second half)
-      let improvementRate = 0;
-      if (totalSessions >= 4) {
-        const midPoint = Math.floor(totalSessions / 2);
-        const firstHalf = sessions.slice(midPoint);
-        const secondHalf = sessions.slice(0, midPoint);
-        
-        const firstHalfAvg = firstHalf.reduce((sum, s) => sum + s.overallScore, 0) / firstHalf.length;
-        const secondHalfAvg = secondHalf.reduce((sum, s) => sum + s.overallScore, 0) / secondHalf.length;
-        
-        improvementRate = Math.round(((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100);
-      }
-
-      // Calculate trend distribution
-      const trendDistribution = sessions.reduce((acc, session) => {
-        const trend = session.trend || 'stable';
-        acc[trend] = (acc[trend] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      // Calculate platform distribution
-      const platformDistribution = sessions.reduce((acc, session) => {
-        const platform = session.platform.toLowerCase();
-        acc[platform] = (acc[platform] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      // Generate score history (daily averages)
-      const scoreHistory: Array<{ date: string; score: number }> = [];
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
-        
-        const dayStart = new Date(date);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(date);
-        dayEnd.setHours(23, 59, 59, 999);
-        
-        const daySessions = sessions.filter(s => {
-          const sessionDate = new Date(s.createdAt);
-          return sessionDate >= dayStart && sessionDate <= dayEnd;
-        });
-        
-        const dayAverage = daySessions.length > 0
-          ? Math.round(daySessions.reduce((sum, s) => sum + s.overallScore, 0) / daySessions.length)
-          : 0;
-          
-        scoreHistory.push({
-          date: dateStr,
-          score: dayAverage
-        });
-      }
-
-      // Get recent sessions for quick access
-      const recentSessions = sessions.slice(0, 5).map(session => ({
-        id: session.id,
-        title: session.title || `${session.platform} Analysis`,
-        overallScore: Math.round(session.overallScore),
-        createdAt: session.createdAt.toISOString(),
-        platform: session.platform.toLowerCase()
-      }));
-
-      const analytics = {
-        totalSessions,
-        totalMessages,
-        averageScore,
-        improvementRate,
-        bestScore: Math.round(bestScore),
-        worstScore: Math.round(worstScore),
-        dimensionAverages,
-        trendDistribution,
-        platformDistribution,
-        scoreHistory,
-        recentSessions
-      };
-
-      console.log('✅ SESSION ANALYTICS CALCULATED:', {
-        userId,
-        totalSessions,
-        averageScore,
-        improvementRate
-      });
-
-      logger.info('Session analytics calculated successfully', { userId, analytics });
-      
-      return analytics;
-      
-    } catch (error) {
-      console.error('❌ SESSION ANALYTICS FAILED:', error);
-      logger.error('Failed to get session analytics', { error, userId });
-      throw new Error('Failed to get session analytics');
     }
   }
 
@@ -471,7 +245,7 @@ export class SessionService {
         include: {
           messages: {
             include: {
-              score: true // ✅ FIXED: singular 'score' not 'scores'
+              scores: true
             },
             orderBy: {
               index: 'asc'
@@ -492,21 +266,21 @@ export class SessionService {
         content: msg.content,
         index: msg.index,
         timestamp: msg.timestamp.toISOString(),
-        scores: msg.score ? [{
-          overall: msg.score.overall,
+        scores: msg.scores.map(score => ({
+          overall: score.overall,
           dimensions: {
-            strategic: msg.score.strategic,
-            tactical: msg.score.tactical,
-            cognitive: msg.score.cognitive,
-            innovation: msg.score.innovation,
-            context: msg.score.context // ✅ NEW: 5th dimension from database
+            strategic: score.strategic,
+            tactical: score.tactical,
+            cognitive: score.cognitive,
+            innovation: score.innovation,
+            context: score.context // ✅ NEW: 5th dimension from database
           },
-          classification: msg.score.classification,
-          chessNotation: msg.score.chessNotation,
-          confidence: msg.score.confidence,
-          explanation: msg.score.explanation || undefined,
-          betterMove: msg.score.betterMove || undefined
-        }] : []
+          classification: score.classification,
+          chessNotation: score.chessNotation,
+          confidence: score.confidence,
+          explanation: score.explanation || undefined,
+          betterMove: score.betterMove || undefined
+        }))
       }));
 
       console.log('✅ SESSION RETRIEVED:', {
@@ -547,41 +321,18 @@ export class SessionService {
   }
 
   /**
-   * ✅ NEW: Backward compatibility overload for sessions.ts
+   * ✅ Get user sessions with pagination and filtering
    */
   async getUserSessions(
     userId: string,
-    limitOrOptions?: number | {
+    options: {
       limit?: number;
       offset?: number;
       platform?: Platform;
       sortBy?: 'createdAt' | 'updatedAt' | 'overallScore';
       sortOrder?: 'asc' | 'desc';
-    },
-    offset?: number
+    } = {}
   ): Promise<any> {
-    // ✅ COMPATIBILITY: Handle both old (userId, limit, offset) and new (userId, options) formats
-    let options: {
-      limit?: number;
-      offset?: number;
-      platform?: Platform;
-      sortBy?: 'createdAt' | 'updatedAt' | 'overallScore';
-      sortOrder?: 'asc' | 'desc';
-    };
-
-    if (typeof limitOrOptions === 'number') {
-      // Old format: getUserSessions(userId, limit, offset)
-      options = {
-        limit: limitOrOptions,
-        offset: offset || 0,
-        sortBy: 'updatedAt',
-        sortOrder: 'desc'
-      };
-    } else {
-      // New format: getUserSessions(userId, options)
-      options = limitOrOptions || {};
-    }
-
     try {
       const {
         limit = 20,
@@ -611,10 +362,8 @@ export class SessionService {
           innovationAvg: true,
           contextAvg: true, // ✅ NEW: 5th dimension
           status: true,
-          trend: true,
           createdAt: true,
-          updatedAt: true,
-          metadata: true
+          updatedAt: true
         },
         orderBy: {
           [sortBy]: sortOrder
@@ -626,34 +375,18 @@ export class SessionService {
       const totalCount = await prisma.session.count({ where });
 
       // Transform to frontend format
-      const transformedSessions = sessions.map(session => {
-        // ✅ SAFE: Parse metadata JSON if it exists
-        let parsedMetadata = session.metadata || {};
-        try {
-          if (typeof session.metadata === 'string') {
-            parsedMetadata = JSON.parse(session.metadata as string);
-          }
-        } catch (e) {
-          // Keep original metadata if parsing fails
-          parsedMetadata = session.metadata || {};
+      const transformedSessions = sessions.map(session => ({
+        ...session,
+        platform: session.platform.toLowerCase(),
+        // ✅ ENHANCED: Include 5D dimension averages
+        dimensionAverages: {
+          strategic: session.strategicAvg,
+          tactical: session.tacticalAvg,
+          cognitive: session.cognitiveAvg,
+          innovation: session.innovationAvg,
+          context: session.contextAvg // ✅ NEW: 5th dimension
         }
-
-        return {
-          ...session,
-          platform: session.platform.toLowerCase(),
-          // ✅ ENHANCED: Include 5D dimension averages
-          dimensionAverages: {
-            strategic: session.strategicAvg,
-            tactical: session.tacticalAvg,
-            cognitive: session.cognitiveAvg,
-            innovation: session.innovationAvg,
-            context: session.contextAvg // ✅ NEW: 5th dimension
-          },
-          // ✅ EXTRACT: Common metadata fields
-          projectContext: (parsedMetadata as any)?.projectContext,
-          sessionGoal: (parsedMetadata as any)?.sessionGoal
-        };
-      });
+      }));
 
       return {
         success: true,
