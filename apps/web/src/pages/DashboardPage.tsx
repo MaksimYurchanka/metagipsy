@@ -158,7 +158,7 @@ const DashboardPage: React.FC = () => {
       
       // ✅ OPTION 1: Navigate to analyze page with session data (recommended)
       // This will work immediately with existing infrastructure
-      window.location.href = `/analyze?session=${sessionId}`;
+      window.location.href = `/analyze/results/${sessionId}`;
       
       // ✅ OPTION 2: Alternative - could open modal with session details
       // toast.info('Loading session details...');
