@@ -5,11 +5,11 @@ import { SessionSummary, SessionMetadata, AnalysisPattern, Platform } from '../t
 
 export class SessionService {
   /**
-   * ✅ FIXED: Create new analysis session compatible with real Prisma schema
+   * ✅ ENHANCED: Create new analysis session with metadata support
    */
   async createSession(
     userId: string, 
-    userEmail: string, // ✅ Keep parameter for API compatibility but don't store
+    userEmail: string,
     metadata: {
       platform?: Platform;
       projectContext?: string;
@@ -21,7 +21,8 @@ export class SessionService {
       
       const session = await prisma.session.create({
         data: {
-          userId, // ✅ FIXED: Only userId field exists in schema (User relation)
+          userId,
+          userEmail,
           platform: metadata.platform || 'other',
           title: `Analysis ${new Date().toLocaleDateString()}`,
           status: 'ACTIVE', // ✅ FIXED: Uppercase enum value
@@ -44,8 +45,7 @@ export class SessionService {
       console.log('✅ SESSION CREATED:', session.id);
       logger.info('Session created successfully', { 
         sessionId: session.id, 
-        userId,
-        userEmail, // ✅ Log userEmail but don't store in DB (User relation handles this)
+        userId, 
         platform: metadata.platform 
       });
       
@@ -59,7 +59,7 @@ export class SessionService {
   }
 
   /**
-   * ✅ FIXED: Update session compatible with real Prisma schema
+   * ✅ ENHANCED: Update session with analysis summary and 5D averages
    */
   async updateSession(
     userId: string, 
@@ -84,7 +84,7 @@ export class SessionService {
           innovationAvg: summary.dimensionAverages.innovation,
           contextAvg: summary.dimensionAverages.context, // ✅ NEW: 5th dimension
           status: 'COMPLETED', // ✅ FIXED: Uppercase enum value
-          // ✅ FIXED: Remove completedAt - use updatedAt (Prisma @updatedAt handles automatically)
+          completedAt: new Date(),
           metadata: {
             ...summary,
             updatedAt: new Date().toISOString(),
@@ -119,8 +119,8 @@ export class SessionService {
           userId // Ensure user owns this session
         },
         data: {
-          title: title.trim()
-          // ✅ FIXED: Remove manual updatedAt - Prisma @updatedAt handles automatically
+          title: title.trim(),
+          updatedAt: new Date()
         }
       });
 
@@ -199,7 +199,7 @@ export class SessionService {
           contextAvg: true, // ✅ NEW: 5th dimension
           trend: true,
           createdAt: true,
-          updatedAt: true // ✅ FIXED: Use updatedAt instead of completedAt
+          completedAt: true
         },
         orderBy: {
           createdAt: 'desc'
@@ -523,7 +523,7 @@ export class SessionService {
           platform: session.platform.toLowerCase(),
           status: session.status,
           createdAt: session.createdAt.toISOString(),
-          updatedAt: session.updatedAt.toISOString(), // ✅ FIXED: Use updatedAt instead of completedAt
+          updatedAt: session.updatedAt.toISOString(),
           messageCount: session.messageCount,
           overallScore: session.overallScore,
           // ✅ ENHANCED: Include 5D dimension averages
@@ -613,7 +613,7 @@ export class SessionService {
           status: true,
           trend: true,
           createdAt: true,
-          updatedAt: true, // ✅ FIXED: Use updatedAt instead of completedAt
+          updatedAt: true,
           metadata: true
         },
         orderBy: {
