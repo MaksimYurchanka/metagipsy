@@ -238,7 +238,7 @@ router.post('/enhanced',
       logger.info('🚀 ENHANCED ENDPOINT REQUEST:', {
         hasBody: !!req.body,
         bodyKeys: req.body ? Object.keys(req.body) : [],
-        contentType: req.headers['content-type'],
+        contentType: req.get('content-type'),
         userId: req.user?.id
       });
 
@@ -321,22 +321,21 @@ router.post('/enhanced',
         
         try {
           // Use the basic parseConversation function as fallback
-          const fallbackResult = parseConversation(text);
+          const fallbackResult = parseConversation(text, {
+            expectedPlatform: options.expectedPlatform
+          });
           
           parseResult = {
-            messages: Array.isArray(fallbackResult) ? fallbackResult : (fallbackResult as any).messages || [],
-            platform: (Array.isArray(fallbackResult) ? (options.expectedPlatform || 'other') : (fallbackResult as any).platform) || 'other',
+            messages: Array.isArray(fallbackResult) ? fallbackResult : fallbackResult.messages || [],
+            platform: (Array.isArray(fallbackResult) ? 'other' : fallbackResult.platform) || 'other',
             confidence: 0.3, // Lower confidence for fallback
             method: 'pattern',
             metadata: {
               originalLength: text.length,
               processingTime: Date.now() - startTime,
-              cost: 0,
-              patternLearning: [
-                'Fallback parsing used',
-                `Parse error: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`
-              ]
-            } as any
+              fallbackUsed: true,
+              parseError: parseError instanceof Error ? parseError.message : 'Unknown error'
+            }
           };
           
           logger.info('✅ FALLBACK PARSING SUCCESS:', {
@@ -360,13 +359,12 @@ router.post('/enhanced',
             metadata: {
               originalLength: text.length,
               processingTime: Date.now() - startTime,
-              cost: 0,
-              patternLearning: [
-                'Last resort parsing used',
-                `Parse error: ${parseError instanceof Error ? parseError.message : 'Parse error'}`,
-                `Fallback error: ${fallbackError instanceof Error ? fallbackError.message : 'Fallback error'}`
+              lastResortUsed: true,
+              errors: [
+                parseError instanceof Error ? parseError.message : 'Parse error',
+                fallbackError instanceof Error ? fallbackError.message : 'Fallback error'
               ]
-            } as any
+            }
           };
         }
       }
@@ -393,7 +391,7 @@ router.post('/enhanced',
           debugInfo: {
             requestValidated: true,
             parseMethod: parseResult.method,
-            fallbackUsed: (parseResult.metadata as any)?.patternLearning?.includes('Fallback parsing used') || false,
+            fallbackUsed: parseResult.metadata?.fallbackUsed || false,
             haikuAttempted: options.forceHaiku !== false
           }
         }
