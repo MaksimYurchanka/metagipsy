@@ -1,5 +1,4 @@
-// ✅ RATE LIMITING SYSTEM - COMPATIBLE with existing Prisma schema
-// apps/api/src/lib/rate-limits.ts
+// ✅ RATE LIMITING SYSTEM - Add to new file: apps/api/src/lib/rate-limits.ts
 
 import { redis } from './redis';
 import { prisma } from './prisma';
@@ -48,17 +47,18 @@ export class RateLimitService {
   };
 
   /**
-   * 🔍 GET USER TIER - COMPATIBLE with existing schema
+   * 🔍 GET USER TIER from database or default to free
    */
   static async getUserTier(userId: string): Promise<UserTier> {
     try {
-      // ✅ FIXED: Use existing User schema fields only
+      // Check if user has pro subscription in database
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { 
           id: true,
-          email: true,
-          tier: true  // ✅ USE EXISTING: tier field exists in schema
+          subscriptionTier: true,
+          subscriptionStatus: true,
+          subscriptionExpiry: true 
         }
       });
 
@@ -67,15 +67,23 @@ export class RateLimitService {
         return this.TIERS.free;
       }
 
-      // ✅ USE EXISTING TIER FIELD: Map schema tier to our tiers
-      const tierMap: Record<string, keyof typeof this.TIERS> = {
-        'FREE': 'free',
-        'PRO': 'pro', 
-        'ENTERPRISE': 'enterprise'
-      };
+      // Check if subscription is active
+      if (user.subscriptionTier === 'pro' || user.subscriptionTier === 'enterprise') {
+        const isActive = user.subscriptionStatus === 'active' && 
+                        (!user.subscriptionExpiry || new Date(user.subscriptionExpiry) > new Date());
+        
+        if (isActive) {
+          return this.TIERS[user.subscriptionTier];
+        } else {
+          logger.info('Subscription expired, falling back to free tier', { 
+            userId, 
+            subscriptionTier: user.subscriptionTier,
+            subscriptionExpiry: user.subscriptionExpiry 
+          });
+        }
+      }
 
-      const userTierKey = tierMap[user.tier] || 'free';
-      return this.TIERS[userTierKey];
+      return this.TIERS.free;
 
     } catch (error) {
       logger.error('Failed to get user tier, defaulting to free', { error, userId });
@@ -234,29 +242,32 @@ export class RateLimitService {
   }
 
   /**
-   * 💳 UPDATE USER TIER (using existing schema)
+   * 💳 STRIPE INTEGRATION: Update user tier after payment
    */
   static async updateUserTier(
     userId: string, 
-    newTier: 'free' | 'pro' | 'enterprise'
+    newTier: 'free' | 'pro' | 'enterprise',
+    subscriptionId?: string,
+    expiryDate?: Date
   ): Promise<void> {
     try {
-      // ✅ USE EXISTING SCHEMA: Update tier field that exists
-      const tierMap: Record<string, 'FREE' | 'PRO' | 'ENTERPRISE'> = {
-        'free': 'FREE',
-        'pro': 'PRO',
-        'enterprise': 'ENTERPRISE'
-      };
-
       await prisma.user.update({
         where: { id: userId },
         data: {
-          tier: tierMap[newTier] || 'FREE',
+          subscriptionTier: newTier,
+          subscriptionStatus: newTier === 'free' ? 'none' : 'active',
+          subscriptionExpiry: expiryDate,
+          stripeSubscriptionId: subscriptionId,
           updatedAt: new Date()
         }
       });
 
-      logger.info('User tier updated successfully', { userId, newTier });
+      logger.info('User tier updated successfully', {
+        userId,
+        newTier,
+        subscriptionId,
+        expiryDate
+      });
 
     } catch (error) {
       logger.error('Failed to update user tier', { error, userId, newTier });
