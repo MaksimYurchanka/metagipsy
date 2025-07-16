@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Eye, Brain, CheckCircle, Sparkles, Zap, Crown, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Upload, Eye, Brain, CheckCircle, Sparkles, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -9,27 +9,10 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { ConversationInputProps, Platform } from '@/types';
 import { useConversationStore } from '@/stores/conversationStore';
 import { api } from '@/lib/api';
-
-interface UsageStats {
-  today: {
-    characters: number;
-    analyses: number;
-    charactersLimit: number;
-    analysesLimit: number;
-  };
-  tier: {
-    type: 'free' | 'pro' | 'enterprise';
-    dailyCharacterLimit: number;
-    features: string[];
-  };
-  percentUsed: number;
-  resetTime: Date;
-}
 
 const ConversationInput: React.FC<ConversationInputProps> = ({
   onAnalyze,
@@ -48,19 +31,13 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
   const [detectedPlatform, setDetectedPlatform] = useState<Platform | null>(null);
   const [messageCount, setMessageCount] = useState(0);
   const [hasRetryEditFormat, setHasRetryEditFormat] = useState(false);
-  
-  // ✅ NEW: Usage tracking and limits
-  const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
-  const [isLoadingUsage, setIsLoadingUsage] = useState(true);
-  const [parsingStrategy, setParsingStrategy] = useState<'auto' | 'local' | 'ai'>('auto');
 
-  // ✅ SMART DETECTION - Enhanced with parsing strategy
+  // ✅ SMART DETECTION - Claude.ai copy-paste + Retry→Edit
   const analyzeText = useCallback((text: string) => {
     if (!text.trim()) {
       setDetectedPlatform(null);
       setMessageCount(0);
       setHasRetryEditFormat(false);
-      setParsingStrategy('auto');
       return;
     }
     
@@ -72,7 +49,6 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       setHasRetryEditFormat(true);
       setDetectedPlatform('claude');
       setMessageCount(Math.min(retryMatches.length, editMatches.length) * 2);
-      setParsingStrategy('local'); // ✅ Smart: Use local for Claude format
       return;
     }
     
@@ -81,16 +57,11 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     // Standard platform detection
     const content = text.toLowerCase();
     let detected: Platform = 'other';
-    let strategy: 'auto' | 'local' | 'ai' = 'auto';
     
     if (content.includes('human:') && content.includes('assistant:')) {
       detected = 'claude';
-      strategy = 'local'; // Clear role markers = local parsing
     } else if (content.includes('user:') && content.includes('chatgpt:')) {
       detected = 'chatgpt';
-      strategy = 'local'; // Clear role markers = local parsing
-    } else {
-      strategy = 'ai'; // Ambiguous format = AI parsing
     }
     
     // Message counting
@@ -103,7 +74,6 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     
     setDetectedPlatform(detected);
     setMessageCount(estimatedMessages);
-    setParsingStrategy(strategy);
   }, []);
 
   const handleTextChange = useCallback((value: string) => {
@@ -111,25 +81,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     analyzeText(value);
   }, [analyzeText]);
 
-  // ✅ NEW: Load usage stats on mount
-  useEffect(() => {
-    const loadUsageStats = async () => {
-      try {
-        setIsLoadingUsage(true);
-        const stats = await api.getUserUsageStats();
-        setUsageStats(stats);
-      } catch (error) {
-        console.error('Failed to load usage stats:', error);
-        toast.error('Failed to load usage limits');
-      } finally {
-        setIsLoadingUsage(false);
-      }
-    };
-
-    loadUsageStats();
-  }, []);
-
-  // ✅ ENHANCED PARSE & VERIFY - with rate limiting
+  // ✅ ENHANCED PARSE & VERIFY - with bulletproof 400 error debugging
   const handleParseAndVerify = useCallback(async () => {
     if (!conversationText.trim()) {
       toast.error('Please paste your conversation first');
@@ -141,56 +93,142 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       return;
     }
 
-    // ✅ NEW: Check rate limits
-    if (usageStats) {
-      const wouldExceed = (usageStats.today.characters + conversationText.length) > usageStats.today.charactersLimit;
-      if (wouldExceed) {
-        const remaining = usageStats.today.charactersLimit - usageStats.today.characters;
-        toast.error(
-          `Daily limit exceeded! You have ${remaining} characters remaining. ${
-            usageStats.tier.type === 'free' ? 'Upgrade to Pro for 500k daily characters.' : 'Limit resets at midnight.'
-          }`
-        );
-        return;
-      }
-    }
-
     console.log('🔍 NAVIGATING TO VERIFY PAGE...');
     
-    // ✅ SMART PARSING: Use strategy based on detection
+    // ✅ ENHANCED: AI parsing with bulletproof error debugging
     let parsedMessages = null;
     let parsingMethod = 'local';
     
-    if (enableAIAnalysis && parsingStrategy === 'ai' && usageStats?.tier.type !== 'free') {
+    if (enableAIAnalysis) {
       setIsParsing(true);
-      toast.info('🧠 Using AI for smart parsing...');
+      toast.info('Using AI for smart parsing...');
       
       try {
-        const response = await api.analyzeEnhanced(conversationText, {
-          expectedPlatform: platform === 'auto' ? detectedPlatform || 'auto' : platform,
-          analysisDepth: 'standard',
-          forceHaiku: true
+        // ✅ BULLETPROOF: Pre-validation logging
+        console.log('🔍 ENHANCED PARSING REQUEST DETAILS:', {
+          textLength: conversationText.length,
+          textPreview: conversationText.substring(0, 100) + '...',
+          hasText: !!conversationText,
+          textType: typeof conversationText,
+          textTrimmedLength: conversationText.trim().length,
+          platform: platform === 'auto' ? detectedPlatform || 'auto' : platform,
+          detectedPlatform,
+          messageCount,
+          hasRetryEditFormat,
+          enableAIAnalysis,
+          timestamp: new Date().toISOString()
+        });
+
+        // ✅ BULLETPROOF: Pre-validation checks to prevent 400 errors
+        if (!conversationText || typeof conversationText !== 'string') {
+          throw new Error(`❌ VALIDATION: Invalid text parameter - hasText=${!!conversationText}, type=${typeof conversationText}`);
+        }
+        
+        if (conversationText.trim().length < 10) {
+          throw new Error(`❌ VALIDATION: Text too short - ${conversationText.trim().length} chars (minimum 10 required)`);
+        }
+        
+        if (conversationText.length > 50000) {
+          throw new Error(`❌ VALIDATION: Text too long - ${conversationText.length} chars (maximum 50,000 allowed)`);
+        }
+
+        // ✅ BULLETPROOF: Ensure platform is valid
+        const finalPlatform = platform === 'auto' ? (detectedPlatform || 'auto') : platform;
+        if (!['claude', 'chatgpt', 'other', 'auto'].includes(finalPlatform)) {
+          throw new Error(`❌ VALIDATION: Invalid platform - ${finalPlatform}`);
+        }
+
+        console.log('✅ PRE-VALIDATION PASSED - Making API call with validated parameters...');
+
+        // ✅ BULLETPROOF: Enhanced API call with explicit parameters
+        const enhancedOptions = {
+          expectedPlatform: finalPlatform,
+          analysisDepth: 'standard' as const,
+          forceHaiku: true, // ✅ EXPLICIT: Always try Haiku first for better accuracy
+          userSignature: undefined // ✅ EXPLICIT: Clear undefined values
+        };
+
+        console.log('🚀 API CALL PARAMETERS:', {
+          textLength: conversationText.length,
+          options: enhancedOptions
+        });
+
+        const response = await api.analyzeEnhanced(conversationText, enhancedOptions);
+        
+        console.log('📥 API RESPONSE RECEIVED:', {
+          success: response?.success,
+          hasResult: !!response?.result,
+          messageCount: response?.result?.messages?.length || 0,
+          confidence: response?.result?.confidence || 0,
+          method: response?.result?.method || 'unknown',
+          needsVerification: response?.metadata?.needsVerification
         });
         
         if (response?.success && response?.result?.messages?.length >= 2) {
           parsedMessages = response.result.messages;
           parsingMethod = 'ai_enhanced';
-          toast.success(`🎊 AI parsing completed! Found ${parsedMessages.length} messages.`);
+          console.log('✅ AI PARSING SUCCESS:', {
+            messageCount: parsedMessages.length,
+            confidence: response.result.confidence,
+            method: response.result.method
+          });
+          toast.success(`🎊 AI parsing completed! Found ${parsedMessages.length} messages with ${Math.round((response.result.confidence || 0) * 100)}% confidence.`);
         } else {
-          throw new Error(`AI parsing returned insufficient messages`);
+          console.log('⚠️ AI PARSING INSUFFICIENT RESULTS:', {
+            success: response?.success || false,
+            messageCount: response?.result?.messages?.length || 0,
+            confidence: response?.result?.confidence || 0,
+            hasVerification: !!response?.result?.verification
+          });
+          throw new Error(`AI parsing returned insufficient messages: ${response?.result?.messages?.length || 0} (need 2+)`);
         }
         
       } catch (error) {
-        console.log('🔄 AI PARSING FAILED, using reliable local parsing');
-        toast.warning('AI parsing unavailable - using reliable local parsing...');
+        // ✅ BULLETPROOF: Comprehensive error analysis and logging
+        const errorDetails = {
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          errorType: error instanceof Error ? error.constructor.name : typeof error,
+          errorStack: error instanceof Error ? error.stack : undefined,
+          textLength: conversationText.length,
+          textValid: !!conversationText && typeof conversationText === 'string',
+          textTrimmedLength: conversationText.trim().length,
+          requestPlatform: platform === 'auto' ? detectedPlatform || 'auto' : platform,
+          detectedPlatform,
+          enableAIAnalysis,
+          timestamp: new Date().toISOString(),
+          apiBaseUrl: import.meta.env.VITE_API_URL || 'https://metagipsy-backend.onrender.com/api/v1'
+        };
+
+        console.error('❌ ENHANCED PARSING COMPREHENSIVE ERROR ANALYSIS:', errorDetails);
+        
+        // ✅ BULLETPROOF: Smart error classification and user feedback
+        const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
+        
+        if (errorMessage.includes('400') || errorMessage.includes('bad request') || errorMessage.includes('validation')) {
+          toast.error('🔍 AI parsing validation failed - using reliable local parsing');
+          console.log('🔄 400/VALIDATION ERROR DETECTED - Backend rejected request, using local fallback');
+        } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
+          toast.warning('🔐 AI parsing authentication issue - using local parsing');
+          console.log('🔄 AUTH ERROR DETECTED - Token issue, using local fallback');
+        } else if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
+          toast.warning('⏱️ AI parsing rate limited - using local parsing');
+          console.log('🔄 RATE LIMIT ERROR DETECTED - Too many requests, using local fallback');
+        } else if (errorMessage.includes('500') || errorMessage.includes('server')) {
+          toast.warning('🔧 AI parsing server unavailable - using local parsing');
+          console.log('🔄 SERVER ERROR DETECTED - Backend issue, using local fallback');
+        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+          toast.warning('🌐 Network issue - using local parsing');
+          console.log('🔄 NETWORK ERROR DETECTED - Connection problem, using local fallback');
+        } else {
+          console.log('🔄 AI PARSING FAILED WITH UNKNOWN ERROR, using local parsing fallback');
+          toast.warning('AI parsing unavailable - using reliable local parsing...');
+        }
+        
+        // ✅ BULLETPROOF: Log error for debugging but continue gracefully
+        console.log('🛡️ GRACEFUL FALLBACK: AI parsing failed but local parsing will handle it perfectly');
+        
       } finally {
         setIsParsing(false);
-      }
-    } else {
-      if (parsingStrategy === 'local') {
-        toast.success('⚡ Using fast local parsing for detected format');
-      } else if (usageStats?.tier.type === 'free') {
-        toast.info('📝 Using local parsing (AI parsing available in Pro)');
       }
     }
     
@@ -202,25 +240,23 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       hasRetryEditFormat,
       messageCount,
       enableAIAnalysis,
-      parsedMessages,
+      parsedMessages, // Pre-parsed messages if AI succeeded
       parsingMethod,
-      parsingStrategy,
       timestamp: Date.now(),
       debugInfo: {
         detectedPlatform,
         originalPlatform: platform,
         textLength: conversationText.length,
-        retryEditDetected: hasRetryEditFormat,
-        smartStrategy: parsingStrategy
+        retryEditDetected: hasRetryEditFormat
       }
     };
     
     // Save to sessionStorage and navigate
     sessionStorage.setItem('metagipsy_verify_data', JSON.stringify(verifyData));
     navigate('/analyze/verify');
-  }, [conversationText, platform, detectedPlatform, sessionGoal, hasRetryEditFormat, messageCount, enableAIAnalysis, parsingStrategy, usageStats, navigate]);
+  }, [conversationText, platform, detectedPlatform, sessionGoal, hasRetryEditFormat, messageCount, enableAIAnalysis, navigate]);
 
-  // ✅ DIRECT ANALYZE - enhanced with rate limiting
+  // ✅ DIRECT ANALYZE - skip verification
   const handleDirectAnalyze = useCallback(async () => {
     if (!conversationText.trim()) {
       toast.error('Please paste your conversation first');
@@ -230,18 +266,6 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     if (messageCount < 2) {
       toast.error('Need at least 2 messages to analyze');
       return;
-    }
-
-    // ✅ NEW: Check rate limits
-    if (usageStats) {
-      const wouldExceed = (usageStats.today.characters + conversationText.length) > usageStats.today.charactersLimit;
-      if (wouldExceed) {
-        const remaining = usageStats.today.charactersLimit - usageStats.today.characters;
-        toast.error(
-          `Daily limit exceeded! You have ${remaining} characters remaining.`
-        );
-        return;
-      }
     }
 
     console.log('🚀 DIRECT ANALYZE: Creating analysis request...');
@@ -264,7 +288,6 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
         hasRetryEditFormat,
         messageCount: messages.length,
         parsingMethod: 'direct_local',
-        parsingStrategy,
         timestamp: new Date().toISOString()
       },
       options: {
@@ -282,7 +305,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     });
 
     onAnalyze(analysisRequest);
-  }, [conversationText, platform, detectedPlatform, sessionGoal, hasRetryEditFormat, messageCount, enableAIAnalysis, parsingStrategy, usageStats, onAnalyze]);
+  }, [conversationText, platform, detectedPlatform, sessionGoal, hasRetryEditFormat, messageCount, enableAIAnalysis, onAnalyze]);
 
   // ✅ SIMPLE PARSING for direct analyze
   const parseSimple = (text: string) => {
@@ -292,27 +315,104 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       return parseRetryEdit(text);
     }
     
-    // Standard parsing logic...
-    // [Previous parsing logic remains the same]
+    // Standard parsing
+    let parts: string[] = [];
+    
+    if (detectedPlatform === 'claude') {
+      parts = text.split(/(?=(?:Human:|Assistant:))/i).filter(p => p.trim());
+    } else if (detectedPlatform === 'chatgpt') {
+      parts = text.split(/(?=(?:User:|ChatGPT:))/i).filter(p => p.trim());
+    } else {
+      parts = text.split(/\n\s*\n/).filter(p => p.trim().length > 20);
+    }
+    
+    parts.forEach((part, index) => {
+      const trimmed = part.trim();
+      if (!trimmed) return;
+      
+      let role: 'user' | 'assistant' = index % 2 === 0 ? 'user' : 'assistant';
+      let content = trimmed;
+      
+      // Role detection
+      if (trimmed.match(/^(Human:|User:)/i)) {
+        role = 'user';
+        content = trimmed.replace(/^(Human:|User:)\s*/i, '').trim();
+      } else if (trimmed.match(/^(Assistant:|ChatGPT:)/i)) {
+        role = 'assistant';
+        content = trimmed.replace(/^(Assistant:|ChatGPT:)\s*/i, '').trim();
+      }
+      
+      if (content.trim()) {
+        messages.push({
+          role,
+          content: content.trim(),
+          index: messages.length,
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
     
     return messages;
   };
 
   // ✅ RETRY→EDIT PARSER
   const parseRetryEdit = (text: string) => {
-    // [Previous retry edit parsing logic remains the same]
-    return [];
+    const messages: any[] = [];
+    const lines = text.split('\n');
+    
+    const retryLines: number[] = [];
+    const editLines: number[] = [];
+    
+    lines.forEach((line, index) => {
+      const trimmed = line.trim();
+      if (trimmed === 'Retry') retryLines.push(index);
+      if (trimmed === 'Edit') editLines.push(index);
+    });
+    
+    for (let i = 0; i < retryLines.length; i++) {
+      const retryLine = retryLines[i];
+      const nextEdit = editLines.find(edit => edit > retryLine);
+      
+      if (nextEdit) {
+        // User message
+        const userMessage = lines.slice(retryLine + 1, nextEdit).join('\n').trim();
+        
+        if (userMessage && userMessage.length > 10) {
+          messages.push({
+            role: 'user',
+            content: userMessage,
+            index: messages.length,
+            timestamp: new Date().toISOString()
+          });
+          
+          // Assistant response
+          const nextRetry = retryLines[i + 1] || lines.length;
+          const assistantLines = lines.slice(nextEdit + 1, nextRetry);
+          let assistantMessage = assistantLines.join('\n').trim();
+          
+          // Clean metadata
+          assistantMessage = assistantMessage
+            .replace(/^[A-Z][a-z].*?\.\s*\n\d+s\s*\n*/g, '')
+            .replace(/^Thought process \d+s\s*\n*/g, '')
+            .trim();
+          
+          if (assistantMessage && assistantMessage.length > 10) {
+            messages.push({
+              role: 'assistant',
+              content: assistantMessage,
+              index: messages.length,
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+      }
+    }
+    
+    return messages;
   };
 
   const canAnalyze = conversationText.trim().length > 50 && messageCount >= 2;
   const canVerify = conversationText.trim().length > 20;
-  
-  // ✅ NEW: Character and limit calculations
-  const currentLength = conversationText.length;
-  const isOverFreeLimit = currentLength > 5000 && usageStats?.tier.type === 'free';
-  const isOverProLimit = currentLength > 500000;
-  const remainingChars = usageStats ? Math.max(0, usageStats.today.charactersLimit - usageStats.today.characters) : 0;
-  const wouldExceedDaily = usageStats ? (usageStats.today.characters + currentLength) > usageStats.today.charactersLimit : false;
 
   return (
     <div className="space-y-6">
@@ -320,49 +420,11 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       <div className="text-center space-y-3">
         <h2 className="text-2xl font-bold text-slate-100">Analyze Conversation</h2>
         <p className="text-slate-400 max-w-2xl mx-auto">
-          Paste your conversation below for intelligent 5D analysis with smart parsing strategy.
+          Paste your conversation below for intelligent 5D analysis. Choose to verify parsing or analyze directly.
         </p>
       </div>
 
-      {/* ✅ NEW: Usage Stats & Limits Display */}
-      {!isLoadingUsage && usageStats && (
-        <Card className="bg-gradient-to-r from-indigo-950/30 to-purple-950/30 border-indigo-800/40">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                {usageStats.tier.type === 'free' ? (
-                  <Badge variant="outline" className="text-blue-400 border-blue-500/50">
-                    Free Tier
-                  </Badge>
-                ) : (
-                  <Badge className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
-                    <Crown className="h-3 w-3 mr-1" />
-                    {usageStats.tier.type === 'pro' ? 'Pro' : 'Enterprise'}
-                  </Badge>
-                )}
-                <span className="text-sm text-slate-300">
-                  {usageStats.today.characters.toLocaleString()} / {usageStats.today.charactersLimit.toLocaleString()} characters today
-                </span>
-              </div>
-              {usageStats.tier.type === 'free' && (
-                <Button variant="outline" size="sm" className="text-purple-400 border-purple-500/50 hover:bg-purple-950/30">
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                  Upgrade to Pro
-                </Button>
-              )}
-            </div>
-            <Progress 
-              value={usageStats.percentUsed} 
-              className="h-2 bg-slate-800"
-            />
-            <div className="mt-2 text-xs text-slate-400">
-              {usageStats.percentUsed}% used • Resets at midnight
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ✅ AI ENHANCEMENT TOGGLE - Enhanced with Smart Parsing */}
+      {/* ✅ AI ENHANCEMENT TOGGLE - Dark Theme Optimized */}
       <Card className="bg-gradient-to-r from-purple-950/30 to-blue-950/30 border-purple-800/40">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
@@ -370,10 +432,10 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
               <Brain className="h-5 w-5 text-purple-400" />
               <div>
                 <Label className="text-sm font-medium text-purple-300">
-                  Smart Parsing Strategy
+                  Enhanced AI Analysis
                 </Label>
                 <p className="text-xs text-purple-400/80 mt-1">
-                  Auto-detects optimal parsing: Local for clear formats, AI for ambiguous
+                  Use Claude AI for superior conversation parsing and 5D insights
                 </p>
               </div>
             </div>
@@ -384,62 +446,15 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
               className="data-[state=checked]:bg-purple-600"
             />
           </div>
-          
-          {/* ✅ NEW: Smart Parsing Indicator */}
-          {conversationText && (
-            <div className="mt-3 flex items-center gap-2">
-              {parsingStrategy === 'local' ? (
-                <Badge variant="outline" className="text-green-400 border-green-500/50 bg-green-950/20">
-                  ⚡ Local Parsing (Fast & Free)
-                </Badge>
-              ) : parsingStrategy === 'ai' ? (
-                <Badge variant="outline" className="text-blue-400 border-blue-500/50 bg-blue-950/20">
-                  🧠 AI Enhanced Parsing
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-gray-400 border-gray-500/50">
-                  🎯 Auto Strategy
-                </Badge>
-              )}
-              
-              {hasRetryEditFormat && (
-                <Badge variant="outline" className="text-cyan-400 border-cyan-500/50 bg-cyan-950/20">
-                  🎯 Claude Format Detected
-                </Badge>
-              )}
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {/* ✅ MAIN INPUT - Enhanced with character counting */}
+      {/* ✅ MAIN INPUT - Dark Theme Optimized */}
       <div className="space-y-4">
         <div>
-          <div className="flex justify-between items-center mb-2">
-            <Label htmlFor="conversation" className="text-base font-medium text-slate-200">
-              Conversation Text
-            </Label>
-            <div className="flex items-center gap-3 text-sm">
-              <span className={`${
-                isOverProLimit ? 'text-red-400' : 
-                isOverFreeLimit ? 'text-orange-400' : 
-                'text-slate-400'
-              }`}>
-                {currentLength.toLocaleString()} / {
-                  usageStats?.tier.type === 'free' ? '5k' : 
-                  usageStats?.tier.type === 'pro' ? '500k' : 
-                  '100k'
-                } chars
-              </span>
-              
-              {wouldExceedDaily && (
-                <span className="text-red-400 font-medium">
-                  Exceeds daily limit!
-                </span>
-              )}
-            </div>
-          </div>
-          
+          <Label htmlFor="conversation" className="text-base font-medium text-slate-200">
+            Conversation Text
+          </Label>
           <Textarea
             id="conversation"
             value={conversationText}
@@ -451,17 +466,13 @@ Supported formats:
 • ChatGPT: Copy with User:/ChatGPT: labels
 • Other: Any clear dialogue format
 
-Smart parsing automatically chooses the optimal strategy for your format."
-            className={`min-h-80 mt-2 bg-slate-900/50 border-slate-700 text-slate-100 placeholder:text-slate-500 resize-none text-base leading-relaxed focus:border-purple-500 focus:ring-purple-500/20 ${
-              wouldExceedDaily ? 'border-red-500/50' : 
-              isOverProLimit ? 'border-red-500/50' :
-              isOverFreeLimit ? 'border-orange-500/50' : ''
-            }`}
+AI parsing will extract precise message boundaries automatically."
+            className="min-h-80 mt-2 bg-slate-900/50 border-slate-700 text-slate-100 placeholder:text-slate-500 resize-none text-base leading-relaxed focus:border-purple-500 focus:ring-purple-500/20"
             disabled={isAnalyzing || isParsing}
           />
         </div>
 
-        {/* ✅ STATUS INDICATORS - Enhanced */}
+        {/* ✅ STATUS INDICATORS - Dark Theme */}
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-4 flex-wrap">
             {detectedPlatform && (
@@ -483,19 +494,13 @@ Smart parsing automatically chooses the optimal strategy for your format."
             {enableAIAnalysis && (
               <Badge variant="outline" className="text-purple-400 border-purple-500/50 bg-purple-950/20">
                 <Sparkles className="h-3 w-3 mr-1" />
-                Smart Mode
+                AI Ready
               </Badge>
             )}
           </div>
-          
-          {remainingChars < 10000 && usageStats && (
-            <span className="text-orange-400 text-xs font-medium">
-              {remainingChars.toLocaleString()} chars remaining today
-            </span>
-          )}
         </div>
 
-        {/* ✅ ESSENTIAL FIELDS ONLY */}
+        {/* ✅ ESSENTIAL FIELDS ONLY - согласно roadmap */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label htmlFor="platform" className="text-slate-200">Platform</Label>
@@ -526,20 +531,27 @@ Smart parsing automatically chooses the optimal strategy for your format."
             />
           </div>
         </div>
+
+        {/* ✅ MINIMAL DISTRACTION - согласно документации */}
+        <div className="text-center">
+          <p className="text-xs text-slate-500">
+            📝 <strong>Advanced settings</strong> like project context and analysis depth will be available on the verification page
+          </p>
+        </div>
       </div>
 
-      {/* ✅ ACTION BUTTONS - Enhanced with limit checks */}
+      {/* ✅ ACTION BUTTONS - Elegant Dark Theme */}
       <div className="flex gap-3">
         <Button
           onClick={handleParseAndVerify}
-          disabled={!canVerify || isAnalyzing || isParsing || wouldExceedDaily}
+          disabled={!canVerify || isAnalyzing || isParsing}
           variant="outline"
           className="flex-1 border-blue-600/50 text-blue-400 hover:bg-blue-950/30 hover:border-blue-500 bg-blue-950/10"
         >
           {isParsing ? (
             <>
               <Brain className="h-4 w-4 mr-2 animate-spin" />
-              {parsingStrategy === 'ai' ? 'AI Parsing...' : 'Processing...'}
+              AI Parsing...
             </>
           ) : (
             <>
@@ -551,7 +563,7 @@ Smart parsing automatically chooses the optimal strategy for your format."
         
         <Button
           onClick={handleDirectAnalyze}
-          disabled={!canAnalyze || isAnalyzing || isParsing || wouldExceedDaily}
+          disabled={!canAnalyze || isAnalyzing || isParsing}
           className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
         >
           {isAnalyzing ? (
@@ -568,29 +580,20 @@ Smart parsing automatically chooses the optimal strategy for your format."
         </Button>
       </div>
 
-      {/* ✅ HELPFUL HINTS - Enhanced with limits */}
+      {/* ✅ HELPFUL HINTS - Dark Theme */}
       <div className="space-y-2">
         {conversationText.trim() && hasRetryEditFormat && (
           <div className="text-center p-3 bg-cyan-950/20 border border-cyan-800/30 rounded-lg">
             <p className="text-sm text-cyan-300">
-              🎯 <strong>Claude.ai format detected!</strong> Using fast local parsing for optimal performance.
+              🎯 <strong>Claude.ai format detected!</strong> Retry→Edit parsing will extract precise message boundaries.
             </p>
           </div>
         )}
         
-        {isOverFreeLimit && usageStats?.tier.type === 'free' && (
+        {conversationText.trim() && !canAnalyze && canVerify && (
           <div className="text-center p-3 bg-orange-950/20 border border-orange-800/30 rounded-lg">
             <p className="text-sm text-orange-300">
-              💡 Text exceeds free tier limit (5k chars). Upgrade to Pro for 500k daily characters.
-            </p>
-          </div>
-        )}
-        
-        {wouldExceedDaily && (
-          <div className="text-center p-3 bg-red-950/20 border border-red-800/30 rounded-lg">
-            <p className="text-sm text-red-300">
-              ⚠️ This analysis would exceed your daily character limit. 
-              {usageStats?.tier.type === 'free' ? ' Upgrade to Pro for higher limits.' : ' Limit resets at midnight.'}
+              💡 You can verify parsing with current text, but need more content for full analysis
             </p>
           </div>
         )}
@@ -598,7 +601,7 @@ Smart parsing automatically chooses the optimal strategy for your format."
         {!conversationText.trim() && (
           <div className="text-center p-3 bg-slate-800/30 border border-slate-700/50 rounded-lg">
             <p className="text-sm text-slate-400">
-              ✨ Paste your conversation above to get started with smart 5D chess analysis
+              ✨ Paste your conversation above to get started with 5D chess analysis
             </p>
           </div>
         )}
