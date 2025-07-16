@@ -287,7 +287,6 @@ router.post('/',
         }
       }
 
-      // ✅ FIXED: Metadata without unsupported fields
       const response: AnalyzeResponse = {
         sessionId,
         messages,
@@ -303,9 +302,13 @@ router.post('/',
           processingTime: Date.now() - startTime,
           version: '3.0.0', // ✅ ENHANCED: Version bump for rate limiting integration
           claudeAnalysisUsed: useClaudeAnalysis,
-          cacheHit: false
-          // ✅ REMOVED: charactersAnalyzed - not supported in metadata type
-          // ✅ REMOVED: rateLimitInfo - not supported in metadata type
+          cacheHit: false,
+          // ✅ NEW: Rate limiting metadata
+          charactersAnalyzed: totalCharacters,
+          rateLimitInfo: req.user ? {
+            tierType: 'unknown', // Will be populated by usage stats
+            charactersUsed: totalCharacters
+          } : undefined
         }
       };
 
@@ -315,7 +318,7 @@ router.post('/',
         overallScore: Math.round(overallScore),
         processingTime: Date.now() - startTime,
         userId: req.user?.id,
-        charactersAnalyzed: totalCharacters // ✅ Log it here instead of metadata
+        charactersAnalyzed: totalCharacters
       });
 
       res.json(response);
@@ -333,7 +336,7 @@ router.post('/',
   }
 );
 
-// ✅ ENHANCED: Enhanced parsing endpoint with Rate Limiting
+// ✅ FIXED: Enhanced parsing endpoint with Rate Limiting
 router.post('/enhanced',
   optionalAuth,
   rateLimiter.createLimiter('enhanced_analyze', 5, 60), // 5 requests per minute (more intensive)
