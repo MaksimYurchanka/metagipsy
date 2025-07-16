@@ -81,7 +81,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     analyzeText(value);
   }, [analyzeText]);
 
-  // ✅ ENHANCED PARSE & VERIFY - with bulletproof 400 error debugging
+  // ✅ PARSE & VERIFY - navigate to verification page
   const handleParseAndVerify = useCallback(async () => {
     if (!conversationText.trim()) {
       toast.error('Please paste your conversation first');
@@ -95,7 +95,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
 
     console.log('🔍 NAVIGATING TO VERIFY PAGE...');
     
-    // ✅ ENHANCED: AI parsing with bulletproof error debugging
+    // Enhanced parsing with AI if enabled
     let parsedMessages = null;
     let parsingMethod = 'local';
     
@@ -104,135 +104,28 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       toast.info('Using AI for smart parsing...');
       
       try {
-        // ✅ BULLETPROOF: Pre-validation logging
-        console.log('🔍 ENHANCED PARSING REQUEST DETAILS:', {
-          textLength: conversationText.length,
-          textPreview: conversationText.substring(0, 100) + '...',
-          hasText: !!conversationText,
-          textType: typeof conversationText,
-          textTrimmedLength: conversationText.trim().length,
-          platform: platform === 'auto' ? detectedPlatform || 'auto' : platform,
-          detectedPlatform,
-          messageCount,
-          hasRetryEditFormat,
-          enableAIAnalysis,
-          timestamp: new Date().toISOString()
-        });
-
-        // ✅ BULLETPROOF: Pre-validation checks to prevent 400 errors
-        if (!conversationText || typeof conversationText !== 'string') {
-          throw new Error(`❌ VALIDATION: Invalid text parameter - hasText=${!!conversationText}, type=${typeof conversationText}`);
-        }
-        
-        if (conversationText.trim().length < 10) {
-          throw new Error(`❌ VALIDATION: Text too short - ${conversationText.trim().length} chars (minimum 10 required)`);
-        }
-        
-        if (conversationText.length > 50000) {
-          throw new Error(`❌ VALIDATION: Text too long - ${conversationText.length} chars (maximum 50,000 allowed)`);
-        }
-
-        // ✅ BULLETPROOF: Ensure platform is valid
-        const finalPlatform = platform === 'auto' ? (detectedPlatform || 'auto') : platform;
-        if (!['claude', 'chatgpt', 'other', 'auto'].includes(finalPlatform)) {
-          throw new Error(`❌ VALIDATION: Invalid platform - ${finalPlatform}`);
-        }
-
-        console.log('✅ PRE-VALIDATION PASSED - Making API call with validated parameters...');
-
-        // ✅ BULLETPROOF: Enhanced API call with explicit parameters
-        const enhancedOptions = {
-          expectedPlatform: finalPlatform,
-          analysisDepth: 'standard' as const,
-          forceHaiku: true, // ✅ EXPLICIT: Always try Haiku first for better accuracy
-          userSignature: undefined // ✅ EXPLICIT: Clear undefined values
-        };
-
-        console.log('🚀 API CALL PARAMETERS:', {
-          textLength: conversationText.length,
-          options: enhancedOptions
-        });
-
-        const response = await api.analyzeEnhanced(conversationText, enhancedOptions);
-        
-        console.log('📥 API RESPONSE RECEIVED:', {
-          success: response?.success,
-          hasResult: !!response?.result,
-          messageCount: response?.result?.messages?.length || 0,
-          confidence: response?.result?.confidence || 0,
-          method: response?.result?.method || 'unknown',
-          needsVerification: response?.metadata?.needsVerification
+        const response = await api.analyzeEnhanced(conversationText, {
+          expectedPlatform: platform === 'auto' ? detectedPlatform || 'auto' : platform,
+          analysisDepth: 'standard'
         });
         
-        if (response?.success && response?.result?.messages?.length >= 2) {
+        if (response.success && response.result?.messages?.length >= 2) {
           parsedMessages = response.result.messages;
           parsingMethod = 'ai_enhanced';
-          console.log('✅ AI PARSING SUCCESS:', {
-            messageCount: parsedMessages.length,
-            confidence: response.result.confidence,
-            method: response.result.method
-          });
-          toast.success(`🎊 AI parsing completed! Found ${parsedMessages.length} messages with ${Math.round((response.result.confidence || 0) * 100)}% confidence.`);
+          console.log('✅ AI PARSING SUCCESS:', parsedMessages.length, 'messages');
+          toast.success(`AI parsing completed! Found ${parsedMessages.length} messages.`);
         } else {
-          console.log('⚠️ AI PARSING INSUFFICIENT RESULTS:', {
-            success: response?.success || false,
-            messageCount: response?.result?.messages?.length || 0,
-            confidence: response?.result?.confidence || 0,
-            hasVerification: !!response?.result?.verification
-          });
-          throw new Error(`AI parsing returned insufficient messages: ${response?.result?.messages?.length || 0} (need 2+)`);
+          throw new Error('AI parsing returned insufficient messages');
         }
-        
       } catch (error) {
-        // ✅ BULLETPROOF: Comprehensive error analysis and logging
-        const errorDetails = {
-          errorMessage: error instanceof Error ? error.message : 'Unknown error',
-          errorType: error instanceof Error ? error.constructor.name : typeof error,
-          errorStack: error instanceof Error ? error.stack : undefined,
-          textLength: conversationText.length,
-          textValid: !!conversationText && typeof conversationText === 'string',
-          textTrimmedLength: conversationText.trim().length,
-          requestPlatform: platform === 'auto' ? detectedPlatform || 'auto' : platform,
-          detectedPlatform,
-          enableAIAnalysis,
-          timestamp: new Date().toISOString(),
-          apiBaseUrl: import.meta.env.VITE_API_URL || 'https://metagipsy-backend.onrender.com/api/v1'
-        };
-
-        console.error('❌ ENHANCED PARSING COMPREHENSIVE ERROR ANALYSIS:', errorDetails);
-        
-        // ✅ BULLETPROOF: Smart error classification and user feedback
-        const errorMessage = error instanceof Error ? error.message.toLowerCase() : '';
-        
-        if (errorMessage.includes('400') || errorMessage.includes('bad request') || errorMessage.includes('validation')) {
-          toast.error('🔍 AI parsing validation failed - using reliable local parsing');
-          console.log('🔄 400/VALIDATION ERROR DETECTED - Backend rejected request, using local fallback');
-        } else if (errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
-          toast.warning('🔐 AI parsing authentication issue - using local parsing');
-          console.log('🔄 AUTH ERROR DETECTED - Token issue, using local fallback');
-        } else if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
-          toast.warning('⏱️ AI parsing rate limited - using local parsing');
-          console.log('🔄 RATE LIMIT ERROR DETECTED - Too many requests, using local fallback');
-        } else if (errorMessage.includes('500') || errorMessage.includes('server')) {
-          toast.warning('🔧 AI parsing server unavailable - using local parsing');
-          console.log('🔄 SERVER ERROR DETECTED - Backend issue, using local fallback');
-        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
-          toast.warning('🌐 Network issue - using local parsing');
-          console.log('🔄 NETWORK ERROR DETECTED - Connection problem, using local fallback');
-        } else {
-          console.log('🔄 AI PARSING FAILED WITH UNKNOWN ERROR, using local parsing fallback');
-          toast.warning('AI parsing unavailable - using reliable local parsing...');
-        }
-        
-        // ✅ BULLETPROOF: Log error for debugging but continue gracefully
-        console.log('🛡️ GRACEFUL FALLBACK: AI parsing failed but local parsing will handle it perfectly');
-        
+        console.log('🔄 AI PARSING FAILED, will use local parsing on verify page');
+        toast.warning('AI parsing failed, will use local parsing...');
       } finally {
         setIsParsing(false);
       }
     }
     
-    // ✅ ENHANCED: Prepare comprehensive data for verify page
+    // Prepare data for verify page
     const verifyData = {
       conversationText,
       platform: platform === 'auto' ? detectedPlatform || 'other' : platform,
@@ -242,13 +135,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       enableAIAnalysis,
       parsedMessages, // Pre-parsed messages if AI succeeded
       parsingMethod,
-      timestamp: Date.now(),
-      debugInfo: {
-        detectedPlatform,
-        originalPlatform: platform,
-        textLength: conversationText.length,
-        retryEditDetected: hasRetryEditFormat
-      }
+      timestamp: Date.now()
     };
     
     // Save to sessionStorage and navigate
