@@ -5,48 +5,6 @@ import { SessionSummary, SessionMetadata, AnalysisPattern, Platform } from '../t
 
 export class SessionService {
   /**
-   * ✅ CRITICAL FIX: Ensure user exists before creating session
-   */
-  async ensureUserExists(userId: string, userEmail: string): Promise<void> {
-    try {
-      // Check if user exists
-      const existingUser = await prisma.user.findUnique({
-        where: { id: userId }
-      });
-
-      if (!existingUser) {
-        console.log(`🔧 CREATING MISSING USER: ${userId} (${userEmail})`);
-        
-        // Create the missing user record
-        await prisma.user.create({
-          data: {
-            id: userId,
-            email: userEmail,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          }
-        });
-        
-        console.log(`✅ USER CREATED SUCCESSFULLY: ${userId}`);
-      } else {
-        console.log(`✅ USER EXISTS: ${userId}`);
-      }
-    } catch (error) {
-      // Don't throw - user might exist from parallel request
-      console.log(`⚠️ User creation handling: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      
-      // Check if error is "already exists" - that's OK
-      if (error instanceof Error && error.message.includes('Unique constraint failed')) {
-        console.log(`✅ USER ALREADY EXISTS (parallel creation): ${userId}`);
-        return; // Success - user exists now
-      }
-      
-      // For other errors, still don't throw - session creation can continue
-      logger.warn('User creation failed but continuing', { error, userId, userEmail });
-    }
-  }
-
-  /**
    * ✅ FIXED: Create new analysis session compatible with real Prisma schema
    */
   async createSession(
@@ -59,14 +17,11 @@ export class SessionService {
     } = {}
   ): Promise<string> {
     try {
-      // ✅ CRITICAL FIX: Ensure user exists before creating session
-      await this.ensureUserExists(userId, userEmail);
-
       console.log('🚀 CREATING SESSION:', { userId, userEmail, metadata });
       
       const session = await prisma.session.create({
         data: {
-          userId, // ✅ Now guaranteed to exist
+          userId, // ✅ FIXED: Only userId field exists in schema (User relation)
           platform: metadata.platform || 'other',
           title: `Analysis ${new Date().toLocaleDateString()}`,
           status: 'ACTIVE', // ✅ FIXED: Uppercase enum value
@@ -98,8 +53,8 @@ export class SessionService {
       
     } catch (error) {
       console.error('❌ SESSION CREATION FAILED:', error);
-      logger.error('Failed to create session', { error, userId, userEmail });
-      throw new Error(`Failed to create session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      logger.error('Failed to create session', { error, userId });
+      throw new Error('Failed to create session');
     }
   }
 

@@ -1,10 +1,9 @@
-// ✅ COMPLETE ENHANCED 5D ANALYZE ROUTES with Rate Limiting Integration
+// ✅ COMPLETE ENHANCED 5D ANALYZE ROUTES with Fixed Enhanced Parsing Support
 // apps/api/src/routes/analyze.ts
 
 import { Router } from 'express';
 import { authenticateUser, optionalAuth, AuthenticatedRequest } from '../middleware/auth';
 import { rateLimiter } from '../lib/rate-limiter';
-import { RateLimitService, rateLimitMiddleware } from '../lib/rate-limits'; // ✅ NEW: Rate limiting integration
 import { parseConversation, parseConversationEnhanced } from '../lib/conversation-parser';
 import { LocalScoringEngine } from '../lib/scoring-engine';
 import { ClaudeClient } from '../lib/claude-client';
@@ -26,24 +25,10 @@ const scoringEngine = new LocalScoringEngine(); // ✅ NOW supports 5D scoring
 const claudeClient = new ClaudeClient();
 const sessionService = new SessionService();
 
-// ✅ NEW: Usage stats endpoint for frontend
-router.get('/usage-stats',
-  authenticateUser,
-  async (req: AuthenticatedRequest, res) => {
-    try {
-      const stats = await RateLimitService.getUserUsageStats(req.user.id);
-      res.json(stats);
-    } catch (error) {
-      logger.error('Failed to get usage stats', { error, userId: req.user?.id });
-      res.status(500).json({ error: 'Failed to load usage statistics' });
-    }
-  }
-);
-
-// ✅ MAIN ANALYSIS ENDPOINT - Enhanced with Rate Limiting
+// ✅ MAIN ANALYSIS ENDPOINT - Enhanced with 5D Support
 router.post('/', 
   optionalAuth,
-  rateLimiter.createLimiter('analyze', 10, 60), // Keep existing rate limiter for request frequency
+  rateLimiter.createLimiter('analyze', 10, 60), // 10 requests per minute
   async (req: AuthenticatedRequest, res) => {
     const startTime = Date.now();
     req.startTime = startTime;
@@ -57,42 +42,9 @@ router.post('/',
         });
       }
 
-      // ✅ ENHANCED: Calculate total characters for rate limiting
-      const totalCharacters = conversation.messages.reduce(
-        (sum, msg) => sum + (msg.content?.length || 0), 0
-      );
-
-      // ✅ NEW: Check character-based rate limits for authenticated users
-      if (req.user) {
-        const rateLimitResult = await rateLimitMiddleware(req.user.id, totalCharacters);
-        
-        if (!rateLimitResult.allowed) {
-          return res.status(429).json({
-            error: rateLimitResult.message,
-            rateLimitInfo: {
-              currentUsage: rateLimitResult.currentUsage,
-              dailyLimit: rateLimitResult.dailyLimit,
-              resetTime: rateLimitResult.resetTime,
-              tierType: rateLimitResult.tierType,
-              requestedCharacters: totalCharacters,
-              availableCharacters: rateLimitResult.dailyLimit - rateLimitResult.currentUsage
-            }
-          });
-        }
-
-        logger.info('Rate limit check passed', {
-          userId: req.user.id,
-          requestedCharacters: totalCharacters,
-          currentUsage: rateLimitResult.currentUsage,
-          dailyLimit: rateLimitResult.dailyLimit,
-          tierType: rateLimitResult.tierType
-        });
-      }
-
-      // ✅ ENHANCED: Dynamic limit based on remaining daily allowance (no hardcoded limits)
-      if (conversation.messages.length > 200) { // Reasonable safety limit for processing
+      if (conversation.messages.length > config.limits.maxMessagesPerAnalysis) {
         return res.status(400).json({
-          error: `Too many messages. Maximum 200 messages per analysis for processing efficiency.`
+          error: `Too many messages. Maximum ${config.limits.maxMessagesPerAnalysis} allowed.`
         });
       }
 
@@ -111,24 +63,15 @@ router.post('/',
       // Create session if user is authenticated
       let sessionId: string | undefined;
       if (req.user) {
-        try {
-          sessionId = await sessionService.createSession(
-            req.user.id, 
-            req.user.email,
-            {
-              platform: conversation.platform || 'auto',
-              projectContext: options.projectContext,
-              sessionGoal: options.sessionGoal
-            }
-          );
-          logger.info('Session created successfully', { sessionId, userId: req.user.id });
-        } catch (sessionError) {
-          logger.error('Session creation failed, continuing without session', { 
-            error: sessionError, 
-            userId: req.user.id 
-          });
-          // Continue without session - don't fail the analysis
-        }
+        sessionId = await sessionService.createSession(
+          req.user.id, 
+          req.user.email,
+          {
+            platform: conversation.platform || 'auto',
+            projectContext: options.projectContext,
+            sessionGoal: options.sessionGoal
+          }
+        );
       }
 
       // ✅ ENHANCED: Score messages with 5D support
@@ -136,13 +79,6 @@ router.post('/',
       const useClaudeAnalysis = options.useClaudeAnalysis && 
         config.anthropic?.apiKey && 
         config.anthropic.apiKey.length > 0;
-
-      logger.info('Starting message analysis', {
-        messageCount: messages.length,
-        useClaudeAnalysis,
-        sessionId,
-        userId: req.user?.id
-      });
 
       for (let i = 0; i < messages.length; i++) {
         const message = messages[i];
@@ -179,12 +115,17 @@ router.post('/',
 
           scores.push(score);
 
+          // Store message and score if session exists
+          if (sessionId && req.user) {
+            // This would be implemented with proper database operations
+            // For now, we'll skip the database storage in this demo
+          }
+
         } catch (error) {
           logger.error('Failed to score message', { 
             error, 
             messageIndex: i, 
-            sessionId,
-            userId: req.user?.id
+            sessionId 
           });
           
           // ✅ ENHANCED: Fallback to 5D basic scoring
@@ -237,54 +178,22 @@ router.post('/',
         insights
       };
 
-      // Update session with summary if authenticated and session exists
+      // Update session with summary if authenticated
       if (sessionId && req.user) {
-        try {
-          await sessionService.updateSession(req.user.id, sessionId, sessionSummary);
-          
-          // ✅ FIXED: Clean messagesWithScores mapping without type conflicts
-          const messagesWithScores = messages
-            .filter(message => message.role !== 'system') // ✅ Filter out 'system' messages
-            .map((message, index) => ({
-              role: message.role as 'user' | 'assistant', // ✅ Type assertion for clean types
-              content: message.content,
-              index: message.index || index, // ✅ Use message.index or fallback to array index
-              timestamp: message.timestamp,
-              scores: scores[index] ? [scores[index]] : [] // ✅ Attach corresponding score
-            }));
+        await sessionService.updateSession(req.user.id, sessionId, sessionSummary);
+        
+        // ✅ FIXED: Clean messagesWithScores mapping without type conflicts
+        const messagesWithScores = messages
+          .filter(message => message.role !== 'system') // ✅ Filter out 'system' messages
+          .map((message, index) => ({
+            role: message.role as 'user' | 'assistant', // ✅ Type assertion for clean types
+            content: message.content,
+            index: message.index || index, // ✅ Use message.index or fallback to array index
+            timestamp: message.timestamp,
+            scores: scores[index] ? [scores[index]] : [] // ✅ Attach corresponding score
+          }));
 
-          await sessionService.saveSessionMessages(sessionId, req.user.id, messagesWithScores);
-          logger.info('Session data saved successfully', { sessionId, messageCount: messagesWithScores.length });
-        } catch (sessionUpdateError) {
-          logger.error('Failed to update session, but analysis completed', { 
-            error: sessionUpdateError, 
-            sessionId, 
-            userId: req.user.id 
-          });
-          // Don't fail the analysis if session update fails
-        }
-      }
-
-      // ✅ NEW: Record usage after successful analysis
-      if (req.user) {
-        try {
-          await RateLimitService.recordUsage(
-            req.user.id, 
-            totalCharacters,
-            useClaudeAnalysis ? 'haiku' : 'local'
-          );
-          logger.info('Usage recorded successfully', {
-            userId: req.user.id,
-            charactersUsed: totalCharacters,
-            analysisType: useClaudeAnalysis ? 'haiku' : 'local'
-          });
-        } catch (usageError) {
-          logger.error('Failed to record usage, but analysis completed', { 
-            error: usageError, 
-            userId: req.user.id 
-          });
-          // Don't fail the analysis if usage recording fails
-        }
+        await sessionService.saveSessionMessages(sessionId, req.user.id, messagesWithScores);
       }
 
       const response: AnalyzeResponse = {
@@ -300,35 +209,16 @@ router.post('/',
           analysisMethod: useClaudeAnalysis ? 'claude' : 'local',
           analysisDepth: options.analysisDepth || 'standard',
           processingTime: Date.now() - startTime,
-          version: '3.0.0', // ✅ ENHANCED: Version bump for rate limiting integration
+          version: '2.0.0', // ✅ ENHANCED: Version bump for 5D support
           claudeAnalysisUsed: useClaudeAnalysis,
-          cacheHit: false,
-          // ✅ NEW: Rate limiting metadata
-          charactersAnalyzed: totalCharacters,
-          rateLimitInfo: req.user ? {
-            tierType: 'unknown', // Will be populated by usage stats
-            charactersUsed: totalCharacters
-          } : undefined
+          cacheHit: false
         }
       };
-
-      logger.info('Analysis completed successfully', {
-        sessionId,
-        messageCount: messages.length,
-        overallScore: Math.round(overallScore),
-        processingTime: Date.now() - startTime,
-        userId: req.user?.id,
-        charactersAnalyzed: totalCharacters
-      });
 
       res.json(response);
 
     } catch (error) {
-      logger.error('Analysis endpoint error', { 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        userId: req.user?.id 
-      });
+      logger.error('Analysis endpoint error', { error });
       res.status(500).json({
         error: 'Analysis failed. Please try again.'
       });
@@ -336,7 +226,7 @@ router.post('/',
   }
 );
 
-// ✅ FIXED: Enhanced parsing endpoint with Rate Limiting
+// ✅ FIXED: Enhanced parsing endpoint with ROBUST ERROR HANDLING & CORRECTED LOGIC
 router.post('/enhanced',
   optionalAuth,
   rateLimiter.createLimiter('enhanced_analyze', 5, 60), // 5 requests per minute (more intensive)
@@ -381,35 +271,9 @@ router.post('/enhanced',
         });
       }
 
-      // ✅ NEW: Check rate limits for enhanced parsing (before length check)
-      if (req.user) {
-        const rateLimitResult = await rateLimitMiddleware(req.user.id, text.length);
-        
-        if (!rateLimitResult.allowed) {
-          return res.status(429).json({
-            error: rateLimitResult.message,
-            rateLimitInfo: {
-              currentUsage: rateLimitResult.currentUsage,
-              dailyLimit: rateLimitResult.dailyLimit,
-              resetTime: rateLimitResult.resetTime,
-              tierType: rateLimitResult.tierType,
-              requestedCharacters: text.length,
-              availableCharacters: rateLimitResult.dailyLimit - rateLimitResult.currentUsage
-            }
-          });
-        }
-      }
-
-      // ✅ ENHANCED: Dynamic length check based on remaining limit
-      const maxLength = req.user ? 
-        (await RateLimitService.getUserUsageStats(req.user.id)).today.charactersLimit : 
-        100000; // Default for unauthenticated users
-
-      if (text.length > maxLength) {
+      if (text.length > 50000) {
         return res.status(400).json({
-          error: `Text too long. Maximum ${maxLength.toLocaleString()} characters allowed for your tier.`,
-          currentLength: text.length,
-          maxLength: maxLength
+          error: 'Text too long. Maximum 50,000 characters allowed.'
         });
       }
 
@@ -507,23 +371,6 @@ router.post('/enhanced',
         }
       }
 
-      // ✅ NEW: Record usage for enhanced parsing
-      if (req.user && parseResult.messages.length >= 2) {
-        try {
-          await RateLimitService.recordUsage(
-            req.user.id, 
-            text.length,
-            parseResult.method === 'haiku' ? 'haiku' : 'local'
-          );
-        } catch (usageError) {
-          logger.error('Failed to record enhanced parsing usage', { 
-            error: usageError, 
-            userId: req.user.id 
-          });
-          // Don't fail parsing if usage recording fails
-        }
-      }
-
       // ✅ FOUNDATION: Prepare verification workflow
       const needsVerification = parseResult.confidence < 0.8 || options.forceHaiku === false;
       
@@ -543,8 +390,6 @@ router.post('/enhanced',
           needsVerification,
           canProceedToAnalysis: parseResult.messages.length >= 2,
           estimatedAnalysisTime: parseResult.messages.length * 0.5,
-          // ✅ NEW: Rate limiting metadata
-          charactersProcessed: text.length,
           debugInfo: {
             requestValidated: true,
             parseMethod: parseResult.method,
@@ -559,8 +404,7 @@ router.post('/enhanced',
         messageCount: parseResult.messages.length,
         confidence: parseResult.confidence,
         method: parseResult.method,
-        processingTime: response.metadata.processingTime,
-        charactersProcessed: text.length
+        processingTime: response.metadata.processingTime
       });
 
       res.json(response);
@@ -584,10 +428,10 @@ router.post('/enhanced',
   }
 );
 
-// ✅ KEEP: Existing reparse and validate endpoints (unchanged)
+// ✅ NEW: Reparse endpoint for different methods - TYPE COMPATIBLE
 router.post('/reparse',
   optionalAuth,
-  rateLimiter.createLimiter('reparse', 3, 60),
+  rateLimiter.createLimiter('reparse', 3, 60), // 3 requests per minute
   async (req: AuthenticatedRequest, res) => {
     const startTime = Date.now();
     
@@ -613,13 +457,15 @@ router.post('/reparse',
         hasOriginalResult: !!originalResult
       });
 
+      // ✅ TYPE COMPATIBLE: Use forcePattern logic
       const parseResult = await parseConversationEnhanced(text, {
-        forcePattern: method === 'pattern',
+        forcePattern: method === 'pattern', // Force pattern only if explicitly requested
         userSignature,
         userId: req.user?.id,
         requestId: `reparse_${method}_${Date.now()}`
       });
 
+      // ✅ ENHANCED: Compare with original result if provided
       let comparison = null;
       if (originalResult) {
         comparison = {
@@ -651,8 +497,9 @@ router.post('/reparse',
   }
 );
 
+// ✅ NEW: Quick validation endpoint
 router.post('/validate',
-  rateLimiter.createLimiter('validate', 20, 60),
+  rateLimiter.createLimiter('validate', 20, 60), // 20 requests per minute (lightweight)
   async (req, res) => {
     try {
       const { text } = req.body;
@@ -663,8 +510,9 @@ router.post('/validate',
         });
       }
 
+      // ✅ QUICK: Client-side validation logic
       const validation = {
-        isValid: text.length >= 10 && text.length <= 500000, // ✅ UPDATED: Allow up to 500k chars
+        isValid: text.length >= 10 && text.length <= 50000,
         textLength: text.length,
         estimatedMessages: Math.max(1, Math.ceil(text.split('\n\n').length / 2)),
         detectedPlatform: detectPlatformQuick(text),
@@ -688,10 +536,12 @@ router.post('/validate',
   }
 );
 
-// ✅ HELPER FUNCTIONS (unchanged from original)
+// ✅ ENHANCED: Helper functions with 5D support
+
 function calculateTrend(scores: number[]): 'improving' | 'declining' | 'stable' | 'volatile' {
   if (scores.length < 3) return 'stable';
 
+  // Simple linear regression
   const n = scores.length;
   const x = Array.from({ length: n }, (_, i) => i);
   const sumX = x.reduce((a, b) => a + b, 0);
@@ -701,6 +551,7 @@ function calculateTrend(scores: number[]): 'improving' | 'declining' | 'stable' 
 
   const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
   
+  // Calculate volatility (standard deviation)
   const mean = sumY / n;
   const variance = scores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / n;
   const stdDev = Math.sqrt(variance);
@@ -714,6 +565,7 @@ function calculateTrend(scores: number[]): 'improving' | 'declining' | 'stable' 
 function detectPatterns(scores: ChessScore[]) {
   const patterns = [];
 
+  // Momentum pattern (3+ consecutive improving scores)
   let momentum = 0;
   for (let i = 1; i < scores.length; i++) {
     if (scores[i].overall > scores[i - 1].overall) {
@@ -732,6 +584,7 @@ function detectPatterns(scores: ChessScore[]) {
     }
   }
 
+  // Fatigue pattern (declining scores towards end)
   const lastQuarter = scores.slice(-Math.ceil(scores.length / 4));
   const firstQuarter = scores.slice(0, Math.ceil(scores.length / 4));
   
@@ -753,9 +606,11 @@ function detectPatterns(scores: ChessScore[]) {
   return patterns;
 }
 
+// ✅ ENHANCED: Generate insights with 5D awareness
 function generateInsights(scores: ChessScore[], messages: any[], dimensionAverages: any) {
   const insights = [];
 
+  // Overall performance insight
   const avgScore = scores.reduce((sum, s) => sum + s.overall, 0) / scores.length;
   if (avgScore >= 75) {
     insights.push({
@@ -774,6 +629,7 @@ function generateInsights(scores: ChessScore[], messages: any[], dimensionAverag
     });
   }
 
+  // ✅ ENHANCED: 5D dimension-specific insights
   const weakestDimension = Object.entries(dimensionAverages)
     .sort(([,a], [,b]) => (a as number) - (b as number))[0];
 
@@ -783,7 +639,7 @@ function generateInsights(scores: ChessScore[], messages: any[], dimensionAverag
       tactical: 'Be more specific about what you need and provide concrete examples.',
       cognitive: 'Consider the timing and complexity of your requests.',
       innovation: 'Try exploring creative approaches and alternative solutions.',
-      context: 'Show awareness of conversation timeline and acknowledge completed tasks.'
+      context: 'Show awareness of conversation timeline and acknowledge completed tasks.' // ✅ NEW
     };
 
     insights.push({
@@ -795,6 +651,7 @@ function generateInsights(scores: ChessScore[], messages: any[], dimensionAverag
     });
   }
 
+  // ✅ NEW: Context-specific insights
   if (dimensionAverages.context < 50) {
     insights.push({
       type: 'improvement',
@@ -808,6 +665,7 @@ function generateInsights(scores: ChessScore[], messages: any[], dimensionAverag
   return insights;
 }
 
+// ✅ ENHANCED: Parsing helper functions
 function generateParsingSuggestions(parseResult: ParseResult): string[] {
   const suggestions: string[] = [];
   
@@ -837,9 +695,13 @@ function detectPlatformQuick(text: string): Platform {
 function calculateQuickConfidence(text: string): number {
   let confidence = 0.5;
   
+  // Role markers present
   if (/(?:Human|Assistant|User|ChatGPT|AI):/gi.test(text)) confidence += 0.3;
+  
+  // Good length
   if (text.length > 100 && text.length < 10000) confidence += 0.1;
   
+  // Multiple exchanges
   const markers = text.match(/(?:Human|Assistant|User|ChatGPT|AI):/gi) || [];
   if (markers.length >= 4) confidence += 0.1;
   
@@ -857,8 +719,8 @@ function generateQuickSuggestions(text: string): string[] {
     suggestions.push('Add role markers like "Human:" and "Assistant:" for clearer parsing.');
   }
   
-  if (text.length > 100000) { // ✅ UPDATED: Higher threshold
-    suggestions.push('Very long conversation. Consider your daily character limit.');
+  if (text.length > 20000) {
+    suggestions.push('Very long conversation. Consider breaking into smaller sessions.');
   }
   
   return suggestions;
