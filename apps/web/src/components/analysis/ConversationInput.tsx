@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Brain, CheckCircle, Crown, TrendingUp, Zap } from 'lucide-react';
+import { Eye, Brain, CheckCircle, Crown, TrendingUp, Zap , Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
