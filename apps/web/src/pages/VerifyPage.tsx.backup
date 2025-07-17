@@ -20,32 +20,6 @@ interface VerifyData {
   hasRetryEditFormat: boolean;
   messageCount: number;
   timestamp: number;
-  // ✅ NEW: Support for pre-parsed messages from ConversationInput
-  parsedMessages?: Array<{
-    role: 'user' | 'assistant';
-    content: string;
-    index: number;
-    timestamp?: string;
-  }>;
-  editRetryDetails?: {
-    isEditRetry: boolean;
-    finalMessagePairs: number;
-    editCount: number;
-    retryCount: number;
-    confidence: number;
-    detectionMethod: string;
-    conversationFlow: string;
-    // ✅ CRITICAL: Pre-parsed messages from ConversationInput
-    parsedMessages?: Array<{
-      role: 'user' | 'assistant';
-      content: string;
-      index: number;
-    }>;
-  };
-  debugInfo?: {
-    preParsedCount?: number;
-    [key: string]: any;
-  };
 }
 
 interface ParsedMessage {
@@ -63,7 +37,6 @@ const VerifyPage: React.FC = () => {
   const [parsedMessages, setParsedMessages] = useState<ParsedMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [usingPreParsed, setUsingPreParsed] = useState(false); // ✅ NEW: Track if using pre-parsed
   
   // ✅ SETTINGS STATE
   const [projectContext, setProjectContext] = useState('');
@@ -89,54 +62,14 @@ const VerifyPage: React.FC = () => {
           textLength: data.conversationText.length,
           platform: data.platform,
           hasRetryEditFormat: data.hasRetryEditFormat,
-          messageCount: data.messageCount,
-          preParsedCount: data.editRetryDetails?.parsedMessages?.length || 0,
-          debugInfo: data.debugInfo
+          messageCount: data.messageCount
         });
 
         setVerifyData(data);
         
-        // ✅ CRITICAL FIX: Use pre-parsed messages from ConversationInput if available
-        if (data.editRetryDetails?.parsedMessages?.length > 0) {
-          console.log('🎯 USING PRE-PARSED MESSAGES FROM ConversationInput');
-          console.log('Pre-parsed messages:', data.editRetryDetails.parsedMessages);
-          
-          const preParsedMessages: ParsedMessage[] = data.editRetryDetails.parsedMessages.map(msg => ({
-            role: msg.role,
-            content: msg.content,
-            index: msg.index,
-            editable: true
-          }));
-          
-          setParsedMessages(preParsedMessages);
-          setUsingPreParsed(true);
-          setIsLoading(false);
-          
-          toast.success(`✅ Using ConversationInput parsing: ${preParsedMessages.length} messages`, {
-            duration: 3000
-          });
-          
-          return; // ✅ SKIP VerifyPage parsing completely
-        }
-        
-        // ✅ FALLBACK: Only use VerifyPage parsing if no pre-parsed messages
-        console.log('🔄 FALLBACK: No pre-parsed messages, using VerifyPage parsing...');
-        
+        // Parse messages immediately
         const messages = parseConversation(data.conversationText, data.hasRetryEditFormat);
         setParsedMessages(messages);
-        setUsingPreParsed(false);
-        
-        if (messages.length !== data.messageCount && data.messageCount > 0) {
-          console.warn('⚠️ MESSAGE COUNT MISMATCH:', {
-            expected: data.messageCount,
-            parsed: messages.length,
-            usingVerifyPageParser: true
-          });
-          
-          toast.warning(`Parsed ${messages.length} messages, expected ${data.messageCount}. You can edit manually.`, {
-            duration: 5000
-          });
-        }
         
         setIsLoading(false);
       } catch (error) {
@@ -149,14 +82,14 @@ const VerifyPage: React.FC = () => {
     loadVerifyData();
   }, [navigate]);
 
-  // ✅ EXISTING PARSERS (unchanged for backward compatibility)
+  // ✅ RETRY→EDIT PARSER (только один формат!)
   const parseConversation = useCallback((text: string, hasRetryEditFormat: boolean): ParsedMessage[] => {
-    console.log('🎯 VERIFY PAGE PARSING (FALLBACK):', { hasRetryEditFormat, textLength: text.length });
+    console.log('🎯 PARSING CONVERSATION:', { hasRetryEditFormat, textLength: text.length });
     
     const messages: ParsedMessage[] = [];
     
     if (hasRetryEditFormat) {
-      console.log('🎯 USING RETRY→EDIT PARSING (FALLBACK)');
+      console.log('🎯 USING RETRY→EDIT PARSING');
       return parseRetryEditFormat(text);
     }
     
@@ -193,9 +126,9 @@ const VerifyPage: React.FC = () => {
     return messages;
   }, []);
 
-  // ✅ EXISTING RETRY→EDIT FORMAT PARSER (unchanged)
+  // ✅ RETRY→EDIT FORMAT PARSER  
   const parseRetryEditFormat = (text: string): ParsedMessage[] => {
-    console.log('🎯 PARSING RETRY→EDIT FORMAT (FALLBACK)...');
+    console.log('🎯 PARSING RETRY→EDIT FORMAT...');
     
     const messages: ParsedMessage[] = [];
     const lines = text.split('\n');
@@ -258,25 +191,25 @@ const VerifyPage: React.FC = () => {
       }
     }
     
-    console.log(`🎯 RETRY→EDIT PARSING (FALLBACK) COMPLETE: ${messages.length} messages`);
+    console.log(`🎯 RETRY→EDIT PARSING COMPLETE: ${messages.length} messages`);
     return messages;
   };
 
-  // ✅ MESSAGE EDITING (unchanged)
+  // ✅ MESSAGE EDITING
   const handleEditMessage = useCallback((index: number, newContent: string) => {
     setParsedMessages(prev => prev.map((msg, i) => 
       i === index ? { ...msg, content: newContent } : msg
     ));
   }, []);
 
-  // ✅ ROLE SWITCHING (unchanged)
+  // ✅ ROLE SWITCHING
   const handleSwitchRole = useCallback((index: number) => {
     setParsedMessages(prev => prev.map((msg, i) => 
       i === index ? { ...msg, role: msg.role === 'user' ? 'assistant' : 'user' } : msg
     ));
   }, []);
 
-  // ✅ CONFIRM & ANALYZE (unchanged)
+  // ✅ CONFIRM & ANALYZE
   const handleConfirmAnalysis = useCallback(async () => {
     if (!verifyData || parsedMessages.length === 0) {
       toast.error('No messages to analyze');
@@ -284,11 +217,7 @@ const VerifyPage: React.FC = () => {
     }
 
     setIsAnalyzing(true);
-    console.log('🚀 STARTING ANALYSIS from verify page...', {
-      messageCount: parsedMessages.length,
-      usingPreParsed,
-      platform: verifyData.platform
-    });
+    console.log('🚀 STARTING ANALYSIS from verify page...');
 
     try {
       // Create analysis request
@@ -307,12 +236,8 @@ const VerifyPage: React.FC = () => {
           projectContext: projectContext || undefined,
           hasRetryEditFormat: verifyData.hasRetryEditFormat,
           messageCount: parsedMessages.length,
-          parsingMethod: usingPreParsed ? 'conversation_input_preparsed' : 
-                        (verifyData.hasRetryEditFormat ? 'verify_page_retry_edit' : 'verify_page_fallback'),
-          timestamp: new Date().toISOString(),
-          // ✅ NEW: Include parsing source info
-          parsingSource: usingPreParsed ? 'ConversationInput' : 'VerifyPage',
-          originalMessageCount: verifyData.messageCount
+          parsingMethod: verifyData.hasRetryEditFormat ? 'retry-edit' : 'fallback',
+          timestamp: new Date().toISOString()
         },
         options: {
           useClaudeAnalysis: enableClaudeAnalysis,
@@ -326,8 +251,7 @@ const VerifyPage: React.FC = () => {
         messageCount: parsedMessages.length,
         platform: verifyData.platform,
         useClaudeAnalysis: enableClaudeAnalysis,
-        analysisDepth,
-        parsingSource: usingPreParsed ? 'ConversationInput' : 'VerifyPage'
+        analysisDepth
       });
 
       // Call analysis API
@@ -352,9 +276,9 @@ const VerifyPage: React.FC = () => {
       toast.error('Analysis failed. Please try again.');
       setIsAnalyzing(false);
     }
-  }, [verifyData, parsedMessages, projectContext, analysisDepth, enablePatternDetection, enableClaudeAnalysis, generateSuggestions, navigate, usingPreParsed]);
+  }, [verifyData, parsedMessages, projectContext, analysisDepth, enablePatternDetection, enableClaudeAnalysis, generateSuggestions, navigate]);
 
-  // ✅ BACK TO INPUT (unchanged)
+  // ✅ BACK TO INPUT
   const handleBackToInput = useCallback(() => {
     navigate('/analyze');
   }, [navigate]);
@@ -386,32 +310,15 @@ const VerifyPage: React.FC = () => {
           Review and edit the parsed messages below, then configure your analysis settings.
         </p>
         
-        {/* ✅ ENHANCED PARSING INFO */}
-        <div className="flex items-center justify-center gap-4 flex-wrap">
-          <Badge variant="outline" className={`${
-            usingPreParsed ? 'bg-green-950/50 border-green-700' : 'bg-blue-950/50 border-blue-700'
-          }`}>
-            {usingPreParsed ? '✅ ConversationInput Parsing' : 
-             (verifyData.hasRetryEditFormat ? 'Retry→Edit Format' : 'Pattern Detection')} • {parsedMessages.length} messages
+        {/* ✅ PARSING INFO */}
+        <div className="flex items-center justify-center gap-4">
+          <Badge variant="outline" className="bg-blue-950/50 border-blue-700">
+            {verifyData.hasRetryEditFormat ? 'Retry→Edit Format' : 'Pattern Detection'} • {parsedMessages.length} messages
           </Badge>
           <Badge variant="secondary">
             Platform: {verifyData.platform}
           </Badge>
-          {usingPreParsed && verifyData.editRetryDetails && (
-            <Badge variant="outline" className="bg-cyan-950/50 border-cyan-700 text-cyan-300">
-              {verifyData.editRetryDetails.editCount}E/{verifyData.editRetryDetails.retryCount}R • {verifyData.editRetryDetails.conversationFlow}
-            </Badge>
-          )}
         </div>
-        
-        {/* ✅ NEW: Parsing source indicator */}
-        {usingPreParsed && (
-          <div className="text-center">
-            <Badge className="bg-green-600/20 text-green-300 border-green-500/50">
-              🎯 Using optimized ConversationInput parsing results
-            </Badge>
-          </div>
-        )}
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -422,11 +329,6 @@ const VerifyPage: React.FC = () => {
               <CardTitle className="flex items-center gap-2">
                 <Bot className="h-5 w-5" />
                 Parsed Messages ({parsedMessages.length})
-                {usingPreParsed && (
-                  <Badge variant="outline" className="text-xs bg-green-900/30 text-green-400 border-green-600">
-                    Pre-parsed
-                  </Badge>
-                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -484,26 +386,11 @@ const VerifyPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-              
-              {/* ✅ PARSING SOURCE INFO */}
-              <div className="mt-4 p-3 bg-muted/30 rounded-lg">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Edit2 className="h-4 w-4" />
-                  <span>
-                    Parsing source: {usingPreParsed ? 'ConversationInput (optimized)' : 'VerifyPage (fallback)'}
-                    {verifyData.debugInfo?.preParsedCount && (
-                      <span className="ml-2 text-xs">
-                        (Expected: {verifyData.messageCount}, Detected: {verifyData.debugInfo.preParsedCount})
-                      </span>
-                    )}
-                  </span>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* ✅ SETTINGS PANEL (1/3 width) - unchanged */}
+        {/* ✅ SETTINGS PANEL (1/3 width) */}
         <div className="space-y-4">
           {/* ✅ BASIC SETTINGS */}
           <Card>
@@ -579,7 +466,7 @@ const VerifyPage: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* ✅ ENHANCED SESSION INFO */}
+          {/* ✅ SESSION INFO */}
           <Card>
             <CardHeader>
               <CardTitle>Session Info</CardTitle>
@@ -599,28 +486,10 @@ const VerifyPage: React.FC = () => {
                   {verifyData.hasRetryEditFormat ? 'Retry→Edit' : 'Standard'}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Parser:</span>
-                <span className={`font-medium ${usingPreParsed ? 'text-green-400' : 'text-blue-400'}`}>
-                  {usingPreParsed ? 'ConversationInput' : 'VerifyPage'}
-                </span>
-              </div>
               {verifyData.sessionGoal && (
                 <div className="pt-2">
                   <span className="text-muted-foreground text-xs">Goal:</span>
                   <p className="text-sm">{verifyData.sessionGoal}</p>
-                </div>
-              )}
-              {/* ✅ NEW: Edit-Retry details */}
-              {usingPreParsed && verifyData.editRetryDetails && (
-                <div className="pt-2 border-t border-muted">
-                  <span className="text-muted-foreground text-xs">Edit-Retry:</span>
-                  <p className="text-sm">
-                    {verifyData.editRetryDetails.editCount} edits, {verifyData.editRetryDetails.retryCount} retries
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Confidence: {Math.round(verifyData.editRetryDetails.confidence * 100)}%
-                  </p>
                 </div>
               )}
             </CardContent>
