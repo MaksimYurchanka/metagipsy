@@ -3,24 +3,6 @@ import { supabase } from './supabase';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://metagipsy-backend.onrender.com/api/v1';
 
-// ✅ NEW: Usage Stats Interface
-interface UsageStats {
-  today: {
-    characters: number;
-    analyses: number;
-    charactersLimit: number;
-    analysesLimit: number;
-  };
-  tier: {
-    type: 'free' | 'pro' | 'enterprise';
-    dailyCharacterLimit: number;
-    dailyAnalysisLimit: number;
-    features: string[];
-  };
-  percentUsed: number;
-  resetTime: Date;
-}
-
 class ApiClient {
   private baseUrl: string;
   
@@ -63,44 +45,6 @@ class ApiClient {
     } catch (error) {
       console.error('Error getting auth token:', error);
       return null;
-    }
-  }
-  
-  // ✅ NEW: Get user usage statistics for rate limiting display
-  async getUserUsageStats(): Promise<UsageStats> {
-    console.log('📊 API: Getting user usage stats...');
-
-    try {
-      const response = await this.request<UsageStats>('/analyze/usage-stats');
-      
-      console.log('✅ API: Usage stats loaded:', {
-        characters: response.today.characters,
-        limit: response.today.charactersLimit,
-        percentUsed: response.percentUsed,
-        tier: response.tier.type
-      });
-
-      return response;
-    } catch (error) {
-      console.error('❌ API: Failed to get usage stats:', error);
-      
-      // Return default free tier stats if API fails
-      return {
-        today: {
-          characters: 0,
-          analyses: 0,
-          charactersLimit: 5000,
-          analysesLimit: 5
-        },
-        tier: {
-          type: 'free',
-          dailyCharacterLimit: 5000,
-          dailyAnalysisLimit: 5,
-          features: ['Basic 5D Analysis', 'Local Parsing', 'Session History']
-        },
-        percentUsed: 0,
-        resetTime: new Date()
-      };
     }
   }
   
