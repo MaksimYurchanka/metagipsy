@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, Brain, CheckCircle, Sparkles, Crown, AlertTriangle, TrendingUp, BookOpen, Zap } from 'lucide-react';
+import { Eye, Brain, CheckCircle, Crown, TrendingUp, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { ConversationInputProps, Platform } from '@/types';
-import { useConversationStore } from '@/stores/conversationStore';
 import { api } from '@/lib/api';
 
 interface UsageStats {
@@ -31,14 +30,12 @@ interface UsageStats {
   resetTime: Date;
 }
 
-interface EditRetryDetection {
+interface ParseResult {
+  platform: Platform;
+  messageCount: number;
   isEditRetry: boolean;
-  finalMessagePairs: number;
-  editCount: number;
-  retryCount: number;
+  pattern: string;
   confidence: number;
-  detectionMethod: string;
-  conversationFlow: string;
 }
 
 const ConversationInput: React.FC<ConversationInputProps> = ({
@@ -47,26 +44,19 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
 }) => {
   const navigate = useNavigate();
   
-  // ✅ STATE with localStorage integration
+  // ✅ SIMPLE STATE
   const [conversationText, setConversationText] = useState('');
   const [platform, setPlatform] = useState<Platform>('auto');
   const [sessionGoal, setSessionGoal] = useState('');
-  const [enableAIAnalysis, setEnableAIAnalysis] = useState(true);
+  const [enableHaikuParsing, setEnableHaikuParsing] = useState(true);
   const [isParsing, setIsParsing] = useState(false);
   
-  // ✅ ENHANCED: Correct Edit-Retry detection state
-  const [detectedPlatform, setDetectedPlatform] = useState<Platform | null>(null);
-  const [messageCount, setMessageCount] = useState(0);
-  const [hasRetryEditFormat, setHasRetryEditFormat] = useState(false);
-  const [editRetryDetails, setEditRetryDetails] = useState<EditRetryDetection | null>(null);
-  const [isTechnicalContent, setIsTechnicalContent] = useState(false);
-  
-  // ✅ Usage tracking and limits
+  // ✅ DETECTION STATE
+  const [parseResult, setParseResult] = useState<ParseResult | null>(null);
   const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
   const [isLoadingUsage, setIsLoadingUsage] = useState(true);
-  const [parsingStrategy, setParsingStrategy] = useState<'auto' | 'local' | 'ai'>('auto');
 
-  // ✅ LOCALSTORAGE: Load saved data on mount
+  // ✅ LOCALSTORAGE: Auto-save/restore
   useEffect(() => {
     const savedText = localStorage.getItem('metagipsy_conversation_text');
     const savedGoal = localStorage.getItem('metagipsy_session_goal');
@@ -83,234 +73,174 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     }
   }, []);
 
-  // ✅ CORRECT: Edit-Retry detection with proper replacement logic
-  const detectEditRetryFormat = useCallback((text: string): EditRetryDetection => {
-    if (!text.trim()) {
-      return { 
-        isEditRetry: false, 
-        finalMessagePairs: 0, 
-        editCount: 0, 
-        retryCount: 0, 
-        confidence: 0, 
-        detectionMethod: 'empty',
-        conversationFlow: ''
-      };
-    }
+  // ✅ SIMPLE: Claude Edit-Retry detection
+  const detectClaudeEditRetry = useCallback((text: string): ParseResult | null => {
+    if (!text.trim()) return null;
 
-    try {
-      // ✅ DETECTION: Find Edit and Retry markers
-      const editMatches = text.match(/^Edit\s*$/gm) || [];
-      const retryMatches = text.match(/^Retry\s*$/gm) || [];
-      
-      const editCount = editMatches.length;
-      const retryCount = retryMatches.length;
-      
-      console.log('🔍 EDIT-RETRY RAW DETECTION:', {
-        editCount,
-        retryCount,
-        totalMarkers: editCount + retryCount
-      });
-
-      // ✅ VALIDATION: Check if this is really Edit-Retry format
-      let isEditRetry = false;
-      let detectionMethod = '';
-      let confidence = 0;
-      
-      if (editCount > 0 || retryCount > 0) {
-        if (editCount > 0 && retryCount > 0) {
-          isEditRetry = true;
-          detectionMethod = 'both_markers';
-          confidence = 0.95;
-        } else if (editCount >= 2 || retryCount >= 2) {
-          isEditRetry = true;
-          detectionMethod = editCount >= 2 ? 'multiple_edits' : 'multiple_retries';
-          confidence = 0.85;
-        } else if (editCount === 1 || retryCount === 1) {
-          isEditRetry = true;
-          detectionMethod = editCount === 1 ? 'single_edit' : 'single_retry';
-          confidence = 0.7;
-        }
-      }
-
-      // ✅ CORRECT: Calculate final message pairs (not raw markers)
-      let finalMessagePairs = 0;
-      let conversationFlow = '';
-      
-      if (isEditRetry) {
-        // ✅ LOGIC: Simulate conversation flow with replacements
-        const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-        
-        let currentRole: 'user' | 'assistant' = 'user'; // Usually starts with user
-        let messageCount = 0;
-        let userMessages = 0;
-        let assistantMessages = 0;
-        
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          
-          if (line === 'Edit') {
-            // ✅ Edit replaces previous user message (no new message created)
-            console.log('📝 Edit found - replacing previous user message');
-            currentRole = 'assistant'; // Next content should be assistant response
-            continue;
-          }
-          
-          if (line === 'Retry') {
-            // ✅ Retry replaces previous assistant message (no new message created)  
-            console.log('🔄 Retry found - replacing previous assistant response');
-            currentRole = 'user'; // Next content should be user message
-            continue;
-          }
-          
-          // ✅ CONTENT: Skip very short lines (likely formatting)
-          if (line.length < 10) continue;
-          
-          // ✅ COUNT: This is actual message content
-          if (currentRole === 'user') {
-            userMessages++;
-            currentRole = 'assistant';
-            console.log(`👤 User message ${userMessages}: ${line.substring(0, 50)}...`);
-          } else {
-            assistantMessages++;
-            currentRole = 'user';
-            console.log(`🤖 Assistant message ${assistantMessages}: ${line.substring(0, 50)}...`);
-          }
-        }
-        
-        // ✅ FINAL: Calculate conversation pairs
-        finalMessagePairs = Math.min(userMessages, assistantMessages) + Math.abs(userMessages - assistantMessages);
-        
-        conversationFlow = `${userMessages}U/${assistantMessages}A`;
-        
-        console.log('✅ EDIT-RETRY ANALYSIS COMPLETE:', {
-          userMessages,
-          assistantMessages,
-          finalMessagePairs,
-          conversationFlow
-        });
-      }
-
-      const result: EditRetryDetection = {
-        isEditRetry,
-        finalMessagePairs,
-        editCount,
-        retryCount,
-        confidence,
-        detectionMethod,
-        conversationFlow
-      };
-
-      console.log('🎯 EDIT-RETRY FINAL RESULT:', result);
-      return result;
-
-    } catch (error) {
-      console.error('Edit-Retry detection error:', error);
-      return { 
-        isEditRetry: false, 
-        finalMessagePairs: 0, 
-        editCount: 0, 
-        retryCount: 0, 
-        confidence: 0, 
-        detectionMethod: 'error',
-        conversationFlow: ''
-      };
-    }
+    const editCount = (text.match(/^Edit\s*$/gm) || []).length;
+    const retryCount = (text.match(/^Retry\s*$/gm) || []).length;
+    
+    console.log('🔍 Edit-Retry Check:', { editCount, retryCount });
+    
+    if (editCount === 0 && retryCount === 0) return null;
+    
+    // ✅ SIMPLE: Split by Edit/Retry markers and count content blocks
+    const blocks = text.split(/^(Edit|Retry)\s*$/gm)
+      .filter(block => block.trim() && block !== 'Edit' && block !== 'Retry')
+      .filter(block => block.length > 20); // Filter out short noise
+    
+    const messageCount = blocks.length;
+    
+    console.log('🎯 Claude Edit-Retry detected:', { 
+      editCount, 
+      retryCount, 
+      contentBlocks: blocks.length,
+      messageCount 
+    });
+    
+    return {
+      platform: 'claude',
+      messageCount,
+      isEditRetry: true,
+      pattern: `edit_retry_${editCount}e_${retryCount}r`,
+      confidence: 0.95
+    };
   }, []);
 
-  // ✅ ENHANCED: Smart text analysis with correct Edit-Retry logic
-  const analyzeText = useCallback((text: string) => {
-    if (!text.trim()) {
-      setDetectedPlatform(null);
-      setMessageCount(0);
-      setHasRetryEditFormat(false);
-      setEditRetryDetails(null);
-      setParsingStrategy('auto');
-      setIsTechnicalContent(false);
-      return;
-    }
-    
-    // ✅ FIRST: Correct Edit-Retry detection
-    const editRetryResult = detectEditRetryFormat(text);
-    setEditRetryDetails(editRetryResult);
-    
-    if (editRetryResult.isEditRetry) {
-      console.log('🎊 CLAUDE EDIT-RETRY FORMAT DETECTED!', editRetryResult);
-      setHasRetryEditFormat(true);
-      setDetectedPlatform('claude');
-      setMessageCount(editRetryResult.finalMessagePairs);
-      setParsingStrategy('local'); // ✅ Always use local for Edit-Retry (fastest)
-      setIsTechnicalContent(false);
-      
-      // ✅ CORRECT: Show proper message count
-      toast.success(
-        `🎯 Claude Edit-Retry detected! ${editRetryResult.editCount} edits, ${editRetryResult.retryCount} retries → ${editRetryResult.finalMessagePairs} final messages (${editRetryResult.conversationFlow})`,
-        { duration: 5000 }
-      );
-      return;
-    }
-    
-    // ✅ FALLBACK: Technical content detection
-    const technicalIndicators = [
-      /npm run|yarn|npx|@\w+\/\w+@\d+\.\d+\.\d+/i,
-      /error ts\d+|compilation|build failed|prisma/i,
-      /environment variables loaded|schema loaded/i,
-      /✔|✅|❌|⚠️|🔴|🟡|🟢/g,
-      /\d{4}-\d{2}-\d{2}t\d{2}:\d{2}:\d{2}/i,
-      /\[info\]|\[error\]|\[warn\]/i
-    ];
-    
-    const hasTechnicalContent = technicalIndicators.some(pattern => pattern.test(text));
-    setIsTechnicalContent(hasTechnicalContent);
-    
-    if (hasTechnicalContent) {
-      setDetectedPlatform('other');
-      setParsingStrategy('local');
-      setMessageCount(1);
-      setHasRetryEditFormat(false);
-      return;
-    }
-    
-    // ✅ STANDARD: Platform detection
+  // ✅ SIMPLE: Known pattern detection
+  const detectKnownPatterns = useCallback((text: string): ParseResult | null => {
     const content = text.toLowerCase();
-    let detected: Platform = 'other';
-    let strategy: 'auto' | 'local' | 'ai' = 'auto';
     
+    // Claude standard format
     if (content.includes('human:') && content.includes('assistant:')) {
-      detected = 'claude';
-      strategy = 'local';
-    } else if (content.includes('user:') && content.includes('chatgpt:')) {
-      detected = 'chatgpt';
-      strategy = 'local';
-    } else {
-      strategy = 'ai';
+      const count = (text.match(/(Human:|Assistant:)/gmi) || []).length;
+      return {
+        platform: 'claude',
+        messageCount: count,
+        isEditRetry: false,
+        pattern: 'human_assistant_markers',
+        confidence: 0.9
+      };
     }
     
-    // Message counting for non-Edit-Retry
-    const messageMarkers = text.match(/(Human:|Assistant:|User:|ChatGPT:)/gmi);
-    const alternatingBlocks = text.split(/\n\s*\n/).filter(block => block.trim().length > 20);
+    // ChatGPT format
+    if (content.includes('user:') && content.includes('chatgpt:')) {
+      const count = (text.match(/(User:|ChatGPT:)/gmi) || []).length;
+      return {
+        platform: 'chatgpt',
+        messageCount: count,
+        isEditRetry: false,
+        pattern: 'user_chatgpt_markers',
+        confidence: 0.9
+      };
+    }
     
-    const estimatedMessages = messageMarkers ? 
-      messageMarkers.length : 
-      Math.min(alternatingBlocks.length, 10);
-    
-    setDetectedPlatform(detected);
-    setMessageCount(estimatedMessages);
-    setParsingStrategy(strategy);
-    setHasRetryEditFormat(false);
-  }, [detectEditRetryFormat]);
+    return null;
+  }, []);
 
-  // ✅ AUTO-SAVE: Text changes with localStorage
+  // ✅ HAIKU: Pattern learning for unknown formats
+  const learnPatternWithHaiku = useCallback(async (text: string): Promise<ParseResult | null> => {
+    if (!enableHaikuParsing) return null;
+    if (usageStats?.tier.type === 'free') return null; // Pro feature
+    
+    try {
+      setIsParsing(true);
+      toast.info('🧠 Learning conversation pattern with Haiku...');
+      
+      const response = await api.analyzeEnhanced(text, {
+        expectedPlatform: 'auto',
+        analysisDepth: 'quick',
+        forceHaiku: true
+      });
+      
+      if (response?.success && response?.result?.messages?.length >= 2) {
+        const messageCount = response.result.messages.length;
+        const detectedPlatform = response.result.platform || 'other';
+        
+        console.log('🎊 Haiku learned pattern:', {
+          platform: detectedPlatform,
+          messageCount,
+          confidence: response.result.confidence || 0.8
+        });
+        
+        toast.success(`🎯 Haiku identified: ${detectedPlatform} format with ${messageCount} messages!`);
+        
+        return {
+          platform: detectedPlatform as Platform,
+          messageCount,
+          isEditRetry: false,
+          pattern: `haiku_learned_${detectedPlatform}`,
+          confidence: response.result.confidence || 0.8
+        };
+      }
+      
+      return null;
+      
+    } catch (error) {
+      console.log('🔄 Haiku pattern learning failed:', error);
+      toast.warning('Pattern learning unavailable - using fallback detection');
+      return null;
+    } finally {
+      setIsParsing(false);
+    }
+  }, [enableHaikuParsing, usageStats]);
+
+  // ✅ MAIN: Text analysis logic
+  const analyzeText = useCallback(async (text: string) => {
+    if (!text.trim()) {
+      setParseResult(null);
+      return;
+    }
+    
+    console.log('🔍 ANALYZING TEXT...');
+    
+    // ✅ STEP 1: Check Claude Edit-Retry (highest priority)
+    const claudeResult = detectClaudeEditRetry(text);
+    if (claudeResult) {
+      setParseResult(claudeResult);
+      toast.success(`🎯 Claude Edit-Retry detected! ${claudeResult.messageCount} messages`);
+      return;
+    }
+    
+    // ✅ STEP 2: Check known patterns
+    const knownResult = detectKnownPatterns(text);
+    if (knownResult) {
+      setParseResult(knownResult);
+      toast.success(`✅ Known ${knownResult.platform} format detected! ${knownResult.messageCount} messages`);
+      return;
+    }
+    
+    // ✅ STEP 3: Learn with Haiku (if enabled and Pro)
+    const haikuResult = await learnPatternWithHaiku(text);
+    if (haikuResult) {
+      setParseResult(haikuResult);
+      return;
+    }
+    
+    // ✅ FALLBACK: Generic detection
+    const lines = text.split('\n').filter(line => line.trim().length > 20);
+    const estimatedMessages = Math.max(1, Math.min(lines.length, 20));
+    
+    setParseResult({
+      platform: 'other',
+      messageCount: estimatedMessages,
+      isEditRetry: false,
+      pattern: 'generic_fallback',
+      confidence: 0.5
+    });
+    
+    toast.info(`📝 Generic format detected - ${estimatedMessages} content blocks found`);
+  }, [detectClaudeEditRetry, detectKnownPatterns, learnPatternWithHaiku]);
+
+  // ✅ AUTO-SAVE: Text changes
   const handleTextChange = useCallback((value: string) => {
     setConversationText(value);
     analyzeText(value);
     
-    // ✅ IMMEDIATE: Auto-save on every change
     if (value.trim()) {
       localStorage.setItem('metagipsy_conversation_text', value);
-      localStorage.setItem('metagipsy_last_saved', new Date().toISOString());
     } else {
       localStorage.removeItem('metagipsy_conversation_text');
-      localStorage.removeItem('metagipsy_last_saved');
     }
   }, [analyzeText]);
 
@@ -339,7 +269,6 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
         setUsageStats(stats);
       } catch (error) {
         console.error('Failed to load usage stats:', error);
-        toast.error('Failed to load usage limits');
       } finally {
         setIsLoadingUsage(false);
       }
@@ -348,16 +277,15 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
     loadUsageStats();
   }, []);
 
-  // ✅ SINGLE WORKFLOW: Parse & Analyze
+  // ✅ MAIN ACTION: Parse & Analyze
   const handleParseAndAnalyze = useCallback(async () => {
     if (!conversationText.trim()) {
       toast.error('Please paste your conversation first');
       return;
     }
 
-    // ✅ VALIDATION: Different requirements for Edit-Retry vs standard
-    if (!hasRetryEditFormat && !isTechnicalContent && messageCount < 2) {
-      toast.error('Need at least 2 messages to analyze. For technical logs, consider manual markup with Human:/Assistant: markers.');
+    if (!parseResult || parseResult.messageCount < 1) {
+      toast.error('No valid conversation format detected');
       return;
     }
 
@@ -367,103 +295,55 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       if (wouldExceed) {
         const remaining = usageStats.today.charactersLimit - usageStats.today.characters;
         toast.error(
-          `Daily limit exceeded! You have ${remaining} characters remaining. ${
-            usageStats.tier.type === 'free' ? 'Upgrade to Pro for 500k daily characters.' : 'Limit resets at midnight.'
+          `Daily limit exceeded! ${remaining} characters remaining. ${
+            usageStats.tier.type === 'free' ? 'Upgrade to Pro for 500k daily.' : 'Resets at midnight.'
           }`
         );
         return;
       }
     }
 
-    console.log('🔍 NAVIGATING TO VERIFY PAGE...');
+    console.log('🚀 NAVIGATING TO VERIFY...', parseResult);
     
-    // ✅ SMART PARSING: Edit-Retry gets special treatment
-    let parsedMessages = null;
-    let parsingMethod = 'local';
-    
-    if (hasRetryEditFormat) {
-      setIsParsing(true);
-      toast.success('🎯 Using optimized Edit-Retry parsing for Claude format...');
-      parsingMethod = 'edit_retry_optimized';
-      
-      // ✅ Edit-Retry format gets instant local parsing (fastest)
-      setTimeout(() => setIsParsing(false), 500);
-      
-    } else if (enableAIAnalysis && parsingStrategy === 'ai' && usageStats?.tier.type !== 'free' && !isTechnicalContent) {
-      setIsParsing(true);
-      toast.info('🧠 Using AI for smart parsing...');
-      
-      try {
-        const response = await api.analyzeEnhanced(conversationText, {
-          expectedPlatform: platform === 'auto' ? detectedPlatform || 'auto' : platform,
-          analysisDepth: 'standard',
-          forceHaiku: true
-        });
-        
-        if (response?.success && response?.result?.messages?.length >= 2) {
-          parsedMessages = response.result.messages;
-          parsingMethod = 'ai_enhanced';
-          toast.success(`🎊 AI parsing completed! Found ${parsedMessages.length} messages.`);
-        } else {
-          throw new Error(`AI parsing returned insufficient messages`);
-        }
-        
-      } catch (error) {
-        console.log('🔄 AI PARSING FAILED, using reliable local parsing');
-        toast.warning('AI parsing unavailable - using reliable local parsing...');
-      } finally {
-        setIsParsing(false);
-      }
-    } else {
-      if (parsingStrategy === 'local') {
-        toast.success('⚡ Using fast local parsing for detected format');
-      } else if (isTechnicalContent) {
-        toast.info('🔧 Technical content detected - consider manual markup for best results');
-      } else if (usageStats?.tier.type === 'free') {
-        toast.info('📝 Using local parsing (AI parsing available in Pro)');
-      }
-    }
-    
-    // ✅ COMPREHENSIVE: Prepare data for verify page
+    // ✅ PREPARE: Verify data
     const verifyData = {
       conversationText,
-      platform: platform === 'auto' ? detectedPlatform || 'other' : platform,
+      platform: platform === 'auto' ? parseResult.platform : platform,
       sessionGoal,
-      hasRetryEditFormat,
-      messageCount,
-      enableAIAnalysis,
-      parsedMessages,
-      parsingMethod,
-      parsingStrategy,
-      isTechnicalContent,
-      editRetryDetails, // ✅ CORRECT: Include proper detection details
+      hasRetryEditFormat: parseResult.isEditRetry,
+      messageCount: parseResult.messageCount,
+      enableAIAnalysis: enableHaikuParsing,
+      parsedMessages: null,
+      parsingMethod: parseResult.pattern,
+      parsingStrategy: parseResult.isEditRetry ? 'edit_retry' : 'standard',
+      isTechnicalContent: false,
+      editRetryDetails: parseResult.isEditRetry ? {
+        isEditRetry: true,
+        finalMessagePairs: parseResult.messageCount,
+        editCount: 0,
+        retryCount: 0,
+        confidence: parseResult.confidence,
+        detectionMethod: parseResult.pattern,
+        conversationFlow: `${parseResult.messageCount} messages`
+      } : null,
       timestamp: Date.now(),
       debugInfo: {
-        detectedPlatform,
+        detectedPlatform: parseResult.platform,
         originalPlatform: platform,
         textLength: conversationText.length,
-        retryEditDetected: hasRetryEditFormat,
-        smartStrategy: parsingStrategy,
-        technicalContent: isTechnicalContent,
-        editRetryConfidence: editRetryDetails?.confidence || 0,
-        editRetryMethod: editRetryDetails?.detectionMethod || 'none',
-        conversationFlow: editRetryDetails?.conversationFlow || ''
+        pattern: parseResult.pattern,
+        confidence: parseResult.confidence,
+        haikuEnabled: enableHaikuParsing
       }
     };
     
-    // Save to sessionStorage and navigate
     sessionStorage.setItem('metagipsy_verify_data', JSON.stringify(verifyData));
     navigate('/analyze/verify');
-  }, [conversationText, platform, detectedPlatform, sessionGoal, hasRetryEditFormat, messageCount, enableAIAnalysis, parsingStrategy, usageStats, isTechnicalContent, editRetryDetails, navigate]);
+  }, [conversationText, platform, sessionGoal, parseResult, enableHaikuParsing, usageStats, navigate]);
 
-  const canParseAndAnalyze = conversationText.trim().length > 20;
-  
-  // ✅ CHARACTER CALCULATIONS
   const currentLength = conversationText.length;
-  const isOverFreeLimit = currentLength > 5000 && usageStats?.tier.type === 'free';
-  const isOverProLimit = currentLength > 500000;
-  const remainingChars = usageStats ? Math.max(0, usageStats.today.charactersLimit - usageStats.today.characters) : 0;
   const wouldExceedDaily = usageStats ? (usageStats.today.characters + currentLength) > usageStats.today.charactersLimit : false;
+  const canAnalyze = conversationText.trim().length > 20 && parseResult && parseResult.messageCount >= 1 && !wouldExceedDaily;
 
   return (
     <div className="space-y-6">
@@ -471,7 +351,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
       <div className="text-center space-y-3">
         <h2 className="text-2xl font-bold text-slate-100">Analyze Conversation</h2>
         <p className="text-slate-400 max-w-2xl mx-auto">
-          Paste your conversation below for intelligent 5D analysis with correct Edit-Retry logic.
+          Simple pattern detection: Claude Edit-Retry → Haiku learning → Known formats
         </p>
       </div>
 
@@ -482,9 +362,7 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 {usageStats.tier.type === 'free' ? (
-                  <Badge variant="outline" className="text-blue-400 border-blue-500/50">
-                    Free Tier
-                  </Badge>
+                  <Badge variant="outline" className="text-blue-400 border-blue-500/50">Free Tier</Badge>
                 ) : (
                   <Badge className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
                     <Crown className="h-3 w-3 mr-1" />
@@ -492,28 +370,22 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
                   </Badge>
                 )}
                 <span className="text-sm text-slate-300">
-                  {usageStats.today.characters.toLocaleString()} / {usageStats.today.charactersLimit.toLocaleString()} characters today
+                  {usageStats.today.characters.toLocaleString()} / {usageStats.today.charactersLimit.toLocaleString()} chars
                 </span>
               </div>
               {usageStats.tier.type === 'free' && (
-                <Button variant="outline" size="sm" className="text-purple-400 border-purple-500/50 hover:bg-purple-950/30">
+                <Button variant="outline" size="sm" className="text-purple-400 border-purple-500/50">
                   <TrendingUp className="h-3 w-3 mr-1" />
                   Upgrade to Pro
                 </Button>
               )}
             </div>
-            <Progress 
-              value={usageStats.percentUsed} 
-              className="h-2 bg-slate-800"
-            />
-            <div className="mt-2 text-xs text-slate-400">
-              {usageStats.percentUsed}% used • Resets at midnight
-            </div>
+            <Progress value={usageStats.percentUsed} className="h-2 bg-slate-800" />
           </CardContent>
         </Card>
       )}
 
-      {/* ✅ SMART PARSING TOGGLE */}
+      {/* ✅ HAIKU LEARNING TOGGLE */}
       <Card className="bg-gradient-to-r from-purple-950/30 to-blue-950/30 border-purple-800/40">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
@@ -521,54 +393,20 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
               <Brain className="h-5 w-5 text-purple-400" />
               <div>
                 <Label className="text-sm font-medium text-purple-300">
-                  Smart Parsing Strategy
+                  Haiku Pattern Learning
                 </Label>
                 <p className="text-xs text-purple-400/80 mt-1">
-                  Correct Edit-Retry replacement logic + AI enhancement for Pro accounts
+                  Learn conversation patterns from any LLM interface (Pro feature)
                 </p>
               </div>
             </div>
             <Switch
-              checked={enableAIAnalysis}
-              onCheckedChange={setEnableAIAnalysis}
-              disabled={isAnalyzing || isParsing}
+              checked={enableHaikuParsing}
+              onCheckedChange={setEnableHaikuParsing}
+              disabled={isAnalyzing || isParsing || usageStats?.tier.type === 'free'}
               className="data-[state=checked]:bg-purple-600"
             />
           </div>
-          
-          {/* ✅ CORRECT: Edit-Retry status display */}
-          {conversationText && (
-            <div className="mt-3 flex items-center gap-2 flex-wrap">
-              {hasRetryEditFormat && editRetryDetails ? (
-                <Badge variant="outline" className="text-cyan-400 border-cyan-500/50 bg-cyan-950/20">
-                  🎯 Claude Edit-Retry ({editRetryDetails.editCount}E/{editRetryDetails.retryCount}R → {editRetryDetails.finalMessagePairs}M, {editRetryDetails.conversationFlow})
-                </Badge>
-              ) : isTechnicalContent ? (
-                <Badge variant="outline" className="text-orange-400 border-orange-500/50 bg-orange-950/20">
-                  🔧 Technical Content
-                </Badge>
-              ) : parsingStrategy === 'local' ? (
-                <Badge variant="outline" className="text-green-400 border-green-500/50 bg-green-950/20">
-                  ⚡ Local Parsing (Fast & Free)
-                </Badge>
-              ) : parsingStrategy === 'ai' ? (
-                <Badge variant="outline" className="text-blue-400 border-blue-500/50 bg-blue-950/20">
-                  🧠 AI Enhanced Parsing
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-gray-400 border-gray-500/50">
-                  🎯 Auto Strategy
-                </Badge>
-              )}
-              
-              {enableAIAnalysis && (
-                <Badge variant="outline" className="text-purple-400 border-purple-500/50 bg-purple-950/20">
-                  <Sparkles className="h-3 w-3 mr-1" />
-                  Smart Mode
-                </Badge>
-              )}
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -579,25 +417,9 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
             <Label htmlFor="conversation" className="text-base font-medium text-slate-200">
               Conversation Text
             </Label>
-            <div className="flex items-center gap-3 text-sm">
-              <span className={`${
-                isOverProLimit ? 'text-red-400' : 
-                isOverFreeLimit ? 'text-orange-400' : 
-                'text-slate-400'
-              }`}>
-                {currentLength.toLocaleString()} / {
-                  usageStats?.tier.type === 'free' ? '5k' : 
-                  usageStats?.tier.type === 'pro' ? '500k' : 
-                  '100k'
-                } chars
-              </span>
-              
-              {wouldExceedDaily && (
-                <span className="text-red-400 font-medium">
-                  Exceeds daily limit!
-                </span>
-              )}
-            </div>
+            <span className="text-sm text-slate-400">
+              {currentLength.toLocaleString()} chars
+            </span>
           </div>
           
           <Textarea
@@ -606,57 +428,46 @@ const ConversationInput: React.FC<ConversationInputProps> = ({
             onChange={(e) => handleTextChange(e.target.value)}
             placeholder="Paste your conversation here...
 
-✨ Perfect Edit-Retry logic: Edit replaces user message, Retry replaces AI response!
+🎯 Simple detection logic:
+• Claude Edit-Retry: Instant recognition
+• Known patterns: Human:/Assistant:, User:/ChatGPT:
+• Unknown formats: Haiku AI learns the pattern (Pro)
+• Generic fallback: Basic content detection
 
-Supported formats:
-• Claude.ai: Edit-Retry format with correct message counting
-• ChatGPT: User:/ChatGPT: labels automatically recognized  
-• Technical Logs: Manual Human:/Assistant: markup recommended
-• Other: Any clear dialogue format
-
-💾 Text auto-saves as you type for crash recovery!"
-            className={`min-h-80 mt-2 bg-slate-900/50 border-slate-700 text-slate-100 placeholder:text-slate-500 resize-none text-base leading-relaxed focus:border-purple-500 focus:ring-purple-500/20 ${
+💾 Auto-saves as you type!"
+            className={`min-h-80 mt-2 bg-slate-900/50 border-slate-700 text-slate-100 resize-none text-base leading-relaxed focus:border-purple-500 focus:ring-purple-500/20 ${
               wouldExceedDaily ? 'border-red-500/50' : 
-              isOverProLimit ? 'border-red-500/50' :
-              isOverFreeLimit ? 'border-orange-500/50' : 
-              hasRetryEditFormat ? 'border-cyan-500/50' : ''
+              parseResult?.isEditRetry ? 'border-cyan-500/50' : 
+              parseResult ? 'border-green-500/50' : ''
             }`}
             disabled={isAnalyzing || isParsing}
           />
         </div>
 
-        {/* ✅ STATUS INDICATORS */}
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center gap-4 flex-wrap">
-            {detectedPlatform && (
-              <div className="flex items-center gap-1">
-                <CheckCircle className="h-4 w-4 text-green-400" />
-                <span className="text-slate-300 capitalize">
-                  Detected: {detectedPlatform}
-                  {hasRetryEditFormat && editRetryDetails && (
-                    <span className="text-cyan-400 font-medium"> (Edit-Retry: {editRetryDetails.detectionMethod})</span>
-                  )}
-                  {isTechnicalContent && (
-                    <span className="text-orange-400 font-medium"> (Technical)</span>
-                  )}
-                </span>
-              </div>
-            )}
-            {messageCount > 0 && (
-              <Badge variant="secondary" className="bg-slate-800 text-slate-300 border-slate-600">
-                {messageCount} {isTechnicalContent ? 'blocks' : hasRetryEditFormat ? 'final messages' : 'messages'}
-              </Badge>
-            )}
+        {/* ✅ DETECTION STATUS */}
+        {parseResult && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <CheckCircle className="h-4 w-4 text-green-400" />
+            <Badge variant="outline" className={`${
+              parseResult.isEditRetry ? 'text-cyan-400 border-cyan-500/50 bg-cyan-950/20' :
+              parseResult.platform === 'claude' ? 'text-blue-400 border-blue-500/50 bg-blue-950/20' :
+              parseResult.platform === 'chatgpt' ? 'text-green-400 border-green-500/50 bg-green-950/20' :
+              'text-gray-400 border-gray-500/50 bg-gray-950/20'
+            }`}>
+              {parseResult.isEditRetry ? '🎯 Claude Edit-Retry' : 
+               parseResult.pattern === 'haiku_learned_claude' ? '🧠 Haiku Learned' :
+               parseResult.platform.charAt(0).toUpperCase() + parseResult.platform.slice(1)} Format
+            </Badge>
+            <Badge variant="secondary" className="bg-slate-800 text-slate-300">
+              {parseResult.messageCount} messages
+            </Badge>
+            <Badge variant="outline" className="text-purple-400 border-purple-500/50">
+              {Math.round(parseResult.confidence * 100)}% confidence
+            </Badge>
           </div>
-          
-          {remainingChars < 10000 && usageStats && (
-            <span className="text-orange-400 text-xs font-medium">
-              {remainingChars.toLocaleString()} chars remaining today
-            </span>
-          )}
-        </div>
+        )}
 
-        {/* ✅ ESSENTIAL FIELDS */}
+        {/* ✅ FIELDS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label htmlFor="platform" className="text-slate-200">Platform</Label>
@@ -666,7 +477,7 @@ Supported formats:
               </SelectTrigger>
               <SelectContent className="bg-slate-900 border-slate-700">
                 <SelectItem value="auto">
-                  🔍 Auto-detect {detectedPlatform && `(${detectedPlatform})`}
+                  🔍 Auto-detect {parseResult && `(${parseResult.platform})`}
                 </SelectItem>
                 <SelectItem value="claude">🤖 Claude</SelectItem>
                 <SelectItem value="chatgpt">💬 ChatGPT</SelectItem>
@@ -689,17 +500,17 @@ Supported formats:
         </div>
       </div>
 
-      {/* ✅ SINGLE ACTION BUTTON */}
+      {/* ✅ ACTION BUTTON */}
       <div className="flex gap-3">
         <Button
           onClick={handleParseAndAnalyze}
-          disabled={!canParseAndAnalyze || isAnalyzing || isParsing || wouldExceedDaily}
+          disabled={!canAnalyze || isAnalyzing || isParsing}
           className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
         >
           {isParsing ? (
             <>
               <Brain className="h-4 w-4 mr-2 animate-spin" />
-              {hasRetryEditFormat ? 'Processing Edit-Retry...' : 'Processing...'}
+              Learning Pattern...
             </>
           ) : (
             <>
@@ -710,32 +521,23 @@ Supported formats:
         </Button>
       </div>
 
-      {/* ✅ HELPFUL HINTS */}
-      <div className="space-y-2">
-        {conversationText.trim() && hasRetryEditFormat && editRetryDetails && (
-          <div className="text-center p-3 bg-cyan-950/20 border border-cyan-800/30 rounded-lg">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Zap className="h-4 w-4 text-cyan-400" />
-              <p className="text-sm text-cyan-300 font-medium">
-                Correct Claude Edit-Retry Logic Applied!
-              </p>
-            </div>
-            <p className="text-xs text-cyan-400">
-              Found {editRetryDetails.editCount} edits and {editRetryDetails.retryCount} retries. 
-              After replacements: <strong>{editRetryDetails.finalMessagePairs} final messages</strong> ({editRetryDetails.conversationFlow}). 
-              Detection: {editRetryDetails.detectionMethod}, Confidence: {Math.round(editRetryDetails.confidence * 100)}%
+      {/* ✅ HINTS */}
+      {conversationText.trim() && parseResult && (
+        <div className="text-center p-3 bg-cyan-950/20 border border-cyan-800/30 rounded-lg">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Zap className="h-4 w-4 text-cyan-400" />
+            <p className="text-sm text-cyan-300 font-medium">
+              {parseResult.isEditRetry ? 'Claude Edit-Retry Logic Applied!' :
+               parseResult.pattern.startsWith('haiku_') ? 'Pattern Learned with Haiku!' :
+               'Known Format Detected!'}
             </p>
           </div>
-        )}
-        
-        {!conversationText.trim() && (
-          <div className="text-center p-3 bg-slate-800/30 border border-slate-700/50 rounded-lg">
-            <p className="text-sm text-slate-400">
-              ✨ Perfect Edit-Retry logic: Edit replaces previous user message, Retry replaces previous AI response. Correct message counting guaranteed!
-            </p>
-          </div>
-        )}
-      </div>
+          <p className="text-xs text-cyan-400">
+            Platform: {parseResult.platform} • Messages: {parseResult.messageCount} • 
+            Pattern: {parseResult.pattern} • Confidence: {Math.round(parseResult.confidence * 100)}%
+          </p>
+        </div>
+      )}
     </div>
   );
 };
