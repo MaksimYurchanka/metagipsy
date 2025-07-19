@@ -1,4 +1,4 @@
-// ✅ UNIFIED 5D DATABASE SCHEMA with Stripe Subscription Support
+// ✅ UNIFIED 5D DATABASE SCHEMA with Lowercase Platform Compatibility
 // apps/api/prisma/schema.prisma
 
 generator client {
@@ -16,21 +16,6 @@ model User {
   name      String?
   avatar    String?
   tier      UserTier @default(FREE)
-  
-  // ✅ NEW: Stripe Subscription Fields
-  stripeCustomerId     String?   // Stripe customer ID
-  subscriptionStatus   String?   // 'free' | 'active' | 'canceled' | 'past_due' | 'trialing'
-  currentPlan          String?   // 'daily' | 'monthly'
-  subscriptionId       String?   // Stripe subscription ID
-  subscriptionStart    DateTime? // When subscription started
-  subscriptionEnd      DateTime? // When subscription ends/ended
-  cancelAtPeriodEnd    Boolean   @default(false) // Stripe cancel_at_period_end
-  
-  // ✅ NEW: Usage Tracking for Rate Limiting
-  dailyUsage           Int       @default(0)     // Current daily character usage
-  dailyLimit           Int       @default(5000)  // Daily character limit based on plan
-  usageResetDate       DateTime? // When daily usage resets
-  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -183,36 +168,6 @@ model ApiKey {
   @@map("api_keys")
 }
 
-// ✅ NEW: Payment Transaction History
-model PaymentTransaction {
-  id                String   @id @default(cuid())
-  userId            String
-  stripePaymentIntentId String @unique
-  stripeCustomerId  String
-  amount            Int      // Amount in cents
-  currency          String   @default("usd")
-  status            String   // 'succeeded' | 'failed' | 'canceled'
-  planType          String   // 'daily' | 'monthly'
-  planName          String
-  metadata          Json?
-  failureReason     String?
-  createdAt         DateTime @default(now())
-
-  @@map("payment_transactions")
-}
-
-// ✅ NEW: Usage Tracking for Analytics
-model UsageLog {
-  id            String   @id @default(cuid())
-  userId        String
-  charactersUsed Int
-  analysisType  String   // 'conversation' | 'quick'
-  timestamp     DateTime @default(now())
-  sessionId     String?  // Optional link to session
-
-  @@map("usage_logs")
-}
-
 // ✅ ENHANCED: Analytics tables for 5D aggregated statistics
 model DailyStats {
   id              String   @id @default(cuid())
@@ -234,11 +189,6 @@ model DailyStats {
   haikuParsingCount    Int  @default(0)
   hybridParsingCount   Int  @default(0)
   totalParsingCost     Float @default(0)
-  
-  // ✅ NEW: Revenue statistics
-  totalRevenue     Float @default(0)
-  newSubscriptions Int   @default(0)
-  canceledSubscriptions Int @default(0)
   
   createdAt       DateTime @default(now())
 

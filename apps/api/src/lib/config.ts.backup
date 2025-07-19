@@ -50,14 +50,6 @@ export const config = {
     apiKey: getEnvVar('ANTHROPIC_API_KEY', '')
   },
   
-  // ✅ NEW: Stripe Payment Configuration
-  stripe: {
-    secretKey: getEnvVar('STRIPE_SECRET_KEY'),
-    webhookSecret: getEnvVar('STRIPE_WEBHOOK_SECRET'),
-    priceMonthly: getEnvVar('STRIPE_PRICE_MONTHLY'),
-    priceDaily: getEnvVar('STRIPE_PRICE_DAILY')
-  },
-  
   jwt: {
     secret: getEnvVar('JWT_SECRET')
   },
@@ -88,12 +80,7 @@ export function validateConfig(): void {
     'DATABASE_URL',
     'JWT_SECRET',
     'SUPABASE_URL',
-    'SUPABASE_ANON_KEY',
-    // ✅ NEW: Stripe required variables
-    'STRIPE_SECRET_KEY',
-    'STRIPE_WEBHOOK_SECRET',
-    'STRIPE_PRICE_MONTHLY',
-    'STRIPE_PRICE_DAILY'
+    'SUPABASE_ANON_KEY'
   ];
   
   const missing = requiredVars.filter(varName => !process.env[varName]);
@@ -111,28 +98,6 @@ export function validateConfig(): void {
     }
   } catch (error) {
     throw new Error('Invalid URL in configuration');
-  }
-  
-  // ✅ NEW: Validate Stripe configuration
-  if (config.nodeEnv === 'production') {
-    // In production, ensure we have live keys
-    if (!config.stripe.secretKey.startsWith('sk_live_')) {
-      console.warn('Warning: Using test Stripe keys in production environment');
-    }
-  }
-  
-  // Validate Stripe Price IDs format
-  if (!config.stripe.priceMonthly.startsWith('price_')) {
-    throw new Error('Invalid Stripe monthly price ID format');
-  }
-  
-  if (!config.stripe.priceDaily.startsWith('price_')) {
-    throw new Error('Invalid Stripe daily price ID format');
-  }
-  
-  // Validate webhook secret format
-  if (!config.stripe.webhookSecret.startsWith('whsec_')) {
-    throw new Error('Invalid Stripe webhook secret format');
   }
   
   // Validate port
