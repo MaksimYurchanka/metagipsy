@@ -358,25 +358,10 @@ const getStructuredData = (pageType: string, analysisType: string | null): Struc
     }
   };
   
-  // Add FAQ structured data for homepage (avoiding circular reference)
+  // Add FAQ structured data for homepage
   if (pageType === 'homepage') {
-    // Create a separate WebApplication object for @graph to avoid circular reference
-    const webAppData = {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "MetaGipsy",
-      "description": baseStructuredData.description,
-      "url": baseStructuredData.url,
-      "applicationCategory": baseStructuredData.applicationCategory,
-      "operatingSystem": baseStructuredData.operatingSystem,
-      "offers": baseStructuredData.offers,
-      "provider": baseStructuredData.provider,
-      "featureList": baseStructuredData.featureList,
-      "aggregateRating": baseStructuredData.aggregateRating
-    };
-
     baseStructuredData["@graph"] = [
-      webAppData,
+      baseStructuredData,
       {
         "@type": "FAQPage",
         "mainEntity": [
