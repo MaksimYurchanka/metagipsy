@@ -13,7 +13,7 @@ const stripe = new Stripe(config.stripe.secretKey, {
   typescript: true,
 });
 
-// Rate limiting for payment endpoints - Fixed for proxy
+// Rate limiting for payment endpoints
 const paymentRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // Limit each IP to 10 payment requests per windowMs
@@ -22,9 +22,6 @@ const paymentRateLimit = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip proxy header validation for Render/Cloudflare
-  skipFailedRequests: true,
-  skipSuccessfulRequests: false,
 });
 
 // Validation schemas
@@ -63,7 +60,6 @@ type VerifyPaymentData = z.infer<typeof VerifyPaymentSchema>;
 /**
  * POST /api/v1/payments/create-payment-intent
  * Creates a Stripe Payment Intent for subscription purchases
- * FIXED: statement_descriptor → statement_descriptor_suffix for card compatibility
  */
 router.post('/create-payment-intent', paymentRateLimit, async (req: Request, res: Response) => {
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -159,7 +155,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: Request, res
       customer = customerId;
     }
 
-    // Create Payment Intent - FIXED: statement_descriptor_suffix for card compatibility
+    // Create Payment Intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency: 'usd',
@@ -172,8 +168,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: Request, res
         timestamp: new Date().toISOString(),
       },
       description: `MetaGipsy ${planName} - AI Conversation Analysis`,
-      // FIXED: Use statement_descriptor_suffix instead of statement_descriptor
-      statement_descriptor_suffix: 'METAGIPSY',
+      statement_descriptor: 'METAGIPSY',
       automatic_payment_methods: {
         enabled: true,
       },
@@ -186,8 +181,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: Request, res
       paymentIntentId: paymentIntent.id,
       planName,
       amount: amount / 100, // Log in dollars
-      customerId: customer,
-      statementDescriptor: 'METAGIPSY (suffix)'
+      customerId: customer
     });
 
     res.status(200).json({
@@ -207,12 +201,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: Request, res
       requestId,
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      ip: clientIP,
-      stripeError: error instanceof Stripe.errors.StripeError ? {
-        type: error.type,
-        code: error.code,
-        param: error.param
-      } : undefined
+      ip: clientIP
     });
 
     if (error instanceof Stripe.errors.StripeError) {
@@ -362,12 +351,7 @@ router.get('/health', async (req: Request, res: Response) => {
       status: 'healthy',
       stripe: 'connected',
       timestamp: new Date().toISOString(),
-      apiVersion: '2025-06-30.basil',
-      fixes: {
-        statementDescriptorSuffix: 'Applied',
-        cardCompatibility: 'Fixed',
-        proxySupport: 'Enhanced'
-      }
+      apiVersion: '2025-06-30.basil'
     });
   } catch (error) {
     logger.error('Stripe health check failed', { error });

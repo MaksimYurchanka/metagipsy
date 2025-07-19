@@ -15,10 +15,6 @@ import webhooksRoutes from './routes/webhooks';
 
 const app = express();
 
-// ✅ CRITICAL FIX: Trust proxy for Render/Cloudflare headers
-// This prevents Express rate limit warnings with X-Forwarded-For headers
-app.set('trust proxy', true);
-
 // ✅ NEW: Validate configuration including Stripe settings
 try {
   validateConfig();
@@ -65,8 +61,7 @@ app.use((req, res, next) => {
       path: req.path,
       ip: req.ip,
       userAgent: req.get('User-Agent'),
-      timestamp: new Date().toISOString(),
-      trustedProxy: 'enabled'
+      timestamp: new Date().toISOString()
     });
   }
   
@@ -87,12 +82,7 @@ app.get('/health', async (req, res) => {
         stripe: config.stripe.secretKey ? 'configured' : 'not_configured',
         anthropic: config.anthropic.apiKey ? 'configured' : 'not_configured'
       },
-      environment: config.nodeEnv,
-      proxy: {
-        trustProxy: true,
-        renderCompatible: true,
-        cloudflareReady: true
-      }
+      environment: config.nodeEnv
     };
 
     res.json(healthStatus);
@@ -128,14 +118,8 @@ app.get('/', (req, res) => {
       'Chess notation scoring',
       'Session management', 
       'Stripe payment processing',
-      'Subscription management',
-      'Proxy-compatible rate limiting'
-    ],
-    infrastructure: {
-      trustProxy: true,
-      renderOptimized: true,
-      cloudflareCompatible: true
-    }
+      'Subscription management'
+    ]
   });
 });
 
@@ -159,8 +143,7 @@ app.use((req, res, next) => {
         statusCode: res.statusCode,
         duration: `${duration}ms`,
         ip: req.ip,
-        success: res.statusCode < 400,
-        proxyHeaders: req.get('X-Forwarded-For') ? 'detected' : 'none'
+        success: res.statusCode < 400
       });
     } else {
       logger.info(`${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
@@ -175,8 +158,7 @@ app.use('*', (req, res) => {
   logger.warn('404 - Endpoint not found', {
     method: req.method,
     path: req.path,
-    ip: req.ip,
-    forwardedFor: req.get('X-Forwarded-For') || 'none'
+    ip: req.ip
   });
   
   res.status(404).json({
@@ -206,11 +188,7 @@ app.use((error: any, req: express.Request, res: express.Response, next: express.
       method: req.method,
       ip: req.ip,
       userAgent: req.get('User-Agent'),
-      body: req.body ? JSON.stringify(req.body).substring(0, 200) : 'no body',
-      proxyInfo: {
-        forwardedFor: req.get('X-Forwarded-For'),
-        trustProxy: true
-      }
+      body: req.body ? JSON.stringify(req.body).substring(0, 200) : 'no body'
     });
     
     // Don't expose internal payment errors to client
@@ -254,9 +232,7 @@ app.listen(port, '0.0.0.0', () => {
   logger.info(`MetaGipsy API server running on port ${port}`, {
     environment: config.nodeEnv,
     stripe: config.stripe.secretKey ? 'configured' : 'not_configured',
-    webhooks: config.stripe.webhookSecret ? 'configured' : 'not_configured',
-    trustProxy: true,
-    renderReady: true
+    webhooks: config.stripe.webhookSecret ? 'configured' : 'not_configured'
   });
 });
 
