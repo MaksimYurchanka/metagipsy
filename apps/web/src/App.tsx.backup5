@@ -11,12 +11,10 @@ import VerifyPage from '@/pages/VerifyPage';
 import ResultsPage from '@/pages/ResultsPage';
 import DashboardPage from '@/pages/DashboardPage';
 import SettingsPage from '@/pages/SettingsPage';
-import PricingPage from '@/pages/PricingPage';
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
 
 // 🎯 MetaGipsy App.tsx - Updated July 19, 2025
-// Production-ready with SEO integration, React 19 compatibility, and complete pricing system
-// Optimized for dark theme consistency and professional UX
+// Production-ready with SEO integration and React 19 compatibility
 
 // 🎯 Types for SEO data
 interface SessionData {
@@ -80,7 +78,7 @@ const AppContent: React.FC = () => {
   }, [pageType]);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100">
+    <div className="min-h-screen bg-background text-foreground">
       {/* 📈 SEO Optimization Component */}
       <SEOOptimization 
         pageType={pageType}
@@ -96,9 +94,8 @@ const AppContent: React.FC = () => {
         <Route path="/*" element={
           <Layout>
             <Routes>
-              {/* ✅ ПУБЛИЧНЫЕ СТРАНИЦЫ - доступны всем */}
+              {/* ✅ ПУБЛИЧНАЯ СТРАНИЦА - доступна всем */}
               <Route path="/" element={<HomePage />} />
-              <Route path="/pricing" element={<PricingPage />} />
               
               {/* ✅ ПОЛНЫЙ АНАЛИЗ WORKFLOW - все защищенные */}
               <Route 
@@ -148,22 +145,17 @@ const AppContent: React.FC = () => {
         } />
       </Routes>
       
-      {/* ✅ TOASTER CONFIGURATION - Dark theme optimized */}
+      {/* ✅ TOASTER CONFIGURATION - сохранена оригинальная настройка */}
       <Toaster 
         position="bottom-right"
         toastOptions={{
           duration: 4000,
           style: {
-            background: '#1f2937', // gray-800 for dark theme consistency
-            color: '#f9fafb', // gray-50 for light text
-            border: '1px solid #374151', // gray-700 for subtle border
-            borderRadius: '0.5rem',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2)',
+            background: 'hsl(var(--background))',
+            color: 'hsl(var(--foreground))',
+            border: '1px solid hsl(var(--border))',
           },
-          className: 'dark-toast',
         }}
-        theme="dark"
-        richColors
       />
     </div>
   );
@@ -172,53 +164,11 @@ const AppContent: React.FC = () => {
 // 🚀 Main App Component
 function App() {
   useEffect(() => {
-    // Initialize theme on app start - force dark theme
+    // Initialize theme on app start
     initializeTheme();
     
-    // 🌙 Force dark theme for consistency
-    document.documentElement.classList.add('dark');
-    document.body.className = 'bg-gray-900 text-gray-100 antialiased';
-    
-    // 📊 Initialize SEO when app starts
-    console.log('🚀 MetaGipsy App initialized with dark theme SEO optimization');
-    
-    // 💳 Initialize payment system readiness
-    console.log('💳 Payment system ready - Stripe integration operational');
-    
-    // 📈 Analytics initialization
-    if (typeof gtag !== 'undefined') {
-      gtag('event', 'app_initialization', {
-        event_category: 'System',
-        event_label: 'App Started',
-        value: 1,
-        custom_map: {
-          theme: 'dark',
-          version: '1.0.0',
-          features: '5D_Analysis_Context_Payments'
-        }
-      });
-    }
-  }, []);
-
-  // 🎯 Global dark theme styles enforcement
-  useEffect(() => {
-    // Ensure dark theme persistence across navigation
-    const enforceTheme = () => {
-      document.documentElement.classList.add('dark');
-      document.body.style.backgroundColor = '#111827'; // gray-900
-      document.body.style.color = '#f9fafb'; // gray-50
-    };
-
-    enforceTheme();
-    
-    // Listen for any theme changes and maintain dark
-    const observer = new MutationObserver(enforceTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class']
-    });
-
-    return () => observer.disconnect();
+    // Initialize SEO when app starts
+    console.log('🚀 MetaGipsy App initialized with SEO optimization');
   }, []);
 
   return (
@@ -246,37 +196,6 @@ export const updateSEOAnalysisType = (analysisType: AnalysisType): void => {
     detail: analysisType 
   });
   window.dispatchEvent(event);
-};
-
-// 📋 DARK THEME UTILITY FUNCTIONS
-
-// 🌙 Function to ensure dark theme consistency
-export const enforceDarkTheme = (): void => {
-  document.documentElement.classList.add('dark');
-  document.body.className = 'bg-gray-900 text-gray-100 antialiased';
-  
-  // Store theme preference
-  localStorage.setItem('metagipsy-theme', 'dark');
-  
-  console.log('🌙 Dark theme enforced for optimal UX');
-};
-
-// 💳 Function for payment success analytics
-export const trackPaymentEvent = (eventType: string, planName: string, amount?: number): void => {
-  if (typeof gtag !== 'undefined') {
-    gtag('event', eventType, {
-      event_category: 'Revenue',
-      event_label: planName,
-      value: amount || 0,
-      custom_map: {
-        plan_type: planName,
-        currency: 'USD',
-        payment_method: 'stripe'
-      }
-    });
-  }
-  
-  console.log(`💳 Payment event tracked: ${eventType} - ${planName}`);
 };
 
 // 📋 USAGE EXAMPLES FOR OTHER COMPONENTS:
@@ -308,43 +227,14 @@ useEffect(() => {
   }
 }, [detectedPlatform]);
 
-// 🎯 In PricingPage.tsx - Track payment events
-import { trackPaymentEvent } from '@/App';
-
-const handlePaymentSuccess = (planName: string, amount: number) => {
-  trackPaymentEvent('purchase', planName, amount);
-};
-
-// 🌙 In any component - Enforce dark theme
-import { enforceDarkTheme } from '@/App';
+// 🎯 In VerifyPage.tsx - Update analysis type based on parsing results
+import { updateSEOAnalysisType } from '@/App';
 
 useEffect(() => {
-  enforceDarkTheme();
-}, []);
-*/
-
-// 🎯 DARK THEME STYLES FOR COMPONENTS:
-/*
-Consistent dark theme classes to use across components:
-
-Backgrounds:
-- bg-gray-900 (darkest - main background)
-- bg-gray-800 (dark - cards, sidebars)
-- bg-gray-700 (medium - borders, dividers)
-
-Text:
-- text-gray-100 (lightest - primary text)
-- text-gray-300 (light - secondary text)
-- text-gray-400 (medium - muted text)
-
-Accents:
-- Purple: from-purple-600 to-blue-600
-- Blue: bg-blue-600, text-blue-400
-- Green: bg-green-600, text-green-400
-- Red: bg-red-600, text-red-400
-
-Borders:
-- border-gray-700 (subtle)
-- border-gray-600 (visible)
-- border-purple-500 (accent)
+  if (parsedMessages && parsedMessages.length > 0) {
+    // Detect platform from conversation format
+    const platform = detectPlatformFromMessages(parsedMessages);
+    updateSEOAnalysisType(platform);
+  }
+}, [parsedMessages]);
 */

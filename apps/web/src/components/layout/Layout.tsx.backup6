@@ -11,8 +11,7 @@ import {
   Github,
   Twitter,
   User,
-  LogOut,
-  Crown  // ✅ ADDED: Crown icon for pricing navigation
+  LogOut
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -31,12 +30,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const theme = useTheme();
   const { user, loading, signOut, isAuthenticated } = useAuth();
 
-  // ✅ UPDATED: Navigation array with Pricing integration
   const navigation = [
     { name: 'Home', href: '/', icon: Home },
     { name: 'Analyze', href: '/analyze', icon: Zap },
     { name: 'Dashboard', href: '/dashboard', icon: BarChart3 },
-    { name: 'Pricing', href: '/pricing', icon: Crown },  // ✅ ADDED: Pricing navigation
     { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
@@ -144,12 +141,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 {active && (
                   <div className="ml-auto w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
                 )}
-                {/* ✅ ADDED: Special indicator for pricing */}
-                {item.name === 'Pricing' && !active && (
-                  <div className="ml-auto">
-                    <Crown className="w-3 h-3 text-yellow-500 opacity-60" />
-                  </div>
-                )}
               </Link>
             );
           })}
@@ -252,12 +243,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </>
             ) : (
               <>
-                {/* ✅ UPDATED: Upgrade to Pro button now links to pricing */}
-                <Button variant="outline" size="sm" className="hidden sm:flex" asChild>
-                  <Link to="/pricing" className="flex items-center">
-                    <Crown className="w-4 h-4 mr-2 text-yellow-500" />
-                    Upgrade to Pro
-                  </Link>
+                <Button variant="outline" size="sm" className="hidden sm:flex">
+                  Upgrade to Pro
                 </Button>
                 <Button 
                   size="sm"
