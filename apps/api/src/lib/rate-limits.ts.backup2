@@ -1,4 +1,4 @@
-// ✅ RATE LIMITING SYSTEM - DATABASE COMPATIBLE with Stripe Integration
+// ✅ RATE LIMITING SYSTEM - COMPATIBLE with existing Prisma schema
 // apps/api/src/lib/rate-limits.ts
 
 import { redis } from './redis';
@@ -36,7 +36,7 @@ export class RateLimitService {
       dailyCharacterLimit: 500000,    // 500k characters per day
       dailyAnalysisLimit: 100,        // 100 analyses per day
       features: ['Enhanced AI Parsing', 'Unlimited Sessions', 'Export Features', 'Priority Support'],
-      stripePriceId: 'price_pro_daily'
+      stripePriceId: 'price_pro_daily' // Will be set up in Stripe
     },
     enterprise: {
       type: 'enterprise',
@@ -48,21 +48,17 @@ export class RateLimitService {
   };
 
   /**
-   * 🔍 GET USER TIER - DATABASE INTEGRATED
+   * 🔍 GET USER TIER - COMPATIBLE with existing schema
    */
   static async getUserTier(userId: string): Promise<UserTier> {
     try {
-      // ✅ ENHANCED: Get user with Stripe subscription info
+      // ✅ FIXED: Use existing User schema fields only
       const user = await prisma.user.findUnique({
         where: { id: userId },
         select: { 
           id: true,
           email: true,
-          tier: true,
-          // ✅ NEW: Stripe subscription fields
-          currentPlan: true,
-          subscriptionStatus: true,
-          dailyLimit: true
+          tier: true  // ✅ USE EXISTING: tier field exists in schema
         }
       });
 
@@ -71,19 +67,7 @@ export class RateLimitService {
         return this.TIERS.free;
       }
 
-      // ✅ ENHANCED: Determine tier from subscription status
-      if (user.subscriptionStatus === 'active' && user.currentPlan) {
-        if (user.currentPlan === 'daily' || user.currentPlan === 'monthly') {
-          const tier = { ...this.TIERS.pro };
-          // ✅ USE DATABASE: Override with actual daily limit from database
-          if (user.dailyLimit && user.dailyLimit > 0) {
-            tier.dailyCharacterLimit = user.dailyLimit;
-          }
-          return tier;
-        }
-      }
-
-      // ✅ FALLBACK: Use schema tier field
+      // ✅ USE EXISTING TIER FIELD: Map schema tier to our tiers
       const tierMap: Record<string, keyof typeof this.TIERS> = {
         'FREE': 'free',
         'PRO': 'pro', 
@@ -91,14 +75,7 @@ export class RateLimitService {
       };
 
       const userTierKey = tierMap[user.tier] || 'free';
-      const tier = { ...this.TIERS[userTierKey] };
-      
-      // ✅ USE DATABASE: Override with actual daily limit
-      if (user.dailyLimit && user.dailyLimit > 0) {
-        tier.dailyCharacterLimit = user.dailyLimit;
-      }
-      
-      return tier;
+      return this.TIERS[userTierKey];
 
     } catch (error) {
       logger.error('Failed to get user tier, defaulting to free', { error, userId });
@@ -107,77 +84,33 @@ export class RateLimitService {
   }
 
   /**
-   * 📊 CHECK DAILY USAGE - DATABASE INTEGRATED
+   * 📊 CHECK DAILY USAGE against limits
    */
   static async checkDailyUsage(
     userId: string, 
     requestedCharacters: number
   ): Promise<RateLimitResult> {
     try {
-      // ✅ GET user data including usage from database
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          dailyUsage: true,
-          dailyLimit: true,
-          usageResetDate: true,
-          currentPlan: true,
-          subscriptionStatus: true,
-          tier: true
-        }
-      });
-
-      if (!user) {
-        return {
-          allowed: false,
-          currentUsage: 0,
-          dailyLimit: 5000,
-          resetTime: new Date(),
-          tierType: 'free',
-          message: 'User not found'
-        };
-      }
-
       const userTier = await this.getUserTier(userId);
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const usageKey = `usage:${userId}:${today}`;
       
-      // ✅ CHECK if usage needs reset (new day)
-      const now = new Date();
-      const resetDate = user.usageResetDate || new Date(0);
-      const needsReset = now > resetDate;
+      // Get current usage from Redis
+      const currentUsageStr = await redis.get(usageKey);
+      const currentUsage = parseInt(currentUsageStr || '0');
       
-      let currentUsage = user.dailyUsage || 0;
-      
-      // ✅ RESET usage if needed
-      if (needsReset) {
-        const nextReset = new Date();
-        nextReset.setHours(24, 0, 0, 0); // Next midnight
-        
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            dailyUsage: 0,
-            usageResetDate: nextReset
-          }
-        });
-        
-        currentUsage = 0;
-        logger.info('Daily usage reset for user', { userId, nextReset });
-      }
-
-      const dailyLimit = user.dailyLimit || userTier.dailyCharacterLimit;
-      const wouldExceed = (currentUsage + requestedCharacters) > dailyLimit;
-      
-      const resetTime = user.usageResetDate || new Date();
+      const wouldExceed = (currentUsage + requestedCharacters) > userTier.dailyCharacterLimit;
+      const resetTime = new Date();
+      resetTime.setHours(24, 0, 0, 0); // Reset at midnight
 
       if (wouldExceed) {
         return {
           allowed: false,
           currentUsage,
-          dailyLimit,
+          dailyLimit: userTier.dailyCharacterLimit,
           resetTime,
           tierType: userTier.type,
-          message: `Daily limit exceeded. You've used ${currentUsage.toLocaleString()}/${dailyLimit.toLocaleString()} characters. ${
+          message: `Daily limit exceeded. You've used ${currentUsage}/${userTier.dailyCharacterLimit} characters. ${
             userTier.type === 'free' ? 'Upgrade to Pro for 500k daily characters.' : 'Limit resets at midnight.'
           }`
         };
@@ -186,7 +119,7 @@ export class RateLimitService {
       return {
         allowed: true,
         currentUsage,
-        dailyLimit,
+        dailyLimit: userTier.dailyCharacterLimit,
         resetTime,
         tierType: userTier.type
       };
@@ -197,7 +130,7 @@ export class RateLimitService {
       return {
         allowed: true,
         currentUsage: 0,
-        dailyLimit: 5000,
+        dailyLimit: this.TIERS.free.dailyCharacterLimit,
         resetTime: new Date(),
         tierType: 'free',
         message: 'Rate limit check unavailable'
@@ -206,7 +139,7 @@ export class RateLimitService {
   }
 
   /**
-   * 📈 RECORD USAGE - DATABASE INTEGRATED
+   * 📈 RECORD USAGE after successful analysis
    */
   static async recordUsage(
     userId: string, 
@@ -214,21 +147,18 @@ export class RateLimitService {
     analysisType: 'local' | 'haiku' = 'local'
   ): Promise<void> {
     try {
-      // ✅ UPDATE usage in database
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          dailyUsage: {
-            increment: charactersUsed
-          }
-        }
-      });
-      
-      // ✅ ALSO track in Redis for analytics
       const today = new Date().toISOString().split('T')[0];
+      const usageKey = `usage:${userId}:${today}`;
       const analysisKey = `analyses:${userId}:${today}`;
       
+      // Increment character usage
+      await redis.incrby(usageKey, charactersUsed);
+      
+      // Increment analysis count
       await redis.incr(analysisKey);
+      
+      // Set expiry for 48 hours (to handle timezone differences)
+      await redis.expire(usageKey, 48 * 60 * 60);
       await redis.expire(analysisKey, 48 * 60 * 60);
       
       logger.info('Usage recorded successfully', {
@@ -245,7 +175,7 @@ export class RateLimitService {
   }
 
   /**
-   * 📊 GET USAGE STATS - DATABASE INTEGRATED
+   * 📊 GET USAGE STATS for user dashboard
    */
   static async getUserUsageStats(userId: string): Promise<{
     today: {
@@ -259,34 +189,27 @@ export class RateLimitService {
     resetTime: Date;
   }> {
     try {
-      // ✅ GET usage from database
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          dailyUsage: true,
-          dailyLimit: true,
-          usageResetDate: true
-        }
-      });
-
       const userTier = await this.getUserTier(userId);
-      
-      // ✅ GET analysis count from Redis
       const today = new Date().toISOString().split('T')[0];
+      
+      const usageKey = `usage:${userId}:${today}`;
       const analysisKey = `analyses:${userId}:${today}`;
-      const analysesUsed = await redis.get(analysisKey).then(val => parseInt(val || '0'));
       
-      const charactersUsed = user?.dailyUsage || 0;
-      const charactersLimit = user?.dailyLimit || userTier.dailyCharacterLimit;
-      const percentUsed = Math.round((charactersUsed / charactersLimit) * 100);
+      const [charactersUsed, analysesUsed] = await Promise.all([
+        redis.get(usageKey).then(val => parseInt(val || '0')),
+        redis.get(analysisKey).then(val => parseInt(val || '0'))
+      ]);
       
-      const resetTime = user?.usageResetDate || new Date();
+      const percentUsed = Math.round((charactersUsed / userTier.dailyCharacterLimit) * 100);
+      
+      const resetTime = new Date();
+      resetTime.setHours(24, 0, 0, 0);
       
       return {
         today: {
           characters: charactersUsed,
           analyses: analysesUsed,
-          charactersLimit,
+          charactersLimit: userTier.dailyCharacterLimit,
           analysesLimit: userTier.dailyAnalysisLimit
         },
         tier: userTier,
@@ -300,8 +223,8 @@ export class RateLimitService {
         today: {
           characters: 0,
           analyses: 0,
-          charactersLimit: 5000,
-          analysesLimit: 5
+          charactersLimit: this.TIERS.free.dailyCharacterLimit,
+          analysesLimit: this.TIERS.free.dailyAnalysisLimit
         },
         tier: this.TIERS.free,
         percentUsed: 0,
@@ -311,26 +234,24 @@ export class RateLimitService {
   }
 
   /**
-   * 💳 UPDATE USER TIER - STRIPE COMPATIBLE
+   * 💳 UPDATE USER TIER (using existing schema)
    */
   static async updateUserTier(
     userId: string, 
     newTier: 'free' | 'pro' | 'enterprise'
   ): Promise<void> {
     try {
+      // ✅ USE EXISTING SCHEMA: Update tier field that exists
       const tierMap: Record<string, 'FREE' | 'PRO' | 'ENTERPRISE'> = {
         'free': 'FREE',
         'pro': 'PRO',
         'enterprise': 'ENTERPRISE'
       };
 
-      const tierConfig = this.TIERS[newTier];
-
       await prisma.user.update({
         where: { id: userId },
         data: {
           tier: tierMap[newTier] || 'FREE',
-          dailyLimit: tierConfig.dailyCharacterLimit,
           updatedAt: new Date()
         }
       });
@@ -340,36 +261,6 @@ export class RateLimitService {
     } catch (error) {
       logger.error('Failed to update user tier', { error, userId, newTier });
       throw new Error('Failed to update subscription');
-    }
-  }
-
-  /**
-   * 🔄 RESET ALL DAILY USAGE (cron job helper)
-   */
-  static async resetAllDailyUsage(): Promise<void> {
-    try {
-      const nextReset = new Date();
-      nextReset.setHours(24, 0, 0, 0);
-
-      const result = await prisma.user.updateMany({
-        where: {
-          usageResetDate: {
-            lt: new Date()
-          }
-        },
-        data: {
-          dailyUsage: 0,
-          usageResetDate: nextReset
-        }
-      });
-
-      logger.info('Daily usage reset completed', { 
-        usersReset: result.count,
-        nextReset
-      });
-
-    } catch (error) {
-      logger.error('Failed to reset daily usage', { error });
     }
   }
 }

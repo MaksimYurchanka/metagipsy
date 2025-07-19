@@ -6,9 +6,9 @@ import { prisma } from '../lib/prisma';
 
 const router = express.Router();
 
-// Initialize Stripe with updated API version
+// Initialize Stripe
 const stripe = new Stripe(config.stripe.secretKey, {
-  apiVersion: '2025-06-30.basil',
+  apiVersion: '2024-11-20.acacia',
   typescript: true,
 });
 
@@ -200,24 +200,10 @@ const eventHandlers = {
         currentPlan: planType,
         subscriptionStart: new Date(),
         subscriptionEnd,
-        dailyLimit
+        dailyLimit,
+        dailyUsage: 0, // Reset usage on new subscription
+        usageResetDate: new Date(Date.now() + 24 * 60 * 60 * 1000) // Tomorrow
       });
-      
-      // Reset usage tracking in separate update (avoiding conflicts)
-      try {
-        await prisma.user.updateMany({
-          where: { stripeCustomerId: customerId },
-          data: {
-            dailyUsage: 0,
-            usageResetDate: new Date(Date.now() + 24 * 60 * 60 * 1000)
-          }
-        });
-      } catch (usageError) {
-        logger.warn('Failed to reset usage tracking', {
-          customerId,
-          error: usageError instanceof Error ? usageError.message : 'Unknown error'
-        });
-      }
       
       logger.info('User upgraded successfully', {
         customerId,
@@ -257,13 +243,13 @@ const eventHandlers = {
   async 'invoice.payment_succeeded'(event: Stripe.Event) {
     const invoice = event.data.object as Stripe.Invoice;
     const customerId = invoice.customer as string;
-    const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
+    const subscriptionId = invoice.subscription as string;
     
     logger.info('Invoice payment succeeded webhook received', {
       invoiceId: invoice.id,
       customerId,
       subscriptionId,
-      amount: (invoice.amount_paid || 0) / 100
+      amount: invoice.amount_paid / 100
     });
     
     // For recurring subscriptions, ensure user access is maintained
@@ -271,11 +257,11 @@ const eventHandlers = {
       try {
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
         const priceId = subscription.items.data[0]?.price.id;
-        const planType = getPlanTypeFromPriceId(priceId || '');
+        const planType = getPlanTypeFromPriceId(priceId);
         
         if (planType !== 'unknown') {
           const dailyLimit = getDailyLimitForPlan(planType);
-          const subscriptionEnd = new Date((subscription as any).current_period_end * 1000);
+          const subscriptionEnd = new Date(subscription.current_period_end * 1000);
           
           await updateUserSubscription(customerId, {
             subscriptionStatus: 'active',
@@ -297,7 +283,7 @@ const eventHandlers = {
   async 'invoice.payment_failed'(event: Stripe.Event) {
     const invoice = event.data.object as Stripe.Invoice;
     const customerId = invoice.customer as string;
-    const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
+    const subscriptionId = invoice.subscription as string;
     
     logger.warn('Invoice payment failed webhook received', {
       invoiceId: invoice.id,
@@ -307,7 +293,7 @@ const eventHandlers = {
     });
     
     // If this is a subscription renewal failure, consider downgrading after grace period
-    if (subscriptionId && (invoice.attempt_count || 0) >= 3) {
+    if (subscriptionId && invoice.attempt_count >= 3) {
       logger.warn('Multiple payment failures detected, considering account suspension', {
         customerId,
         invoiceId: invoice.id,
@@ -326,7 +312,7 @@ const eventHandlers = {
     const subscription = event.data.object as Stripe.Subscription;
     const customerId = subscription.customer as string;
     const priceId = subscription.items.data[0]?.price.id;
-    const planType = getPlanTypeFromPriceId(priceId || '');
+    const planType = getPlanTypeFromPriceId(priceId);
     
     logger.info('Subscription created webhook received', {
       subscriptionId: subscription.id,
@@ -337,15 +323,15 @@ const eventHandlers = {
     
     if (planType !== 'unknown' && subscription.status === 'active') {
       const dailyLimit = getDailyLimitForPlan(planType);
-      const subscriptionEnd = new Date((subscription as any).current_period_end * 1000);
+      const subscriptionEnd = new Date(subscription.current_period_end * 1000);
       
       await updateUserSubscription(customerId, {
         subscriptionStatus: 'active',
         currentPlan: planType,
         subscriptionId: subscription.id,
-        subscriptionStart: new Date((subscription as any).current_period_start * 1000),
+        subscriptionStart: new Date(subscription.current_period_start * 1000),
         subscriptionEnd,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
         dailyLimit
       });
     }
@@ -355,7 +341,7 @@ const eventHandlers = {
     const subscription = event.data.object as Stripe.Subscription;
     const customerId = subscription.customer as string;
     const priceId = subscription.items.data[0]?.price.id;
-    const planType = getPlanTypeFromPriceId(priceId || '');
+    const planType = getPlanTypeFromPriceId(priceId);
     
     logger.info('Subscription updated webhook received', {
       subscriptionId: subscription.id,
@@ -364,7 +350,7 @@ const eventHandlers = {
       cancelAtPeriodEnd: subscription.cancel_at_period_end
     });
     
-    const subscriptionEnd = new Date((subscription as any).current_period_end * 1000);
+    const subscriptionEnd = new Date(subscription.current_period_end * 1000);
     
     // Update user access based on subscription status
     if (subscription.status === 'active' && planType !== 'unknown') {
@@ -374,13 +360,13 @@ const eventHandlers = {
         subscriptionStatus: 'active',
         currentPlan: planType,
         subscriptionEnd,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
         dailyLimit
       });
     } else if (['canceled', 'unpaid', 'past_due'].includes(subscription.status)) {
       await updateUserSubscription(customerId, {
         subscriptionStatus: subscription.status,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end || false,
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
         subscriptionEnd
       });
       
@@ -419,10 +405,9 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req: Re
   const signature = req.headers['stripe-signature'] as string;
   const webhookSecret = config.stripe.webhookSecret;
   const requestId = `webhook_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
   
   if (!signature) {
-    logger.error('Missing Stripe signature', { requestId, ip: clientIp });
+    logger.error('Missing Stripe signature', { requestId, ip: req.ip });
     return res.status(400).send('Missing Stripe signature');
   }
   
@@ -436,7 +421,7 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req: Re
   if (!event) {
     logger.error('Invalid webhook signature', { 
       requestId, 
-      ip: clientIp,
+      ip: req.ip,
       userAgent: req.get('User-Agent')
     });
     return res.status(400).send('Invalid signature');
@@ -447,7 +432,7 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req: Re
     eventType: event.type,
     eventId: event.id,
     livemode: event.livemode,
-    ip: clientIp
+    ip: req.ip
   });
 
   try {

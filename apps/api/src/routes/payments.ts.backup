@@ -9,7 +9,7 @@ const router = express.Router();
 
 // Initialize Stripe with secret key
 const stripe = new Stripe(config.stripe.secretKey, {
-  apiVersion: '2025-06-30.basil',
+  apiVersion: '2024-11-20.acacia',
   typescript: true,
 });
 
@@ -67,7 +67,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: CreatePaymen
   try {
     logger.info('Payment Intent creation started', {
       requestId,
-      ip: req.ip || req.socket.remoteAddress,
+      ip: req.ip,
       userAgent: req.get('User-Agent'),
       body: { ...req.body, customerEmail: req.body.customerEmail ? '[REDACTED]' : undefined }
     });
@@ -78,7 +78,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: CreatePaymen
       logger.warn('Invalid payment intent request', {
         requestId,
         errors: validation.error.errors,
-        ip: req.ip || req.socket.remoteAddress
+        ip: req.ip
       });
       
       return res.status(400).json({
@@ -95,7 +95,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: CreatePaymen
       logger.warn('Invalid price ID provided', {
         requestId,
         priceId,
-        ip: req.ip || req.socket.remoteAddress
+        ip: req.ip
       });
       
       return res.status(400).json({
@@ -198,7 +198,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: CreatePaymen
       requestId,
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      ip: req.ip || req.socket.remoteAddress
+      ip: req.ip
     });
 
     if (error instanceof Stripe.errors.StripeError) {
@@ -251,7 +251,7 @@ router.post('/verify-payment', async (req: VerifyPaymentRequest, res: Response) 
   try {
     logger.info('Payment verification started', {
       requestId,
-      ip: req.ip || req.socket.remoteAddress
+      ip: req.ip
     });
 
     const validation = VerifyPaymentSchema.safeParse(req.body);
@@ -314,7 +314,7 @@ router.post('/verify-payment', async (req: VerifyPaymentRequest, res: Response) 
       requestId,
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      ip: req.ip || req.socket.remoteAddress
+      ip: req.ip
     });
 
     if (error instanceof Stripe.errors.StripeError) {
@@ -346,7 +346,7 @@ router.get('/health', async (req: Request, res: Response) => {
       status: 'healthy',
       stripe: 'connected',
       timestamp: new Date().toISOString(),
-      apiVersion: '2025-06-30.basil'
+      version: stripe.VERSION
     });
   } catch (error) {
     logger.error('Stripe health check failed', { error });
