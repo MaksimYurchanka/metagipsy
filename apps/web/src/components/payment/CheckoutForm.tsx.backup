@@ -50,9 +50,7 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
         setError('');
 
         const apiUrl = import.meta.env.VITE_API_URL;
-        
-        // ✅ FIXED: Remove duplicate /api/v1 - VITE_API_URL already includes it
-        const response = await fetch(`${apiUrl}/payments/create-payment-intent`, {
+        const response = await fetch(`${apiUrl}/api/v1/payments/create-payment-intent`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -70,14 +68,6 @@ const CheckoutForm: React.FC<CheckoutFormProps> = ({
         }
 
         const data = await response.json();
-        
-        console.log('💳 Payment Intent created:', {
-          paymentIntentId: data.paymentIntentId,
-          amount: data.amount,
-          currency: data.currency,
-          planName,
-          priceId
-        });
         
         if (data.clientSecret) {
           setClientSecret(data.clientSecret);
@@ -250,8 +240,6 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
         throw new Error(submitError.message);
       }
 
-      console.log('💳 Confirming payment for:', { planName, planPrice, priceId });
-
       // Confirm the payment
       const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
         elements,
@@ -266,12 +254,6 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       }
 
       if (paymentIntent && paymentIntent.status === 'succeeded') {
-        console.log('🎉 Payment succeeded:', {
-          paymentIntentId: paymentIntent.id,
-          amount: paymentIntent.amount,
-          status: paymentIntent.status
-        });
-
         setSuccess(true);
         
         // Call success callback
