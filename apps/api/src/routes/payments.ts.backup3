@@ -53,9 +53,17 @@ const getUserAgent = (req: Request): string | undefined => {
   return req.get ? req.get('User-Agent') : req.headers['user-agent'] as string;
 };
 
-// Type definitions for validated data (matching Zod schema output)
-type CreatePaymentIntentData = z.infer<typeof CreatePaymentIntentSchema>;
-type VerifyPaymentData = z.infer<typeof VerifyPaymentSchema>;
+// Request body type definitions (avoiding custom interface extensions)
+interface CreatePaymentIntentBody {
+  priceId: string;
+  planName: string;
+  customerEmail?: string;
+  customerId?: string;
+}
+
+interface VerifyPaymentBody {
+  paymentIntentId: string;
+}
 
 /**
  * POST /api/v1/payments/create-payment-intent
@@ -90,8 +98,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: Request, res
       });
     }
 
-    // Extract validated data (TypeScript compatible)
-    const { priceId, planName, customerEmail, customerId }: CreatePaymentIntentData = validation.data;
+    const { priceId, planName, customerEmail, customerId }: CreatePaymentIntentBody = validation.data;
 
     // Verify price ID is valid
     if (!PriceToAmountMap[priceId]) {
@@ -266,8 +273,7 @@ router.post('/verify-payment', async (req: Request, res: Response) => {
       });
     }
 
-    // Extract validated data (TypeScript compatible)
-    const { paymentIntentId }: VerifyPaymentData = validation.data;
+    const { paymentIntentId }: VerifyPaymentBody = validation.data;
 
     // Retrieve payment intent from Stripe
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
