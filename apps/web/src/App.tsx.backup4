@@ -1,0 +1,99 @@
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'sonner';
+import { initializeTheme } from '@/stores/settingsStore';
+import Layout from '@/components/layout/Layout';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import HomePage from '@/pages/HomePage';
+import AnalysisPage from '@/pages/AnalysisPage';
+import VerifyPage from '@/pages/VerifyPage';
+import ResultsPage from '@/pages/ResultsPage';
+import DashboardPage from '@/pages/DashboardPage';
+import SettingsPage from '@/pages/SettingsPage';
+import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
+
+function App() {
+  useEffect(() => {
+    // Initialize theme on app start
+    initializeTheme();
+  }, []);
+
+  return (
+    <Router>
+      <div className="min-h-screen bg-background text-foreground">
+        <Routes>
+          {/* СПЕЦИАЛЬНЫЙ МАРШРУТ: Auth Callback - БЕЗ Layout */}
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          
+          {/* ОБЫЧНЫЕ МАРШРУТЫ: С Layout */}
+          <Route path="/*" element={
+            <Layout>
+              <Routes>
+                {/* Публичная страница - доступна всем */}
+                <Route path="/" element={<HomePage />} />
+                
+                {/* ✅ ПОЛНЫЙ АНАЛИЗ WORKFLOW - все защищенные */}
+                <Route 
+                  path="/analyze" 
+                  element={
+                    <ProtectedRoute>
+                      <AnalysisPage />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/analyze/verify" 
+                  element={
+                    <ProtectedRoute>
+                      <VerifyPage />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/analyze/results/:sessionId" 
+                  element={
+                    <ProtectedRoute>
+                      <ResultsPage />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* ОСТАЛЬНЫЕ ЗАЩИЩЕННЫЕ МАРШРУТЫ */}
+                <Route 
+                  path="/dashboard" 
+                  element={
+                    <ProtectedRoute>
+                      <DashboardPage />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/settings" 
+                  element={
+                    <ProtectedRoute>
+                      <SettingsPage />
+                    </ProtectedRoute>
+                  } 
+                />
+              </Routes>
+            </Layout>
+          } />
+        </Routes>
+        
+        <Toaster 
+          position="bottom-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: 'hsl(var(--background))',
+              color: 'hsl(var(--foreground))',
+              border: '1px solid hsl(var(--border))',
+            },
+          }}
+        />
+      </div>
+    </Router>
+  );
+}
+
+export default App;

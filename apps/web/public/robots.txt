@@ -1,0 +1,67 @@
+# MetaGipsy OWL Chess Engine - Robots.txt Configuration
+# Professional SEO configuration for search engine crawlers
+# Generated: July 19, 2025
+# Domain: metagipsy.com
+
+User-agent: *
+Allow: /
+
+# Allow all public pages
+Allow: /analyze
+Allow: /pricing
+
+# Allow important static resources
+Allow: /favicon.svg
+Allow: /favicon.ico
+Allow: /*.css
+Allow: /*.js
+Allow: /*.svg
+Allow: /*.png
+Allow: /*.jpg
+Allow: /*.jpeg
+Allow: /*.webp
+
+# Disallow protected routes (require authentication)
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /analyze/verify
+Disallow: /analyze/results
+Disallow: /auth/
+
+# Disallow API endpoints (handled separately)
+Disallow: /api/
+
+# Disallow common non-public paths
+Disallow: /admin
+Disallow: /private
+Disallow: /.well-known/
+Disallow: /.*
+
+# Special instructions for major search engines
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Slurp
+Allow: /
+Crawl-delay: 2
+
+# Block aggressive crawlers
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+# Sitemap location
+Sitemap: https://www.metagipsy.com/sitemap.xml
+
+# Additional sitemap for analytics
+Sitemap: https://www.metagipsy.com/sitemap-pages.xml
