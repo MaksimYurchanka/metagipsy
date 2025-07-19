@@ -12,35 +12,6 @@ const stripe = new Stripe(config.stripe.secretKey, {
   typescript: true,
 });
 
-// Helper functions for safe property access (following project patterns)
-const getClientIP = (req: Request): string => {
-  return req.ip || 
-         (req.socket && req.socket.remoteAddress) || 
-         'unknown';
-};
-
-const getUserAgent = (req: Request): string | undefined => {
-  return req.get ? req.get('User-Agent') : req.headers['user-agent'] as string;
-};
-
-// Helper function to safely extract subscription ID from invoice (TypeScript compatible)
-const getSubscriptionIdFromInvoice = (invoice: Stripe.Invoice): string | undefined => {
-  // Stripe Invoice can have subscription property as string, object, or undefined
-  // TypeScript definitions don't always include it, but it exists at runtime
-  const invoiceAny = invoice as any;
-  
-  if (!invoiceAny.subscription) return undefined;
-  
-  // Handle both string and expanded object subscription types
-  if (typeof invoiceAny.subscription === 'string') {
-    return invoiceAny.subscription;
-  } else if (typeof invoiceAny.subscription === 'object' && invoiceAny.subscription.id) {
-    return invoiceAny.subscription.id;
-  }
-  
-  return undefined;
-};
-
 // Webhook signature verification
 const verifyStripeSignature = (
   payload: string | Buffer,
@@ -135,7 +106,7 @@ const recordPaymentTransaction = async (
     logger.info('Payment transaction recorded', {
       paymentIntentId,
       customerId,
-      amount: amount / 100, // Log in dollars (cents to dollars conversion)
+      amount: amount / 100, // Log in dollars
       status,
       planType
     });
@@ -197,7 +168,7 @@ const eventHandlers = {
     logger.info('Payment succeeded webhook received', {
       paymentIntentId: paymentIntent.id,
       customerId,
-      amount: paymentIntent.amount / 100, // Log in dollars
+      amount: paymentIntent.amount / 100,
       planType,
       planName
     });
@@ -282,17 +253,17 @@ const eventHandlers = {
     );
   },
 
-  // Invoice Events (for future subscription support) - FIXED TypeScript compatibility
+  // Invoice Events (for future subscription support)
   async 'invoice.payment_succeeded'(event: Stripe.Event) {
     const invoice = event.data.object as Stripe.Invoice;
     const customerId = invoice.customer as string;
-    const subscriptionId = getSubscriptionIdFromInvoice(invoice); // ✅ TypeScript safe access
+    const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
     
     logger.info('Invoice payment succeeded webhook received', {
       invoiceId: invoice.id,
       customerId,
       subscriptionId,
-      amount: (invoice.amount_paid || 0) / 100 // Log in dollars
+      amount: (invoice.amount_paid || 0) / 100
     });
     
     // For recurring subscriptions, ensure user access is maintained
@@ -326,7 +297,7 @@ const eventHandlers = {
   async 'invoice.payment_failed'(event: Stripe.Event) {
     const invoice = event.data.object as Stripe.Invoice;
     const customerId = invoice.customer as string;
-    const subscriptionId = getSubscriptionIdFromInvoice(invoice); // ✅ TypeScript safe access
+    const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id;
     
     logger.warn('Invoice payment failed webhook received', {
       invoiceId: invoice.id,
@@ -448,8 +419,7 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req: Re
   const signature = req.headers['stripe-signature'] as string;
   const webhookSecret = config.stripe.webhookSecret;
   const requestId = `webhook_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const clientIp = getClientIP(req);
-  const userAgent = getUserAgent(req);
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
   
   if (!signature) {
     logger.error('Missing Stripe signature', { requestId, ip: clientIp });
@@ -467,7 +437,7 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req: Re
     logger.error('Invalid webhook signature', { 
       requestId, 
       ip: clientIp,
-      userAgent
+      userAgent: req.get('User-Agent')
     });
     return res.status(400).send('Invalid signature');
   }
