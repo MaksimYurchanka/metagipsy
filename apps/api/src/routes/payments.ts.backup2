@@ -42,43 +42,33 @@ const PriceToAmountMap: Record<string, number> = {
   [config.stripe.priceDaily]: 999,    // $9.99 in cents
 };
 
-// Helper functions for safe property access (following project patterns)
-const getClientIP = (req: Request): string => {
-  return req.ip || 
-         (req.socket && req.socket.remoteAddress) || 
-         'unknown';
-};
-
-const getUserAgent = (req: Request): string | undefined => {
-  return req.get ? req.get('User-Agent') : req.headers['user-agent'] as string;
-};
-
-// Request body type definitions (avoiding custom interface extensions)
-interface CreatePaymentIntentBody {
-  priceId: string;
-  planName: string;
-  customerEmail?: string;
-  customerId?: string;
+interface CreatePaymentIntentRequest extends Request {
+  body: {
+    priceId: string;
+    planName: string;
+    customerEmail?: string;
+    customerId?: string;
+  };
 }
 
-interface VerifyPaymentBody {
-  paymentIntentId: string;
+interface VerifyPaymentRequest extends Request {
+  body: {
+    paymentIntentId: string;
+  };
 }
 
 /**
  * POST /api/v1/payments/create-payment-intent
  * Creates a Stripe Payment Intent for subscription purchases
  */
-router.post('/create-payment-intent', paymentRateLimit, async (req: Request, res: Response) => {
+router.post('/create-payment-intent', paymentRateLimit, async (req: CreatePaymentIntentRequest, res: Response) => {
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const clientIP = getClientIP(req);
-  const userAgent = getUserAgent(req);
   
   try {
     logger.info('Payment Intent creation started', {
       requestId,
-      ip: clientIP,
-      userAgent,
+      ip: req.ip || req.socket.remoteAddress,
+      userAgent: req.get('User-Agent'),
       body: { ...req.body, customerEmail: req.body.customerEmail ? '[REDACTED]' : undefined }
     });
 
@@ -88,7 +78,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: Request, res
       logger.warn('Invalid payment intent request', {
         requestId,
         errors: validation.error.errors,
-        ip: clientIP
+        ip: req.ip || req.socket.remoteAddress
       });
       
       return res.status(400).json({
@@ -98,14 +88,14 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: Request, res
       });
     }
 
-    const { priceId, planName, customerEmail, customerId }: CreatePaymentIntentBody = validation.data;
+    const { priceId, planName, customerEmail, customerId } = validation.data;
 
     // Verify price ID is valid
     if (!PriceToAmountMap[priceId]) {
       logger.warn('Invalid price ID provided', {
         requestId,
         priceId,
-        ip: clientIP
+        ip: req.ip || req.socket.remoteAddress
       });
       
       return res.status(400).json({
@@ -208,7 +198,7 @@ router.post('/create-payment-intent', paymentRateLimit, async (req: Request, res
       requestId,
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      ip: clientIP
+      ip: req.ip || req.socket.remoteAddress
     });
 
     if (error instanceof Stripe.errors.StripeError) {
@@ -255,14 +245,13 @@ router.get('/config', (req: Request, res: Response) => {
  * POST /api/v1/payments/verify-payment
  * Verifies payment status and processes subscription upgrade
  */
-router.post('/verify-payment', async (req: Request, res: Response) => {
+router.post('/verify-payment', async (req: VerifyPaymentRequest, res: Response) => {
   const requestId = `verify_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const clientIP = getClientIP(req);
   
   try {
     logger.info('Payment verification started', {
       requestId,
-      ip: clientIP
+      ip: req.ip || req.socket.remoteAddress
     });
 
     const validation = VerifyPaymentSchema.safeParse(req.body);
@@ -273,7 +262,7 @@ router.post('/verify-payment', async (req: Request, res: Response) => {
       });
     }
 
-    const { paymentIntentId }: VerifyPaymentBody = validation.data;
+    const { paymentIntentId } = validation.data;
 
     // Retrieve payment intent from Stripe
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
@@ -325,7 +314,7 @@ router.post('/verify-payment', async (req: Request, res: Response) => {
       requestId,
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      ip: clientIP
+      ip: req.ip || req.socket.remoteAddress
     });
 
     if (error instanceof Stripe.errors.StripeError) {
