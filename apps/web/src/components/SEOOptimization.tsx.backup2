@@ -468,11 +468,10 @@ const addMobileOptimization = (): void => {
   updateMetaTag('apple-mobile-web-app-capable', 'yes', 'name');
 };
 
-// 🚀 INITIALIZE SEO OPTIMIZATION WITH GA4 INTEGRATION
+// 🚀 INITIALIZE SEO OPTIMIZATION
 const initializeSEO = (): void => {
   preloadCriticalResources();
   addMobileOptimization();
-  initializeGA4();
   
   // Add performance hints
   updateMetaTag('color-scheme', 'dark light', 'name');
@@ -481,92 +480,8 @@ const initializeSEO = (): void => {
   // Add security headers
   updateMetaTag('referrer', 'origin-when-cross-origin', 'name');
   
-  console.log('🚀 MetaGipsy SEO optimization initialized with GA4');
+  console.log('🚀 MetaGipsy SEO optimization initialized');
 };
-
-// 📊 INITIALIZE GOOGLE ANALYTICS 4
-const initializeGA4 = (): void => {
-  // Get Measurement ID from environment variables
-  const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID;
-  
-  if (!measurementId) {
-    console.log('📊 GA4: Measurement ID not found in environment variables');
-    return;
-  }
-  
-  // Add gtag script to head
-  const gtagScript = document.createElement('script');
-  gtagScript.async = true;
-  gtagScript.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`;
-  document.head.appendChild(gtagScript);
-  
-  // Initialize dataLayer and gtag function
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = function(...args: any[]) {
-    window.dataLayer.push(args);
-  };
-  
-  // Configure GA4
-  window.gtag('js', new Date());
-  window.gtag('config', measurementId, {
-    // Enhanced ecommerce for subscription tracking
-    send_page_view: true,
-    // Custom parameters for MetaGipsy
-    custom_map: {
-      'custom_parameter_1': 'analysis_type',
-      'custom_parameter_2': 'session_score'
-    }
-  });
-  
-  console.log('📊 GA4 initialized with Measurement ID:', measurementId);
-  
-  // Track initial page view
-  trackPageView();
-};
-
-// 📈 TRACK PAGE VIEW (called automatically)
-const trackPageView = (): void => {
-  if (typeof window.gtag !== 'undefined') {
-    window.gtag('event', 'page_view', {
-      page_title: document.title,
-      page_location: window.location.href,
-      page_path: window.location.pathname
-    });
-  }
-};
-
-// 📊 TRACK CUSTOM EVENTS (for other components to use)
-export const trackCustomEvent = (eventName: string, parameters: any = {}): void => {
-  if (typeof window.gtag !== 'undefined') {
-    window.gtag('event', eventName, {
-      ...parameters,
-      event_category: 'MetaGipsy',
-      event_label: 'User Interaction'
-    });
-    console.log('📊 GA4 Event tracked:', eventName, parameters);
-  }
-};
-
-// 📈 TRACK CONVERSION EVENTS (for Stripe integration)
-export const trackConversion = (eventName: string, value?: number, currency = 'USD'): void => {
-  if (typeof window.gtag !== 'undefined') {
-    window.gtag('event', eventName, {
-      currency: currency,
-      value: value || 0,
-      event_category: 'Conversion',
-      event_label: 'Subscription'
-    });
-    console.log('📊 GA4 Conversion tracked:', eventName, value);
-  }
-};
-
-// 🎯 DECLARE WINDOW GTAG TYPES
-declare global {
-  interface Window {
-    dataLayer: any[];
-    gtag: (...args: any[]) => void;
-  }
-}
 
 // Auto-initialize when module loads
 if (typeof window !== 'undefined') {
