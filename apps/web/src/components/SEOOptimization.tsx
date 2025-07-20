@@ -1,8 +1,7 @@
-// 📈 SEO OPTIMIZATION FOR METAGIPSY OWL CHESS ENGINE
-// Enhanced meta tags, structured data, and SEO components for 5D conversation analysis
-// Production-ready version with full MetaGipsy integration
-// Updated: July 19, 2025
-// Note: React 19 supports native document metadata, but this approach provides more control and compatibility
+// 📈 SEO OPTIMIZATION FOR METAGIPSY OWL CHESS ENGINE - HYBRID APPROACH
+// Использует уже загруженный GA4 из HTML, не дублирует инициализацию
+// Enhanced meta tags, structured data, и page view tracking
+// Updated: July 20, 2025 - Hybrid GA4 Strategy
 
 import React, { useEffect } from 'react';
 
@@ -28,44 +27,6 @@ interface MetaData {
   url: string;
 }
 
-interface StructuredDataOffer {
-  "@type": string;
-  name: string;
-  price: string;
-  priceCurrency: string;
-  availability: string;
-  description: string;
-}
-
-interface StructuredData {
-  "@context": string;
-  "@type": string;
-  name: string;
-  description: string;
-  url: string;
-  applicationCategory: string;
-  operatingSystem: string;
-  offers: StructuredDataOffer[];
-  provider: {
-    "@type": string;
-    name: string;
-    url: string;
-    logo: {
-      "@type": string;
-      url: string;
-    };
-  };
-  featureList: string[];
-  aggregateRating: {
-    "@type": string;
-    ratingValue: string;
-    ratingCount: string;
-    bestRating: string;
-    worstRating: string;
-  };
-  "@graph"?: any[];
-}
-
 const SEOOptimization: React.FC<SEOOptimizationProps> = ({ 
   pageType = 'homepage', 
   analysisType = null, 
@@ -77,10 +38,13 @@ const SEOOptimization: React.FC<SEOOptimizationProps> = ({
     addStructuredData(pageType, analysisType);
     addCanonicalLink(pageType);
     
+    // ✅ GA4 уже загружен из HTML, только трекаем page view
+    trackPageView(pageType, analysisType, sessionData);
+    
     console.log('📈 SEO updated for page:', pageType, { analysisType, sessionData });
   }, [pageType, analysisType, sessionData]);
 
-  return null; // This component only manages SEO, no visual output
+  return null;
 };
 
 // 🏷️ UPDATE META TAGS DYNAMICALLY
@@ -91,7 +55,6 @@ const updateMetaTags = (
 ): void => {
   const metaData = getMetaData(pageType, analysisType, sessionData);
   
-  // Update title
   document.title = metaData.title;
   
   // Update meta tags
@@ -114,16 +77,6 @@ const updateMetaTags = (
   updateMetaTag('twitter:image', metaData.image, 'name');
   updateMetaTag('twitter:site', '@metagipsy', 'name');
   updateMetaTag('twitter:creator', '@aiautocodingdao', 'name');
-  
-  // Additional SEO tags
-  updateMetaTag('robots', 'index, follow', 'name');
-  updateMetaTag('author', 'AI-AutoCoding-DAO', 'name');
-  updateMetaTag('theme-color', '#667eea', 'name');
-  updateMetaTag('application-name', 'MetaGipsy', 'name');
-  
-  // Performance and technical tags
-  updateMetaTag('viewport', 'width=device-width, initial-scale=1.0', 'name');
-  updateMetaTag('format-detection', 'telephone=no', 'name');
   
   console.log('📈 SEO meta tags updated for:', pageType);
 };
@@ -153,20 +106,14 @@ const getMetaData = (
   sessionData: SessionData | null
 ): MetaData => {
   const baseUrl = 'https://www.metagipsy.com';
-  const defaultImage = `${baseUrl}/favicon.svg`; // Using existing favicon as OG image
-  
-  const analysisTypeNames: Record<string, string> = {
-    claude: 'Claude AI Conversations',
-    chatgpt: 'ChatGPT Conversations',
-    general: 'AI Conversations'
-  };
+  const defaultImage = `${baseUrl}/favicon.svg`;
   
   switch (pageType) {
     case 'homepage':
       return {
         title: 'MetaGipsy - AI Conversation Analysis with Chess-Style 5D Scoring',
         description: 'World\'s first 5D conversation analysis platform. Transform your AI interactions with Strategic, Tactical, Cognitive, Innovation, and Context scoring. Professional chess-style evaluation for ChatGPT and Claude conversations.',
-        keywords: 'AI conversation analysis, chess scoring, ChatGPT analysis, Claude analysis, conversation optimization, 5D scoring, AI interaction improvement, strategic thinking, tactical communication, cognitive load, innovation factor, context awareness, prompt engineering, AI conversation scoring',
+        keywords: 'AI conversation analysis, chess scoring, ChatGPT analysis, Claude analysis, conversation optimization, 5D scoring, AI interaction improvement, strategic thinking, tactical communication, cognitive load, innovation factor, context awareness, prompt engineering',
         image: defaultImage,
         url: baseUrl
       };
@@ -180,15 +127,6 @@ const getMetaData = (
         url: `${baseUrl}/analyze`
       };
       
-    case 'verify':
-      return {
-        title: 'Verify Conversation - Confirm Analysis Setup | MetaGipsy',
-        description: 'Review and verify your conversation before 5D analysis. Ensure accurate parsing and optimal scoring across all dimensions. Final step before professional AI conversation evaluation.',
-        keywords: 'verify conversation, confirm analysis, conversation review, analysis setup, conversation validation, AI chat verification',
-        image: defaultImage,
-        url: `${baseUrl}/analyze/verify`
-      };
-      
     case 'results':
       const overallScore = sessionData?.overallScore || 0;
       const messageCount = sessionData?.messageCount || 0;
@@ -200,24 +138,6 @@ const getMetaData = (
         keywords: `conversation results, AI analysis score, ${overallScore} points, conversation improvement, AI interaction insights, ${platform} analysis, conversation optimization results`,
         image: defaultImage,
         url: `${baseUrl}/analyze/results/${sessionData?.sessionId || ''}`
-      };
-      
-    case 'dashboard':
-      return {
-        title: 'User Dashboard - Track Your AI Conversation Progress | MetaGipsy',
-        description: 'Monitor your AI conversation analysis progress. View session history, track scoring improvements, and access detailed 5D analysis insights for all your ChatGPT and Claude conversations.',
-        keywords: 'user dashboard, conversation history, progress tracking, AI interaction improvement, conversation analytics, session management, AI conversation insights, progress monitoring',
-        image: defaultImage,
-        url: `${baseUrl}/dashboard`
-      };
-      
-    case 'settings':
-      return {
-        title: 'Account Settings - Customize Your Experience | MetaGipsy',
-        description: 'Manage your MetaGipsy account settings, preferences, and subscription. Customize your 5D conversation analysis experience and optimize your AI interaction workflow.',
-        keywords: 'account settings, user preferences, subscription management, profile settings, AI analysis preferences, conversation analysis settings',
-        image: defaultImage,
-        url: `${baseUrl}/settings`
       };
       
     case 'pricing':
@@ -272,7 +192,6 @@ const getCanonicalUrl = (pageType: string): string => {
 
 // 📊 ADD STRUCTURED DATA (JSON-LD)
 const addStructuredData = (pageType: string, analysisType: string | null): void => {
-  // Remove existing structured data
   const existingScript = document.querySelector('script[type="application/ld+json"]');
   if (existingScript) {
     existingScript.remove();
@@ -289,8 +208,8 @@ const addStructuredData = (pageType: string, analysisType: string | null): void 
 };
 
 // 📋 GET STRUCTURED DATA
-const getStructuredData = (pageType: string, analysisType: string | null): StructuredData => {
-  const baseStructuredData: StructuredData = {
+const getStructuredData = (pageType: string, analysisType: string | null) => {
+  const baseStructuredData = {
     "@context": "https://schema.org",
     "@type": "WebApplication",
     "name": "MetaGipsy",
@@ -314,14 +233,6 @@ const getStructuredData = (pageType: string, analysisType: string | null): Struc
         "priceCurrency": "USD", 
         "availability": "https://schema.org/InStock",
         "description": "500,000 characters for 24 hours with advanced analytics"
-      },
-      {
-        "@type": "Offer",
-        "name": "Pro Monthly",
-        "price": "199",
-        "priceCurrency": "USD",
-        "availability": "https://schema.org/InStock", 
-        "description": "500,000 characters per day for 30 days with premium features"
       }
     ],
     "provider": {
@@ -343,11 +254,7 @@ const getStructuredData = (pageType: string, analysisType: string | null): Struc
       "Context awareness evaluation for temporal understanding",
       "Claude AI conversation parsing with 95% accuracy",
       "ChatGPT conversation analysis and optimization",
-      "Real-time conversation scoring and feedback",
-      "Professional insights and actionable recommendations",
-      "Session history and progress tracking dashboard",
-      "Export functionality for reports and analytics",
-      "Pattern detection across conversation sessions"
+      "Real-time conversation scoring and feedback"
     ],
     "aggregateRating": {
       "@type": "AggregateRating",
@@ -358,25 +265,20 @@ const getStructuredData = (pageType: string, analysisType: string | null): Struc
     }
   };
   
-  // Add FAQ structured data for homepage (avoiding circular reference)
+  // Add FAQ for homepage
   if (pageType === 'homepage') {
-    // Create a separate WebApplication object for @graph to avoid circular reference
-    const webAppData = {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "MetaGipsy",
-      "description": baseStructuredData.description,
-      "url": baseStructuredData.url,
-      "applicationCategory": baseStructuredData.applicationCategory,
-      "operatingSystem": baseStructuredData.operatingSystem,
-      "offers": baseStructuredData.offers,
-      "provider": baseStructuredData.provider,
-      "featureList": baseStructuredData.featureList,
-      "aggregateRating": baseStructuredData.aggregateRating
-    };
-
     baseStructuredData["@graph"] = [
-      webAppData,
+      {
+        "@type": "WebApplication",
+        "name": "MetaGipsy",
+        "description": baseStructuredData.description,
+        "url": baseStructuredData.url,
+        "applicationCategory": baseStructuredData.applicationCategory,
+        "offers": baseStructuredData.offers,
+        "provider": baseStructuredData.provider,
+        "featureList": baseStructuredData.featureList,
+        "aggregateRating": baseStructuredData.aggregateRating
+      },
       {
         "@type": "FAQPage",
         "mainEntity": [
@@ -385,39 +287,23 @@ const getStructuredData = (pageType: string, analysisType: string | null): Struc
             "name": "What is 5D conversation analysis?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "5D conversation analysis evaluates AI interactions across five dimensions: Strategic (goal alignment and progress tracking), Tactical (clarity and specificity), Cognitive (mental load optimization), Innovation (creative thinking and breakthrough potential), and Context (temporal awareness and conversation continuity). Each dimension is scored 0-100 with chess-style classifications."
+              "text": "5D conversation analysis evaluates AI interactions across five dimensions: Strategic (goal alignment), Tactical (clarity and specificity), Cognitive (mental load optimization), Innovation (creative thinking), and Context (temporal understanding). Each dimension is scored 0-100 with chess-style classifications."
             }
           },
           {
             "@type": "Question", 
-            "name": "Which AI platforms are supported for analysis?",
+            "name": "Which AI platforms are supported?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "MetaGipsy supports analysis of conversations from Claude AI, ChatGPT, and other AI platforms. Our advanced parsing technology can detect and analyze various conversation formats with 95% accuracy, including edit-retry patterns and complex conversation structures."
+              "text": "MetaGipsy supports analysis of conversations from Claude AI, ChatGPT, and other AI platforms with 95% accuracy parsing, including edit-retry patterns and complex conversation structures."
             }
           },
           {
             "@type": "Question",
-            "name": "How does chess-style scoring work for conversations?",
+            "name": "How does chess-style scoring work?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "We use chess notation to classify conversation quality: !! (Brilliant, 90-100 points), ! (Excellent, 80-89), + (Good, 70-79), = (Average, 50-69), ? (Mistake, 30-49), ?? (Blunder, 0-29). This provides intuitive understanding of interaction quality and areas for improvement."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "What insights can I get from conversation analysis?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Get actionable insights including better move suggestions, conversation optimization tips, dimension-specific improvements, progress tracking across sessions, pattern detection, and professional recommendations to enhance your AI interaction skills and achieve better results."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "What is the Context dimension in 5D analysis?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "The Context dimension (20% weight) evaluates temporal understanding, state awareness, and conversation continuity. It measures how well conversations maintain coherent flow, avoid redundancy, acknowledge previous actions, and demonstrate proper understanding of the conversation timeline."
+              "text": "We use chess notation: !! (Brilliant, 90-100), ! (Excellent, 80-89), + (Good, 70-79), = (Average, 50-69), ? (Mistake, 30-49), ?? (Blunder, 0-29). This provides intuitive understanding of interaction quality."
             }
           }
         ]
@@ -428,149 +314,71 @@ const getStructuredData = (pageType: string, analysisType: string | null): Struc
   return baseStructuredData;
 };
 
-// 🎯 PRELOAD CRITICAL RESOURCES
-const preloadCriticalResources = (): void => {
-  // DNS prefetch for external resources
-  const dnsPrefetch = ['https://api.metagipsy.com', 'https://fonts.googleapis.com'];
-  dnsPrefetch.forEach(domain => {
-    const link = document.createElement('link');
-    link.rel = 'dns-prefetch';
-    link.href = domain;
-    document.head.appendChild(link);
-  });
-  
-  // Preconnect to critical domains
-  const preconnectDomains = ['https://api.metagipsy.com'];
-  preconnectDomains.forEach(domain => {
-    const link = document.createElement('link');
-    link.rel = 'preconnect';
-    link.href = domain;
-    document.head.appendChild(link);
-  });
-};
-
-// 📱 MOBILE OPTIMIZATION
-const addMobileOptimization = (): void => {
-  // Mobile-specific meta tags
-  updateMetaTag('mobile-web-app-capable', 'yes', 'name');
-  updateMetaTag('apple-mobile-web-app-capable', 'yes', 'name');
-  updateMetaTag('apple-mobile-web-app-status-bar-style', 'default', 'name');
-  updateMetaTag('apple-mobile-web-app-title', 'MetaGipsy', 'name');
-  
-  // Add touch icons
-  const appleTouchIcon = document.createElement('link');
-  appleTouchIcon.rel = 'apple-touch-icon';
-  appleTouchIcon.href = '/favicon.svg';
-  document.head.appendChild(appleTouchIcon);
-  
-  // Add manifest for PWA capabilities
-  updateMetaTag('mobile-web-app-capable', 'yes', 'name');
-  updateMetaTag('apple-mobile-web-app-capable', 'yes', 'name');
-};
-
-// 🚀 INITIALIZE SEO OPTIMIZATION WITH GA4 INTEGRATION
-const initializeSEO = (): void => {
-  preloadCriticalResources();
-  addMobileOptimization();
-  initializeGA4();
-  
-  // Add performance hints
-  updateMetaTag('color-scheme', 'dark light', 'name');
-  updateMetaTag('supported-color-schemes', 'dark light', 'name');
-  
-  // Add security headers
-  updateMetaTag('referrer', 'origin-when-cross-origin', 'name');
-  
-  console.log('🚀 MetaGipsy SEO optimization initialized with GA4');
-};
-
-// 📊 INITIALIZE GOOGLE ANALYTICS 4
-const initializeGA4 = (): void => {
-  // Get Measurement ID from environment variables
-  const measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID;
-  
-  if (!measurementId) {
-    console.log('📊 GA4: Measurement ID not found in environment variables');
-    return;
-  }
-  
-  // Add gtag script to head
-  const gtagScript = document.createElement('script');
-  gtagScript.async = true;
-  gtagScript.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`;
-  document.head.appendChild(gtagScript);
-  
-  // Initialize dataLayer and gtag function
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = function(...args: any[]) {
-    window.dataLayer.push(args);
-  };
-  
-  // Configure GA4
-  window.gtag('js', new Date());
-  window.gtag('config', measurementId, {
-    // Enhanced ecommerce for subscription tracking
-    send_page_view: true,
-    // Custom parameters for MetaGipsy
-    custom_map: {
-      'custom_parameter_1': 'analysis_type',
-      'custom_parameter_2': 'session_score'
-    }
-  });
-  
-  console.log('📊 GA4 initialized with Measurement ID:', measurementId);
-  
-  // Track initial page view
-  trackPageView();
-};
-
-// 📈 TRACK PAGE VIEW (called automatically)
-const trackPageView = (): void => {
+// 📈 TRACK PAGE VIEW (использует уже загруженный GA4 из HTML)
+const trackPageView = (
+  pageType: string, 
+  analysisType: string | null, 
+  sessionData: SessionData | null
+): void => {
+  // ✅ GA4 уже загружен из HTML, просто используем
   if (typeof window.gtag !== 'undefined') {
     window.gtag('event', 'page_view', {
       page_title: document.title,
       page_location: window.location.href,
-      page_path: window.location.pathname
+      page_path: window.location.pathname,
+      custom_parameter_1: analysisType || pageType,
+      custom_parameter_2: sessionData?.overallScore || 0,
+      custom_parameter_3: sessionData?.platform || 'web'
     });
+    
+    console.log('📊 GA4 Page view tracked:', pageType, analysisType);
+  } else {
+    console.log('📊 GA4 not available (should be loaded from HTML)');
+  }
+  
+  // ✅ Используем готовые функции из HTML
+  if (window.trackMetaGipsyEvent) {
+    window.trackMetaGipsyEvent('page_view', 'Navigation', pageType, 1);
   }
 };
 
-// 📊 TRACK CUSTOM EVENTS (for other components to use)
+// 📊 EXPORT TRACKING FUNCTIONS (используют уже загруженные из HTML)
 export const trackCustomEvent = (eventName: string, parameters: any = {}): void => {
-  if (typeof window.gtag !== 'undefined') {
+  // Используем готовую функцию из HTML если доступна
+  if (window.trackMetaGipsyEvent) {
+    window.trackMetaGipsyEvent(eventName, parameters.category || 'Custom', parameters.label || 'Event', parameters.value || 0);
+  } else if (typeof window.gtag !== 'undefined') {
     window.gtag('event', eventName, {
       ...parameters,
       event_category: 'MetaGipsy',
       event_label: 'User Interaction'
     });
-    console.log('📊 GA4 Event tracked:', eventName, parameters);
+  }
+  console.log('📊 Custom event tracked:', eventName, parameters);
+};
+
+export const trackConversationAnalysis = (platform: string, score: number, messageCount: number): void => {
+  if (window.trackConversationAnalysis) {
+    window.trackConversationAnalysis(platform, score, messageCount);
   }
 };
 
-// 📈 TRACK CONVERSION EVENTS (for Stripe integration)
-export const trackConversion = (eventName: string, value?: number, currency = 'USD'): void => {
-  if (typeof window.gtag !== 'undefined') {
-    window.gtag('event', eventName, {
-      currency: currency,
-      value: value || 0,
-      event_category: 'Conversion',
-      event_label: 'Subscription'
-    });
-    console.log('📊 GA4 Conversion tracked:', eventName, value);
+export const trackSubscription = (tier: string, amount: number, stage: string): void => {
+  if (window.trackSubscription) {
+    window.trackSubscription(tier, amount, stage);
   }
 };
 
-// 🎯 DECLARE WINDOW GTAG TYPES
+// 🎯 DECLARE WINDOW TYPES
 declare global {
   interface Window {
     dataLayer: any[];
     gtag: (...args: any[]) => void;
+    METAGIPSY_GA_ID: string;
+    trackMetaGipsyEvent: (action: string, category: string, label: string, value: number) => void;
+    trackConversationAnalysis: (platform: string, score: number, messageCount: number) => void;
+    trackSubscription: (tier: string, amount: number, stage: string) => void;
   }
-}
-
-// Auto-initialize when module loads
-if (typeof window !== 'undefined') {
-  document.addEventListener('DOMContentLoaded', initializeSEO);
 }
 
 export default SEOOptimization;

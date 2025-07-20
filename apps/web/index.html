@@ -7,37 +7,185 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     
+    <!-- ✅ PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    
     <!-- Viewport and Base -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="MetaGipsy" />
+    <meta name="application-name" content="MetaGipsy" />
     
     <!-- SEO Meta Tags -->
     <title>MetaGipsy - AI Conversation Analysis with Chess-Style Scoring</title>
     <meta name="description" content="World's first 5D conversation analysis platform. Transform your AI interactions with strategic, tactical, cognitive, innovation, and context scoring. Professional chess-style evaluation for ChatGPT and Claude conversations." />
     <meta name="keywords" content="AI conversation analysis, chess scoring, ChatGPT analysis, Claude analysis, conversation optimization, 5D scoring, AI interaction improvement" />
     
-    <!-- Open Graph Meta Tags for Social Sharing -->
+    <!-- Open Graph Meta Tags -->
     <meta property="og:title" content="MetaGipsy - AI Conversation Analysis" />
     <meta property="og:description" content="World's first 5D conversation analysis platform with chess-style scoring" />
     <meta property="og:url" content="https://www.metagipsy.com" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="MetaGipsy" />
+    <meta property="og:image" content="https://www.metagipsy.com/favicon.svg" />
+    <meta property="og:locale" content="en_US" />
     
     <!-- Twitter Card Meta Tags -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="MetaGipsy - AI Conversation Analysis" />
     <meta name="twitter:description" content="World's first 5D conversation analysis platform with chess-style scoring" />
+    <meta name="twitter:image" content="https://www.metagipsy.com/favicon.svg" />
+    <meta name="twitter:site" content="@metagipsy" />
+    <meta name="twitter:creator" content="@aiautocodingdao" />
     
     <!-- Additional Meta Tags -->
     <meta name="author" content="AI-AutoCoding-DAO" />
     <meta name="robots" content="index, follow" />
     <meta name="theme-color" content="#667eea" />
+    <meta name="referrer" content="origin-when-cross-origin" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="supported-color-schemes" content="dark light" />
     
-    <!-- Preconnect for Performance -->
+    <!-- Performance Optimization -->
     <link rel="preconnect" href="https://api.metagipsy.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+    <link rel="dns-prefetch" href="https://js.stripe.com" />
+    <link rel="canonical" href="https://www.metagipsy.com" />
+    
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+    
+    <!-- Resource Hints -->
+    <link rel="preload" href="/src/main.tsx" as="script" />
+    <link rel="modulepreload" href="/src/main.tsx" />
+    
+    <!-- ✅ ГИБРИДНАЯ GA4 СТРАТЕГИЯ: Immediate + Fallback -->
+    <script>
+      // 🎯 STEP 1: Определяем GA ID (приоритет: env variable, fallback: production)
+      window.METAGIPSY_GA_ID = 'G-TLMM5F6LD0'; // Production fallback
+      
+      // 🎯 STEP 2: Immediate GA4 loading
+      (function() {
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=' + window.METAGIPSY_GA_ID;
+        document.head.appendChild(script);
+        
+        // Initialize dataLayer
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function(){dataLayer.push(arguments);};
+        window.gtag('js', new Date());
+        
+        // Configure immediately  
+        window.gtag('config', window.METAGIPSY_GA_ID, {
+          page_title: 'MetaGipsy - 5D AI Analysis',
+          page_location: window.location.href,
+          custom_map: {
+            'custom_parameter_1': 'analysis_type',
+            'custom_parameter_2': 'session_score',
+            'custom_parameter_3': 'user_tier'
+          }
+        });
+        
+        console.log('✅ MetaGipsy GA4 загружен немедленно:', window.METAGIPSY_GA_ID);
+      })();
+      
+      // 🎯 STEP 3: Enhanced tracking functions
+      window.trackMetaGipsyEvent = function(action, category, label, value) {
+        if (typeof gtag !== 'undefined') {
+          gtag('event', action, {
+            event_category: category || 'MetaGipsy',
+            event_label: label || 'User Action',
+            value: value || 0,
+            custom_parameter_1: category,
+            custom_parameter_2: label
+          });
+        }
+        console.log('📊 Event tracked:', action, category, label, value);
+      };
+      
+      window.trackConversationAnalysis = function(platform, score, messageCount) {
+        if (typeof gtag !== 'undefined') {
+          gtag('event', 'conversation_analyzed', {
+            event_category: 'Analysis',
+            event_label: platform,
+            value: score,
+            custom_parameter_1: platform,
+            custom_parameter_2: score,
+            custom_parameter_3: messageCount
+          });
+        }
+        console.log('📊 Analysis tracked:', platform, score, messageCount);
+      };
+      
+      window.trackSubscription = function(tier, amount, stage) {
+        if (typeof gtag !== 'undefined') {
+          gtag('event', 'subscription_' + stage, {
+            event_category: 'Revenue',
+            event_label: tier,
+            value: amount,
+            currency: 'USD',
+            custom_parameter_1: tier,
+            custom_parameter_2: stage
+          });
+        }
+        console.log('💰 Subscription tracked:', tier, amount, stage);
+      };
+      
+      // 🎯 STEP 4: Auto page tracking
+      document.addEventListener('DOMContentLoaded', function() {
+        if (window.trackMetaGipsyEvent) {
+          window.trackMetaGipsyEvent('page_load', 'Navigation', 'Homepage', 1);
+        }
+        console.log('🚀 MetaGipsy полностью загружен с GA4!');
+      });
+      
+      // 🎯 STEP 5: Error tracking
+      window.addEventListener('error', function(e) {
+        if (e.error && typeof gtag !== 'undefined') {
+          gtag('event', 'js_error', {
+            event_category: 'Error',
+            event_label: e.error.name || 'Unknown',
+            value: 1
+          });
+        }
+      });
+      
+      // 🎯 STEP 6: Network status
+      window.addEventListener('online', function() {
+        if (window.trackMetaGipsyEvent) {
+          window.trackMetaGipsyEvent('network_online', 'System', 'Connection Restored', 1);
+        }
+      });
+      
+      window.addEventListener('offline', function() {
+        if (window.trackMetaGipsyEvent) {
+          window.trackMetaGipsyEvent('network_offline', 'System', 'Connection Lost', 1);
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Noscript fallback -->
+    <noscript>
+      <div style="text-align: center; padding: 50px; font-family: system-ui;">
+        <h1>MetaGipsy - AI Conversation Analysis</h1>
+        <p>This application requires JavaScript to run.</p>
+        <p>Please enable JavaScript in your browser to continue.</p>
+      </div>
+    </noscript>
   </body>
 </html>

@@ -1,17 +1,77 @@
 {
-  "name": "MetaGipsy OWL Chess Engine",
+  "name": "MetaGipsy - AI Conversation Analysis",
   "short_name": "MetaGipsy",
-  "description": "AI conversation analysis with chess-like scoring system",
+  "description": "World's first 5D conversation analysis platform with chess-style scoring for AI interactions",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "theme_color": "#667eea",
-  "background_color": "#111827",
+  "background_color": "#0f172a",
+  "categories": ["productivity", "business", "education"],
+  "lang": "en-US",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "16x16 32x32 48x48",
+      "type": "image/x-icon"
     }
-  ]
+  ],
+  "screenshots": [
+    {
+      "src": "/images/screenshot-desktop.jpg",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "MetaGipsy Desktop Analysis Interface"
+    },
+    {
+      "src": "/images/screenshot-mobile.jpg", 
+      "sizes": "390x844",
+      "type": "image/jpeg",
+      "form_factor": "narrow",
+      "label": "MetaGipsy Mobile Analysis Experience"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start Analysis",
+      "short_name": "Analyze",
+      "description": "Start analyzing your AI conversations",
+      "url": "/analyze",
+      "icons": [
+        {
+          "src": "/favicon.svg",
+          "sizes": "any"
+        }
+      ]
+    },
+    {
+      "name": "View Dashboard", 
+      "short_name": "Dashboard",
+      "description": "View your conversation analysis history",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/favicon.svg",
+          "sizes": "any"
+        }
+      ]
+    }
+  ],
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "related_applications": [],
+  "prefer_related_applications": false
 }
