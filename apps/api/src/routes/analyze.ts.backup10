@@ -1,10 +1,10 @@
-// ✅ COMPLETE ENHANCED 5D ANALYZE ROUTES with User Auto-Creation Fix
+// ✅ COMPLETE ENHANCED 5D ANALYZE ROUTES with Rate Limiting Integration
 // apps/api/src/routes/analyze.ts
 
 import { Router } from 'express';
 import { authenticateUser, optionalAuth, AuthenticatedRequest } from '../middleware/auth';
 import { rateLimiter } from '../lib/rate-limiter';
-import { RateLimitService, rateLimitMiddleware } from '../lib/rate-limits';
+import { RateLimitService, rateLimitMiddleware } from '../lib/rate-limits'; // ✅ NEW: Rate limiting integration
 import { parseConversation, parseConversationEnhanced } from '../lib/conversation-parser';
 import { LocalScoringEngine } from '../lib/scoring-engine';
 import { ClaudeClient } from '../lib/claude-client';
@@ -18,48 +18,32 @@ import {
   EnhancedParseRequest,
   ChessScore,
   SessionSummary,
-  Platform,
-  Message
+  Platform
 } from '../types';
 
 const router = Router();
-const scoringEngine = new LocalScoringEngine();
+const scoringEngine = new LocalScoringEngine(); // ✅ NOW supports 5D scoring
 const claudeClient = new ClaudeClient();
 const sessionService = new SessionService();
 
-// ✅ FIXED: Usage stats endpoint with auto-creation
+// ✅ NEW: Usage stats endpoint for frontend
 router.get('/usage-stats',
   authenticateUser,
   async (req: AuthenticatedRequest, res) => {
     try {
-      // ✅ FIXED: Auto-create user if needed
       const stats = await RateLimitService.getUserUsageStats(req.user.id);
-      
-      logger.info('✅ Usage stats retrieved successfully', {
-        userId: req.user.id,
-        email: req.user.email,
-        charactersUsed: stats.today.characters,
-        charactersLimit: stats.today.charactersLimit,
-        percentUsed: stats.percentUsed,
-        tierType: stats.tier.type
-      });
-      
       res.json(stats);
     } catch (error) {
-      logger.error('Failed to get usage stats', { 
-        error, 
-        userId: req.user?.id,
-        email: req.user?.email 
-      });
+      logger.error('Failed to get usage stats', { error, userId: req.user?.id });
       res.status(500).json({ error: 'Failed to load usage statistics' });
     }
   }
 );
 
-// ✅ MAIN ANALYSIS ENDPOINT - Enhanced with User Auto-Creation
+// ✅ MAIN ANALYSIS ENDPOINT - Enhanced with Rate Limiting
 router.post('/', 
   optionalAuth,
-  rateLimiter.createLimiter('analyze', 10, 60),
+  rateLimiter.createLimiter('analyze', 10, 60), // Keep existing rate limiter for request frequency
   async (req: AuthenticatedRequest, res) => {
     const startTime = Date.now();
     req.startTime = startTime;
@@ -78,13 +62,9 @@ router.post('/',
         (sum, msg) => sum + (msg.content?.length || 0), 0
       );
 
-      // ✅ FIXED: Pass email to rate limiting for auto-creation
+      // ✅ NEW: Check character-based rate limits for authenticated users
       if (req.user) {
-        const rateLimitResult = await rateLimitMiddleware(
-          req.user.id, 
-          totalCharacters,
-          req.user.email // ✅ PASS EMAIL for auto-creation in Prisma
-        );
+        const rateLimitResult = await rateLimitMiddleware(req.user.id, totalCharacters);
         
         if (!rateLimitResult.allowed) {
           return res.status(429).json({
@@ -100,9 +80,8 @@ router.post('/',
           });
         }
 
-        logger.info('✅ Rate limit check passed + user auto-created if needed', {
+        logger.info('Rate limit check passed', {
           userId: req.user.id,
-          email: req.user.email,
           requestedCharacters: totalCharacters,
           currentUsage: rateLimitResult.currentUsage,
           dailyLimit: rateLimitResult.dailyLimit,
@@ -110,17 +89,17 @@ router.post('/',
         });
       }
 
-      // ✅ ENHANCED: Dynamic limit based on remaining daily allowance
-      if (conversation.messages.length > 200) {
+      // ✅ ENHANCED: Dynamic limit based on remaining daily allowance (no hardcoded limits)
+      if (conversation.messages.length > 200) { // Reasonable safety limit for processing
         return res.status(400).json({
           error: `Too many messages. Maximum 200 messages per analysis for processing efficiency.`
         });
       }
 
       // ✅ ENHANCED: Parse and validate messages with unified types
-      const messages: Message[] = parseConversation(
+      const messages = parseConversation(
         conversation.messages,
-        conversation.platform || 'auto'
+        conversation.platform || 'auto' // ✅ UNIFIED: lowercase platform
       );
 
       if (messages.length === 0) {
@@ -137,7 +116,7 @@ router.post('/',
             req.user.id, 
             req.user.email,
             {
-              platform: conversation.platform || 'other',
+              platform: conversation.platform || 'auto',
               projectContext: options.projectContext,
               sessionGoal: options.sessionGoal
             }
@@ -186,7 +165,7 @@ router.post('/',
             );
           } else {
             // ✅ ENHANCED: Use 5D local scoring engine
-            score = scoringEngine.scoreMessage(
+            score = await scoringEngine.scoreMessage(
               message,
               {
                 previousMessages: messages.slice(0, i),
@@ -209,7 +188,7 @@ router.post('/',
           });
           
           // ✅ ENHANCED: Fallback to 5D basic scoring
-          const fallbackScore = scoringEngine.scoreMessage(
+          const fallbackScore = await scoringEngine.scoreMessage(
             message,
             { 
               previousMessages: messages.slice(0, i),
@@ -286,7 +265,7 @@ router.post('/',
         }
       }
 
-      // ✅ FIXED: Record usage after successful analysis with auto-creation
+      // ✅ NEW: Record usage after successful analysis
       if (req.user) {
         try {
           await RateLimitService.recordUsage(
@@ -294,17 +273,15 @@ router.post('/',
             totalCharacters,
             useClaudeAnalysis ? 'haiku' : 'local'
           );
-          logger.info('✅ Usage recorded successfully after analysis', {
+          logger.info('Usage recorded successfully', {
             userId: req.user.id,
-            email: req.user.email,
             charactersUsed: totalCharacters,
             analysisType: useClaudeAnalysis ? 'haiku' : 'local'
           });
         } catch (usageError) {
           logger.error('Failed to record usage, but analysis completed', { 
             error: usageError, 
-            userId: req.user.id,
-            email: req.user.email
+            userId: req.user.id 
           });
           // Don't fail the analysis if usage recording fails
         }
@@ -324,9 +301,11 @@ router.post('/',
           analysisMethod: useClaudeAnalysis ? 'claude' : 'local',
           analysisDepth: options.analysisDepth || 'standard',
           processingTime: Date.now() - startTime,
-          version: '3.0.0', // ✅ ENHANCED: Version bump for user auto-creation
+          version: '3.0.0', // ✅ ENHANCED: Version bump for rate limiting integration
           claudeAnalysisUsed: useClaudeAnalysis,
           cacheHit: false
+          // ✅ REMOVED: charactersAnalyzed - not supported in metadata type
+          // ✅ REMOVED: rateLimitInfo - not supported in metadata type
         }
       };
 
@@ -336,7 +315,7 @@ router.post('/',
         overallScore: Math.round(overallScore),
         processingTime: Date.now() - startTime,
         userId: req.user?.id,
-        charactersAnalyzed: totalCharacters
+        charactersAnalyzed: totalCharacters // ✅ Log it here instead of metadata
       });
 
       res.json(response);
@@ -354,14 +333,15 @@ router.post('/',
   }
 );
 
-// ✅ ENHANCED: Enhanced parsing endpoint with User Auto-Creation
+// ✅ ENHANCED: Enhanced parsing endpoint with Rate Limiting
 router.post('/enhanced',
   optionalAuth,
-  rateLimiter.createLimiter('enhanced_analyze', 5, 60),
+  rateLimiter.createLimiter('enhanced_analyze', 5, 60), // 5 requests per minute (more intensive)
   async (req: AuthenticatedRequest, res) => {
     const startTime = Date.now();
     
     try {
+      // ✅ ROBUST: Request validation with detailed logging
       logger.info('🚀 ENHANCED ENDPOINT REQUEST:', {
         hasBody: !!req.body,
         bodyKeys: req.body ? Object.keys(req.body) : [],
@@ -379,6 +359,7 @@ router.post('/enhanced',
 
       const { text, options = {}, metadata = {} }: EnhancedParseRequest = req.body;
 
+      // ✅ ROBUST: Text validation
       if (!text || typeof text !== 'string') {
         logger.error('❌ ENHANCED ENDPOINT: Invalid text parameter', {
           hasText: !!text,
@@ -397,13 +378,9 @@ router.post('/enhanced',
         });
       }
 
-      // ✅ FIXED: Pass email to rate limiting for auto-creation
+      // ✅ NEW: Check rate limits for enhanced parsing (before length check)
       if (req.user) {
-        const rateLimitResult = await rateLimitMiddleware(
-          req.user.id, 
-          text.length,
-          req.user.email // ✅ PASS EMAIL for auto-creation in Prisma
-        );
+        const rateLimitResult = await rateLimitMiddleware(req.user.id, text.length);
         
         if (!rateLimitResult.allowed) {
           return res.status(429).json({
@@ -418,19 +395,12 @@ router.post('/enhanced',
             }
           });
         }
-
-        logger.info('✅ Enhanced parsing: Rate limit check passed + user auto-created if needed', {
-          userId: req.user.id,
-          email: req.user.email,
-          requestedCharacters: text.length,
-          tierType: rateLimitResult.tierType
-        });
       }
 
       // ✅ ENHANCED: Dynamic length check based on remaining limit
       const maxLength = req.user ? 
         (await RateLimitService.getUserUsageStats(req.user.id)).today.charactersLimit : 
-        100000;
+        100000; // Default for unauthenticated users
 
       if (text.length > maxLength) {
         return res.status(400).json({
@@ -447,11 +417,15 @@ router.post('/enhanced',
         expectedPlatform: options.expectedPlatform
       });
 
+      // ✅ FIXED: Correct forcePattern logic for Haiku-first approach
       let parseResult: ParseResult;
       
       try {
         parseResult = await parseConversationEnhanced(text, {
-          forcePattern: options.forceHaiku === false,
+          // ✅ CORRECTED LOGIC: 
+          // - If forceHaiku === false, then forcePattern = true (skip Haiku, use pattern)
+          // - If forceHaiku === true OR undefined, then forcePattern = false (try Haiku first)
+          forcePattern: options.forceHaiku === false, // Simple and clear logic
           userSignature: options.userSignature,
           expectedPlatform: options.expectedPlatform,
           analysisDepth: options.analysisDepth || 'standard',
@@ -475,15 +449,17 @@ router.post('/enhanced',
           userId: req.user?.id
         });
 
+        // ✅ ROBUST FALLBACK: Use basic pattern parsing
         logger.info('🔄 FALLING BACK TO PATTERN PARSING...');
         
         try {
+          // Use the basic parseConversation function as fallback
           const fallbackResult = parseConversation(text);
           
           parseResult = {
             messages: Array.isArray(fallbackResult) ? fallbackResult : (fallbackResult as any).messages || [],
             platform: (Array.isArray(fallbackResult) ? (options.expectedPlatform || 'other') : (fallbackResult as any).platform) || 'other',
-            confidence: 0.3,
+            confidence: 0.3, // Lower confidence for fallback
             method: 'pattern',
             metadata: {
               originalLength: text.length,
@@ -503,6 +479,7 @@ router.post('/enhanced',
         } catch (fallbackError) {
           logger.error('❌ FALLBACK PARSING ALSO FAILED:', fallbackError);
           
+          // ✅ LAST RESORT: Create minimal result
           parseResult = {
             messages: [{
               role: 'user',
@@ -527,7 +504,7 @@ router.post('/enhanced',
         }
       }
 
-      // ✅ FIXED: Record usage for enhanced parsing with auto-creation
+      // ✅ NEW: Record usage for enhanced parsing
       if (req.user && parseResult.messages.length >= 2) {
         try {
           await RateLimitService.recordUsage(
@@ -535,21 +512,16 @@ router.post('/enhanced',
             text.length,
             parseResult.method === 'haiku' ? 'haiku' : 'local'
           );
-          logger.info('✅ Enhanced parsing usage recorded successfully', {
-            userId: req.user.id,
-            email: req.user.email,
-            charactersUsed: text.length,
-            analysisType: parseResult.method === 'haiku' ? 'haiku' : 'local'
-          });
         } catch (usageError) {
           logger.error('Failed to record enhanced parsing usage', { 
             error: usageError, 
-            userId: req.user.id,
-            email: req.user.email
+            userId: req.user.id 
           });
+          // Don't fail parsing if usage recording fails
         }
       }
 
+      // ✅ FOUNDATION: Prepare verification workflow
       const needsVerification = parseResult.confidence < 0.8 || options.forceHaiku === false;
       
       if (needsVerification && !parseResult.verification) {
@@ -568,6 +540,7 @@ router.post('/enhanced',
           needsVerification,
           canProceedToAnalysis: parseResult.messages.length >= 2,
           estimatedAnalysisTime: parseResult.messages.length * 0.5,
+          // ✅ NEW: Rate limiting metadata
           charactersProcessed: text.length,
           debugInfo: {
             requestValidated: true,
@@ -688,7 +661,7 @@ router.post('/validate',
       }
 
       const validation = {
-        isValid: text.length >= 10 && text.length <= 500000,
+        isValid: text.length >= 10 && text.length <= 500000, // ✅ UPDATED: Allow up to 500k chars
         textLength: text.length,
         estimatedMessages: Math.max(1, Math.ceil(text.split('\n\n').length / 2)),
         detectedPlatform: detectPlatformQuick(text),
@@ -881,7 +854,7 @@ function generateQuickSuggestions(text: string): string[] {
     suggestions.push('Add role markers like "Human:" and "Assistant:" for clearer parsing.');
   }
   
-  if (text.length > 100000) {
+  if (text.length > 100000) { // ✅ UPDATED: Higher threshold
     suggestions.push('Very long conversation. Consider your daily character limit.');
   }
   

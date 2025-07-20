@@ -5,12 +5,53 @@ import { SessionSummary, SessionMetadata, AnalysisPattern, Platform } from '../t
 
 export class SessionService {
   /**
-   * ✅ CLEAN: Create session WITHOUT duplicate ensureUserExists
-   * User is guaranteed to exist from RateLimitService.ensureUserExists call
+   * ✅ CRITICAL FIX: Ensure user exists before creating session
+   */
+  async ensureUserExists(userId: string, userEmail: string): Promise<void> {
+    try {
+      // Check if user exists
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId }
+      });
+
+      if (!existingUser) {
+        console.log(`🔧 CREATING MISSING USER: ${userId} (${userEmail})`);
+        
+        // Create the missing user record
+        await prisma.user.create({
+          data: {
+            id: userId,
+            email: userEmail,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+        
+        console.log(`✅ USER CREATED SUCCESSFULLY: ${userId}`);
+      } else {
+        console.log(`✅ USER EXISTS: ${userId}`);
+      }
+    } catch (error) {
+      // Don't throw - user might exist from parallel request
+      console.log(`⚠️ User creation handling: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // Check if error is "already exists" - that's OK
+      if (error instanceof Error && error.message.includes('Unique constraint failed')) {
+        console.log(`✅ USER ALREADY EXISTS (parallel creation): ${userId}`);
+        return; // Success - user exists now
+      }
+      
+      // For other errors, still don't throw - session creation can continue
+      logger.warn('User creation failed but continuing', { error, userId, userEmail });
+    }
+  }
+
+  /**
+   * ✅ FIXED: Create new analysis session compatible with real Prisma schema
    */
   async createSession(
     userId: string, 
-    userEmail: string, // ✅ Keep parameter for API compatibility but don't use for creation
+    userEmail: string, // ✅ Keep parameter for API compatibility but don't store
     metadata: {
       platform?: Platform;
       projectContext?: string;
@@ -18,12 +59,14 @@ export class SessionService {
     } = {}
   ): Promise<string> {
     try {
-      // ✅ NO ensureUserExists call - user already created by RateLimitService
-      logger.info('🚀 Creating session for existing user', { userId, userEmail, metadata });
+      // ✅ CRITICAL FIX: Ensure user exists before creating session
+      await this.ensureUserExists(userId, userEmail);
+
+      console.log('🚀 CREATING SESSION:', { userId, userEmail, metadata });
       
       const session = await prisma.session.create({
         data: {
-          userId, // ✅ User guaranteed to exist from rate limiting step
+          userId, // ✅ Now guaranteed to exist
           platform: metadata.platform || 'other',
           title: `Analysis ${new Date().toLocaleDateString()}`,
           status: 'ACTIVE', // ✅ FIXED: Uppercase enum value
@@ -43,30 +86,25 @@ export class SessionService {
         }
       });
 
-      logger.info('✅ Session created successfully for existing user', { 
+      console.log('✅ SESSION CREATED:', session.id);
+      logger.info('Session created successfully', { 
         sessionId: session.id, 
         userId,
-        userEmail,
+        userEmail, // ✅ Log userEmail but don't store in DB (User relation handles this)
         platform: metadata.platform 
       });
       
       return session.id;
       
     } catch (error) {
-      logger.error('❌ Session creation failed', { error, userId, userEmail });
-      
-      // ✅ IMPROVED: More specific error handling
-      if (error.code === 'P2003') {
-        // Foreign key constraint failed - user doesn't exist
-        throw new Error(`User ${userId} not found in database. Ensure rate limiting ran first.`);
-      }
-      
+      console.error('❌ SESSION CREATION FAILED:', error);
+      logger.error('Failed to create session', { error, userId, userEmail });
       throw new Error(`Failed to create session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * ✅ UNCHANGED: Update session compatible with real Prisma schema
+   * ✅ FIXED: Update session compatible with real Prisma schema
    */
   async updateSession(
     userId: string, 
@@ -74,7 +112,7 @@ export class SessionService {
     summary: SessionSummary
   ): Promise<void> {
     try {
-      logger.info('🔄 Updating session', { sessionId, userId });
+      console.log('🔄 UPDATING SESSION:', { sessionId, userId });
       
       await prisma.session.update({
         where: {
@@ -91,6 +129,7 @@ export class SessionService {
           innovationAvg: summary.dimensionAverages.innovation,
           contextAvg: summary.dimensionAverages.context, // ✅ NEW: 5th dimension
           status: 'COMPLETED', // ✅ FIXED: Uppercase enum value
+          // ✅ FIXED: Remove completedAt - use updatedAt (Prisma @updatedAt handles automatically)
           metadata: {
             ...summary,
             updatedAt: new Date().toISOString(),
@@ -102,20 +141,22 @@ export class SessionService {
         }
       });
 
-      logger.info('✅ Session updated successfully', { sessionId, userId, summary });
+      console.log('✅ SESSION UPDATED:', sessionId);
+      logger.info('Session updated successfully', { sessionId, userId, summary });
       
     } catch (error) {
-      logger.error('❌ Session update failed', { error, sessionId, userId });
+      console.error('❌ SESSION UPDATE FAILED:', error);
+      logger.error('Failed to update session', { error, sessionId, userId });
       throw new Error('Failed to update session');
     }
   }
 
   /**
-   * ✅ UNCHANGED: Update session title only (lightweight operation)
+   * ✅ NEW: Update session title only (lightweight operation)
    */
   async updateSessionTitle(sessionId: string, userId: string, title: string): Promise<void> {
     try {
-      logger.info('📝 Updating session title', { sessionId, userId, title });
+      console.log('📝 UPDATING SESSION TITLE:', { sessionId, userId, title });
       
       await prisma.session.update({
         where: {
@@ -124,13 +165,16 @@ export class SessionService {
         },
         data: {
           title: title.trim()
+          // ✅ FIXED: Remove manual updatedAt - Prisma @updatedAt handles automatically
         }
       });
 
-      logger.info('✅ Session title updated successfully', { sessionId, userId, title });
+      console.log('✅ SESSION TITLE UPDATED:', sessionId);
+      logger.info('Session title updated successfully', { sessionId, userId, title });
       
     } catch (error) {
-      logger.error('❌ Session title update failed', { error, sessionId, userId });
+      console.error('❌ SESSION TITLE UPDATE FAILED:', error);
+      logger.error('Failed to update session title', { error, sessionId, userId });
       
       if (error instanceof Error && error.message.includes('Record to update not found')) {
         throw new Error('Session not found');
@@ -141,7 +185,7 @@ export class SessionService {
   }
 
   /**
-   * ✅ UNCHANGED: Get session analytics for Dashboard
+   * ✅ NEW: Get session analytics for Dashboard
    */
   async getSessionAnalytics(userId: string, days: number = 30): Promise<{
     totalSessions: number;
@@ -172,7 +216,7 @@ export class SessionService {
     }>;
   }> {
     try {
-      logger.info('📊 Getting session analytics', { userId, days });
+      console.log('📊 GETTING SESSION ANALYTICS:', { userId, days });
       
       // Calculate date range
       const startDate = new Date();
@@ -200,7 +244,7 @@ export class SessionService {
           contextAvg: true, // ✅ NEW: 5th dimension
           trend: true,
           createdAt: true,
-          updatedAt: true
+          updatedAt: true // ✅ FIXED: Use updatedAt instead of completedAt
         },
         orderBy: {
           createdAt: 'desc'
@@ -315,23 +359,26 @@ export class SessionService {
         recentSessions
       };
 
-      logger.info('✅ Session analytics calculated successfully', {
+      console.log('✅ SESSION ANALYTICS CALCULATED:', {
         userId,
         totalSessions,
         averageScore,
         improvementRate
       });
+
+      logger.info('Session analytics calculated successfully', { userId, analytics });
       
       return analytics;
       
     } catch (error) {
-      logger.error('❌ Session analytics failed', { error, userId });
+      console.error('❌ SESSION ANALYTICS FAILED:', error);
+      logger.error('Failed to get session analytics', { error, userId });
       throw new Error('Failed to get session analytics');
     }
   }
 
   /**
-   * ✅ UNCHANGED: Save individual messages with 5D scores to database
+   * ✅ CRITICAL: Save individual messages with 5D scores to database
    */
   async saveSessionMessages(
     sessionId: string,
@@ -358,7 +405,7 @@ export class SessionService {
     }>
   ): Promise<void> {
     try {
-      logger.info('💾 Saving session messages', {
+      console.log('💾 SAVING SESSION MESSAGES:', {
         sessionId,
         userId,
         messageCount: messagesWithScores.length
@@ -398,7 +445,7 @@ export class SessionService {
                 innovation: score.dimensions.innovation,
                 context: score.dimensions.context, // ✅ NEW: 5th dimension
                 classification: score.classification,
-                chessNotation: this.getChessNotationFromScore(score),
+                chessNotation: this.getChessNotationFromScore(score), // ✅ FIXED: Safe chessNotation generation
                 explanation: score.explanation || '',
                 betterMove: score.betterMove || '',
                 confidence: score.confidence || 0.9
@@ -408,25 +455,35 @@ export class SessionService {
         }
       });
       
-      logger.info('✅ Session messages saved successfully', {
+      console.log('✅ SESSION MESSAGES SAVED:', {
         sessionId,
         savedCount: messagesWithScores.length
       });
+      logger.info('Session messages saved successfully', {
+        sessionId,
+        userId,
+        messageCount: messagesWithScores.length
+      });
       
     } catch (error) {
-      logger.error('❌ Failed to save session messages', {
+      console.error('❌ FAILED TO SAVE SESSION MESSAGES:', {
         error: error instanceof Error ? error.message : String(error),
         sessionId,
         userId,
         messageCount: messagesWithScores.length
       });
       
+      logger.error('Failed to save session messages', { 
+        error, 
+        sessionId, 
+        userId 
+      });
       throw new Error('Failed to save session messages');
     }
   }
 
   /**
-   * ✅ UNCHANGED: Safe chessNotation generation from score
+   * ✅ FIXED: Safe chessNotation generation from score
    */
   private getChessNotationFromScore(score: any): string {
     // First try to get chessNotation from score (if exists)
@@ -444,11 +501,11 @@ export class SessionService {
   }
 
   /**
-   * ✅ UNCHANGED: Get session with individual messages and 5D scores
+   * ✅ ENHANCED: Get session with individual messages and 5D scores
    */
   async getSession(userId: string, sessionId: string): Promise<any> {
     try {
-      logger.info('📖 Getting session', { sessionId, userId });
+      console.log('📖 GETTING SESSION:', { sessionId, userId });
       
       // Get session with related messages and scores
       const session = await prisma.session.findFirst({
@@ -459,7 +516,7 @@ export class SessionService {
         include: {
           messages: {
             include: {
-              score: true
+              score: true // ✅ FIXED: singular 'score' not 'scores'
             },
             orderBy: {
               index: 'asc'
@@ -469,7 +526,7 @@ export class SessionService {
       });
 
       if (!session) {
-        logger.info('❌ Session not found', { sessionId });
+        console.log('❌ SESSION NOT FOUND:', sessionId);
         return { success: false, error: 'Session not found' };
       }
 
@@ -497,7 +554,7 @@ export class SessionService {
         }] : []
       }));
 
-      logger.info('✅ Session retrieved successfully', {
+      console.log('✅ SESSION RETRIEVED:', {
         sessionId,
         messageCount: messages.length,
         averageScore: session.overallScore
@@ -511,7 +568,7 @@ export class SessionService {
           platform: session.platform.toLowerCase(),
           status: session.status,
           createdAt: session.createdAt.toISOString(),
-          updatedAt: session.updatedAt.toISOString(),
+          updatedAt: session.updatedAt.toISOString(), // ✅ FIXED: Use updatedAt instead of completedAt
           messageCount: session.messageCount,
           overallScore: session.overallScore,
           // ✅ ENHANCED: Include 5D dimension averages
@@ -528,13 +585,14 @@ export class SessionService {
       };
       
     } catch (error) {
-      logger.error('❌ Get session failed', { error, sessionId, userId });
+      console.error('❌ GET SESSION FAILED:', error);
+      logger.error('Failed to get session', { error, sessionId, userId });
       return { success: false, error: 'Failed to retrieve session' };
     }
   }
 
   /**
-   * ✅ UNCHANGED: Backward compatibility overload for sessions.ts
+   * ✅ NEW: Backward compatibility overload for sessions.ts
    */
   async getUserSessions(
     userId: string,
@@ -600,7 +658,7 @@ export class SessionService {
           status: true,
           trend: true,
           createdAt: true,
-          updatedAt: true,
+          updatedAt: true, // ✅ FIXED: Use updatedAt instead of completedAt
           metadata: true
         },
         orderBy: {
@@ -660,7 +718,7 @@ export class SessionService {
   }
 
   /**
-   * ✅ UNCHANGED: Delete session and all related data
+   * ✅ Delete session and all related data
    */
   async deleteSession(userId: string, sessionId: string): Promise<boolean> {
     try {

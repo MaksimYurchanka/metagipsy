@@ -1,4 +1,4 @@
-// ✅ FIXED RATE LIMITING SYSTEM - Auto-create Prisma users + TypeScript corrections
+// ✅ RATE LIMITING SYSTEM - DATABASE COMPATIBLE with Stripe Integration
 // apps/api/src/lib/rate-limits.ts
 
 import { redis } from './redis';
@@ -27,86 +27,31 @@ export class RateLimitService {
   static readonly TIERS: Record<string, UserTier> = {
     free: {
       type: 'free',
-      dailyCharacterLimit: 5000,
-      dailyAnalysisLimit: 5,
+      dailyCharacterLimit: 5000,      // 5k characters for testing
+      dailyAnalysisLimit: 5,          // 5 analyses per day
       features: ['Basic 5D Analysis', 'Local Parsing', 'Session History']
     },
     pro: {
       type: 'pro',
-      dailyCharacterLimit: 500000,
-      dailyAnalysisLimit: 100,
+      dailyCharacterLimit: 500000,    // 500k characters per day
+      dailyAnalysisLimit: 100,        // 100 analyses per day
       features: ['Enhanced AI Parsing', 'Unlimited Sessions', 'Export Features', 'Priority Support'],
       stripePriceId: 'price_pro_daily'
     },
     enterprise: {
       type: 'enterprise',
-      dailyCharacterLimit: 2000000,
-      dailyAnalysisLimit: 1000,
+      dailyCharacterLimit: 2000000,   // 2M characters per day
+      dailyAnalysisLimit: 1000,       // 1000 analyses per day
       features: ['API Access', 'Custom Integrations', 'White Label', 'Dedicated Support'],
       stripePriceId: 'price_enterprise_monthly'
     }
   };
 
   /**
-   * 🔧 FIXED: Auto-create Prisma user if missing (Supabase → Prisma sync)
+   * 🔍 GET USER TIER - DATABASE INTEGRATED
    */
-  static async ensureUserExists(userId: string, email?: string): Promise<void> {
+  static async getUserTier(userId: string): Promise<UserTier> {
     try {
-      // Check if user already exists
-      const existingUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true }
-      });
-
-      if (existingUser) {
-        return; // User already exists
-      }
-
-      // ✅ FIXED: Correct static method call
-      const nextReset = RateLimitService.getNextResetTime();
-
-      // ✅ CREATE USER: Auto-create missing Prisma user from Supabase
-      const newUser = await prisma.user.create({
-        data: {
-          id: userId,
-          email: email || `user_${userId}@example.com`, // Fallback email
-          tier: 'FREE',
-          dailyLimit: this.TIERS.free.dailyCharacterLimit,
-          dailyUsage: 0,
-          usageResetDate: nextReset,
-          cancelAtPeriodEnd: false, // ✅ FIXED: Added missing required field
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      });
-
-      logger.info('🎊 User auto-created in Prisma database', { 
-        userId, 
-        email: newUser.email,
-        tier: newUser.tier,
-        dailyLimit: newUser.dailyLimit
-      });
-
-    } catch (error) {
-      // Handle unique constraint violations gracefully (race condition)
-      if (error.code === 'P2002') {
-        logger.info('User creation race condition - user already exists', { userId });
-        return;
-      }
-      
-      logger.error('Failed to auto-create user in Prisma', { error, userId, email });
-      throw error;
-    }
-  }
-
-  /**
-   * 🔍 GET USER TIER - ENHANCED with auto-creation
-   */
-  static async getUserTier(userId: string, email?: string): Promise<UserTier> {
-    try {
-      // ✅ ENSURE USER EXISTS: Auto-create if missing
-      await this.ensureUserExists(userId, email);
-
       // ✅ ENHANCED: Get user with Stripe subscription info
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -122,8 +67,7 @@ export class RateLimitService {
       });
 
       if (!user) {
-        // This should not happen after ensureUserExists, but handle gracefully
-        logger.warn('User still not found after auto-creation attempt', { userId });
+        logger.warn('User not found, defaulting to free tier', { userId });
         return this.TIERS.free;
       }
 
@@ -163,17 +107,13 @@ export class RateLimitService {
   }
 
   /**
-   * 📊 CHECK DAILY USAGE - ENHANCED with auto-creation
+   * 📊 CHECK DAILY USAGE - DATABASE INTEGRATED
    */
   static async checkDailyUsage(
     userId: string, 
-    requestedCharacters: number,
-    email?: string
+    requestedCharacters: number
   ): Promise<RateLimitResult> {
     try {
-      // ✅ ENSURE USER EXISTS: Auto-create if missing
-      await this.ensureUserExists(userId, email);
-
       // ✅ GET user data including usage from database
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -189,19 +129,17 @@ export class RateLimitService {
       });
 
       if (!user) {
-        // This should not happen after ensureUserExists
-        logger.error('User still not found after auto-creation', { userId });
         return {
           allowed: false,
           currentUsage: 0,
           dailyLimit: 5000,
           resetTime: new Date(),
           tierType: 'free',
-          message: 'User creation failed'
+          message: 'User not found'
         };
       }
 
-      const userTier = await this.getUserTier(userId, email);
+      const userTier = await this.getUserTier(userId);
       
       // ✅ CHECK if usage needs reset (new day)
       const now = new Date();
@@ -212,8 +150,8 @@ export class RateLimitService {
       
       // ✅ RESET usage if needed
       if (needsReset) {
-        // ✅ FIXED: Correct static method call
-        const nextReset = RateLimitService.getNextResetTime();
+        const nextReset = new Date();
+        nextReset.setHours(24, 0, 0, 0); // Next midnight
         
         await prisma.user.update({
           where: { id: userId },
@@ -230,8 +168,7 @@ export class RateLimitService {
       const dailyLimit = user.dailyLimit || userTier.dailyCharacterLimit;
       const wouldExceed = (currentUsage + requestedCharacters) > dailyLimit;
       
-      // ✅ FIXED: Correct static method call for reset time
-      const resetTime = user.usageResetDate || RateLimitService.getNextResetTime();
+      const resetTime = user.usageResetDate || new Date();
 
       if (wouldExceed) {
         return {
@@ -277,9 +214,6 @@ export class RateLimitService {
     analysisType: 'local' | 'haiku' = 'local'
   ): Promise<void> {
     try {
-      // ✅ ENSURE USER EXISTS before recording usage
-      await this.ensureUserExists(userId);
-
       // ✅ UPDATE usage in database
       await prisma.user.update({
         where: { id: userId },
@@ -311,7 +245,7 @@ export class RateLimitService {
   }
 
   /**
-   * 📊 GET USAGE STATS - ENHANCED with auto-creation
+   * 📊 GET USAGE STATS - DATABASE INTEGRATED
    */
   static async getUserUsageStats(userId: string): Promise<{
     today: {
@@ -325,9 +259,6 @@ export class RateLimitService {
     resetTime: Date;
   }> {
     try {
-      // ✅ ENSURE USER EXISTS
-      await this.ensureUserExists(userId);
-
       // ✅ GET usage from database
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -349,8 +280,7 @@ export class RateLimitService {
       const charactersLimit = user?.dailyLimit || userTier.dailyCharacterLimit;
       const percentUsed = Math.round((charactersUsed / charactersLimit) * 100);
       
-      // ✅ FIXED: Correct static method call
-      const resetTime = user?.usageResetDate || RateLimitService.getNextResetTime();
+      const resetTime = user?.usageResetDate || new Date();
       
       return {
         today: {
@@ -388,9 +318,6 @@ export class RateLimitService {
     newTier: 'free' | 'pro' | 'enterprise'
   ): Promise<void> {
     try {
-      // ✅ ENSURE USER EXISTS before updating
-      await this.ensureUserExists(userId);
-
       const tierMap: Record<string, 'FREE' | 'PRO' | 'ENTERPRISE'> = {
         'free': 'FREE',
         'pro': 'PRO',
@@ -421,8 +348,8 @@ export class RateLimitService {
    */
   static async resetAllDailyUsage(): Promise<void> {
     try {
-      // ✅ FIXED: Correct static method call
-      const nextReset = RateLimitService.getNextResetTime();
+      const nextReset = new Date();
+      nextReset.setHours(24, 0, 0, 0);
 
       const result = await prisma.user.updateMany({
         where: {
@@ -445,22 +372,12 @@ export class RateLimitService {
       logger.error('Failed to reset daily usage', { error });
     }
   }
-
-  /**
-   * ✅ FIXED: Public static method for next reset time
-   */
-  static getNextResetTime(): Date {
-    const nextReset = new Date();
-    nextReset.setHours(24, 0, 0, 0); // Next midnight
-    return nextReset;
-  }
 }
 
-// ✅ ENHANCED MIDDLEWARE: Rate limiting for analyze endpoints with auto-creation
+// ✅ MIDDLEWARE: Rate limiting for analyze endpoints
 export async function rateLimitMiddleware(
   userId: string,
-  requestedCharacters: number,
-  email?: string
+  requestedCharacters: number
 ): Promise<RateLimitResult> {
-  return RateLimitService.checkDailyUsage(userId, requestedCharacters, email);
+  return RateLimitService.checkDailyUsage(userId, requestedCharacters);
 }
