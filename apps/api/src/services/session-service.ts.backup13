@@ -55,8 +55,8 @@ export class SessionService {
     } catch (error) {
       logger.error('❌ Session creation failed', { error, userId, userEmail });
       
-      // ✅ IMPROVED: More specific error handling with proper TypeScript
-      if (error instanceof Error && 'code' in error && error.code === 'P2003') {
+      // ✅ IMPROVED: More specific error handling
+      if (error.code === 'P2003') {
         // Foreign key constraint failed - user doesn't exist
         throw new Error(`User ${userId} not found in database. Ensure rate limiting ran first.`);
       }

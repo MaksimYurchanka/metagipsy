@@ -89,7 +89,7 @@ export class RateLimitService {
 
     } catch (error) {
       // Handle unique constraint violations gracefully (race condition)
-      if (error.code === 'P2002') {
+      if (error instanceof Error && 'code' in error && error.code === 'P2002') {
         logger.info('User creation race condition - user already exists', { userId });
         return;
       }
