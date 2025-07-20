@@ -53,35 +53,40 @@
     <meta name="color-scheme" content="dark light" />
     <meta name="supported-color-schemes" content="dark light" />
     
-    <!-- ✅ REMOVED: X-Frame-Options, X-XSS-Protection (должны быть HTTP headers) -->
-    <!-- ✅ KEPT: Only meta tags that work in HTML -->
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    
-    <!-- ✅ ENHANCED: Performance Optimization -->
+    <!-- Performance Optimization -->
     <link rel="preconnect" href="https://api.metagipsy.com" />
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="dns-prefetch" href="https://js.stripe.com" />
     <link rel="canonical" href="https://www.metagipsy.com" />
     
-    <!-- ✅ REMOVED: Problematic preload hints that cause warnings -->
-    <!-- Module preloading handled by Vite automatically -->
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
     
-    <!-- ✅ GA4 IMMEDIATE LOADING - WORKING SOLUTION -->
+    <!-- Resource Hints -->
+    <link rel="preload" href="/src/main.tsx" as="script" />
+    <link rel="modulepreload" href="/src/main.tsx" />
+    
+    <!-- ✅ ГИБРИДНАЯ GA4 СТРАТЕГИЯ: Immediate + Fallback -->
     <script>
-      // 🎯 GA4 Immediate Loading Strategy
-      window.METAGIPSY_GA_ID = 'G-TLMM5F6LD0';
+      // 🎯 STEP 1: Определяем GA ID (приоритет: env variable, fallback: production)
+      window.METAGIPSY_GA_ID = 'G-TLMM5F6LD0'; // Production fallback
       
+      // 🎯 STEP 2: Immediate GA4 loading
       (function() {
         const script = document.createElement('script');
         script.async = true;
         script.src = 'https://www.googletagmanager.com/gtag/js?id=' + window.METAGIPSY_GA_ID;
         document.head.appendChild(script);
         
+        // Initialize dataLayer
         window.dataLayer = window.dataLayer || [];
         window.gtag = function(){dataLayer.push(arguments);};
         window.gtag('js', new Date());
         
+        // Configure immediately  
         window.gtag('config', window.METAGIPSY_GA_ID, {
           page_title: 'MetaGipsy - 5D AI Analysis',
           page_location: window.location.href,
@@ -89,18 +94,13 @@
             'custom_parameter_1': 'analysis_type',
             'custom_parameter_2': 'session_score',
             'custom_parameter_3': 'user_tier'
-          },
-          // ✅ Reduce setTimeout violations
-          send_page_view: true,
-          cookie_expires: 63072000, // 2 years
-          cookie_update: true,
-          cookie_flags: 'SameSite=None;Secure'
+          }
         });
         
         console.log('✅ MetaGipsy GA4 загружен немедленно:', window.METAGIPSY_GA_ID);
       })();
       
-      // ✅ Enhanced tracking functions
+      // 🎯 STEP 3: Enhanced tracking functions
       window.trackMetaGipsyEvent = function(action, category, label, value) {
         if (typeof gtag !== 'undefined') {
           gtag('event', action, {
@@ -142,7 +142,7 @@
         console.log('💰 Subscription tracked:', tier, amount, stage);
       };
       
-      // ✅ Auto page tracking
+      // 🎯 STEP 4: Auto page tracking
       document.addEventListener('DOMContentLoaded', function() {
         if (window.trackMetaGipsyEvent) {
           window.trackMetaGipsyEvent('page_load', 'Navigation', 'Homepage', 1);
@@ -150,14 +150,9 @@
         console.log('🚀 MetaGipsy полностью загружен с GA4!');
       });
       
-      // ✅ OPTIMIZED: Error tracking (reduce noise)
+      // 🎯 STEP 5: Error tracking
       window.addEventListener('error', function(e) {
-        // Filter out common non-critical errors
-        if (e.error && 
-            e.error.name !== 'ChunkLoadError' &&
-            e.error.name !== 'ResizeObserver' &&
-            !e.message.includes('Non-Error promise rejection') &&
-            typeof gtag !== 'undefined') {
+        if (e.error && typeof gtag !== 'undefined') {
           gtag('event', 'js_error', {
             event_category: 'Error',
             event_label: e.error.name || 'Unknown',
@@ -166,42 +161,30 @@
         }
       });
       
-      // ✅ OPTIMIZED: Network monitoring (less verbose)
-      let networkStatus = navigator.onLine;
+      // 🎯 STEP 6: Network status
       window.addEventListener('online', function() {
-        if (!networkStatus && window.trackMetaGipsyEvent) {
+        if (window.trackMetaGipsyEvent) {
           window.trackMetaGipsyEvent('network_online', 'System', 'Connection Restored', 1);
-          networkStatus = true;
         }
       });
       
       window.addEventListener('offline', function() {
-        if (networkStatus && window.trackMetaGipsyEvent) {
+        if (window.trackMetaGipsyEvent) {
           window.trackMetaGipsyEvent('network_offline', 'System', 'Connection Lost', 1);
-          networkStatus = false;
         }
       });
     </script>
   </head>
   <body>
     <div id="root"></div>
-    
-    <!-- ✅ FIXED: Proper module script loading -->
     <script type="module" src="/src/main.tsx"></script>
     
-    <!-- ✅ Enhanced noscript fallback -->
+    <!-- Noscript fallback -->
     <noscript>
-      <div style="text-align: center; padding: 50px; font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: #334155;">
-        <h1 style="color: #667eea; margin-bottom: 20px;">MetaGipsy - AI Conversation Analysis</h1>
-        <p style="font-size: 18px; margin-bottom: 15px;">This application requires JavaScript to run.</p>
-        <p style="font-size: 16px; color: #64748b;">Please enable JavaScript in your browser to continue.</p>
-        <div style="margin-top: 30px; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-          <h3 style="color: #475569; margin-bottom: 10px;">About MetaGipsy</h3>
-          <p style="font-size: 14px; color: #64748b; line-height: 1.5;">
-            World's first 5D conversation analysis platform with chess-style scoring for AI interactions.
-            Analyze ChatGPT and Claude conversations across Strategic, Tactical, Cognitive, Innovation, and Context dimensions.
-          </p>
-        </div>
+      <div style="text-align: center; padding: 50px; font-family: system-ui;">
+        <h1>MetaGipsy - AI Conversation Analysis</h1>
+        <p>This application requires JavaScript to run.</p>
+        <p>Please enable JavaScript in your browser to continue.</p>
       </div>
     </noscript>
   </body>
