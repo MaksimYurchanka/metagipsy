@@ -10,11 +10,9 @@ import {
   X,
   Github,
   Twitter,
-  Linkedin,  // ✅ ADDED: LinkedIn icon
   User,
   LogOut,
-  Crown,
-  UserPlus  // ✅ ADDED: UserPlus for Register
+  Crown  // ✅ ADDED: Crown icon for pricing navigation
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -180,7 +178,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           )}
         </div>
 
-        {/* ✅ UPDATED: Footer with correct social links */}
+        {/* Footer */}
         <div className="p-4 border-t border-border bg-accent/10">
           <div className="flex items-center justify-center space-x-4">
             <Button 
@@ -190,16 +188,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               asChild
             >
               <a
-                href="https://github.com/MaksimYurchanka"
+                href="https://github.com/metagipsy"
                 target="_blank"
                 rel="noopener noreferrer"
-                title="GitHub"
               >
                 <Github className="h-4 w-4" />
               </a>
             </Button>
-            
-            {/* ✅ NEW: LinkedIn button */}
             <Button 
               variant="ghost" 
               size="icon" 
@@ -207,26 +202,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               asChild
             >
               <a
-                href="https://www.linkedin.com/in/maksim-yurchanka-91208696/"
+                href="https://twitter.com/metagipsy"
                 target="_blank"
                 rel="noopener noreferrer"
-                title="LinkedIn"
-              >
-                <Linkedin className="h-4 w-4" />
-              </a>
-            </Button>
-            
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-              asChild
-            >
-              <a
-                href="https://x.com/MaksimYurchanka"
-                target="_blank"
-                rel="noopener noreferrer"
-                title="X / Twitter"
               >
                 <Twitter className="h-4 w-4" />
               </a>
@@ -281,18 +259,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     Upgrade to Pro
                   </Link>
                 </Button>
-                
-                {/* ✅ UPDATED: Changed to Register button */}
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  className="hidden md:flex"
-                  onClick={() => setShowAuthModal(true)}
-                >
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Register
-                </Button>
-                
                 <Button 
                   size="sm"
                   className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0"
