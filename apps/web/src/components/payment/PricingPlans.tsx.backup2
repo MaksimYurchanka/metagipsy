@@ -1,10 +1,8 @@
 // apps/web/src/components/payment/PricingPlans.tsx
 import React, { useState } from 'react';
-import { Check, Zap, Crown, Users, Sparkles, Lock } from 'lucide-react';
+import { Check, Zap, Crown, Users, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/hooks/useAuth';
-import { AuthModal } from '@/components/auth/AuthModal';
 import CheckoutForm from './CheckoutForm';
 
 interface PricingPlan {
@@ -28,16 +26,10 @@ interface PricingPlan {
 }
 
 const PricingPlans: React.FC = () => {
-  // ✅ NEW: Auth integration
-  const { isAuthenticated } = useAuth();
-  
   // Checkout modal state
   const [showCheckout, setShowCheckout] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PricingPlan | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
-  
-  // ✅ NEW: Auth modal state
-  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Environment variables for pricing (order matches backend cents: daily=999¢, monthly=19900¢)
   const dailyPrice = import.meta.env.VITE_PRICE_DAILY_USD || '9.99';
@@ -57,7 +49,7 @@ const PricingPlans: React.FC = () => {
       period: 'forever',
       description: 'Perfect for trying MetaGipsy',
       features: [
-        'Complete 5D analysis', // ✅ UPDATED: 4D → 5D
+        'Complete 5D analysis',
         'Chess notation scoring',
         'Export as JSON/CSV/Markdown',
         'Session insights',
@@ -81,7 +73,7 @@ const PricingPlans: React.FC = () => {
       period: '24 hours',
       description: 'Perfect for batch processing',
       features: [
-        'Complete 5D analysis', // ✅ UPDATED: 4D → 5D
+        'Complete 5D analysis',
         '24-hour access window', 
         'All export formats',
         'Session insights',
@@ -94,10 +86,8 @@ const PricingPlans: React.FC = () => {
         export: true,
         support: 'Email'
       },
-      buttonText: isAuthenticated ? 'Upgrade to Pro Daily' : 'Sign In to Upgrade',
-      buttonStyle: isAuthenticated 
-        ? 'bg-blue-600 hover:bg-blue-700 text-white transition-colors border-0'
-        : 'bg-blue-600/80 hover:bg-blue-700 text-white transition-colors border-0',
+      buttonText: 'Upgrade to Pro Daily',
+      buttonStyle: 'bg-blue-600 hover:bg-blue-700 text-white transition-colors border-0',
       icon: <Zap className="w-6 h-6 text-blue-400" />,
       priceId: dailyPriceId,
     },
@@ -108,7 +98,7 @@ const PricingPlans: React.FC = () => {
       period: '30 days',
       description: 'Best value for professionals',
       features: [
-        'Complete 5D analysis', // ✅ UPDATED: 4D → 5D
+        'Complete 5D analysis',
         'Daily 500k character limit',
         'All export formats',
         'Advanced session insights',
@@ -122,10 +112,8 @@ const PricingPlans: React.FC = () => {
         export: true,
         support: 'Priority'
       },
-      buttonText: isAuthenticated ? 'Upgrade to Pro Monthly' : 'Sign In to Upgrade',
-      buttonStyle: isAuthenticated
-        ? 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white transition-all border-0'
-        : 'bg-gradient-to-r from-purple-600/80 to-blue-600/80 hover:from-purple-700 hover:to-blue-700 text-white transition-all border-0',
+      buttonText: 'Upgrade to Pro Monthly',
+      buttonStyle: 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white transition-all border-0',
       popular: true,
       icon: <Crown className="w-6 h-6 text-purple-400" />,
       priceId: monthlyPriceId,
@@ -134,12 +122,6 @@ const PricingPlans: React.FC = () => {
 
   const handleUpgrade = (plan: PricingPlan) => {
     if (plan.id === 'free') return;
-    
-    // ✅ NEW: Authentication check
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-      return;
-    }
     
     // Open checkout modal with selected plan
     setSelectedPlan(plan);
@@ -151,11 +133,6 @@ const PricingPlans: React.FC = () => {
     setShowCheckout(false);
     setSelectedPlan(null);
     setPaymentSuccess(false);
-  };
-
-  const handleAuthSuccess = () => {
-    setShowAuthModal(false);
-    // After successful auth, user can try upgrade again
   };
 
   const handlePaymentSuccess = (subscriptionId: string) => {
@@ -184,23 +161,6 @@ const PricingPlans: React.FC = () => {
           Same powerful 5D analysis, just higher limits for power users.
         </p>
       </div>
-
-      {/* ✅ NEW: Authentication Notice */}
-      {!isAuthenticated && (
-        <div className="max-w-4xl mx-auto mb-8 p-6 bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-2xl border border-blue-800/30">
-          <div className="flex items-center justify-center text-center">
-            <Lock className="w-6 h-6 text-blue-400 mr-3" />
-            <div>
-              <h3 className="text-lg font-semibold text-gray-100 mb-2">
-                Sign in to access Pro features
-              </h3>
-              <p className="text-gray-300 text-sm">
-                Create a free account to upgrade to Pro plans and unlock higher analysis limits
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Pricing Cards */}
       <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
@@ -288,9 +248,6 @@ const PricingPlans: React.FC = () => {
                 ? 'Opening Checkout...' 
                 : plan.buttonText
               }
-              {!isAuthenticated && plan.id !== 'free' && (
-                <Lock className="w-4 h-4 ml-2" />
-              )}
             </Button>
 
             {/* Value Proposition */}
@@ -326,7 +283,6 @@ const PricingPlans: React.FC = () => {
             }`}
           >
             {showCheckout ? 'Processing...' : `Try Pro Daily - $${dailyPrice}`}
-            {!isAuthenticated && <Lock className="w-4 h-4 ml-2" />}
           </Button>
           <Button
             onClick={() => handleUpgrade(plans[2])}
@@ -338,20 +294,12 @@ const PricingPlans: React.FC = () => {
             }`}
           >
             {showCheckout ? 'Processing...' : `Go Pro Monthly - $${monthlyPrice}`}
-            {!isAuthenticated && <Lock className="w-4 h-4 ml-2" />}
           </Button>
         </div>
       </div>
 
-      {/* ✅ NEW: Auth Modal */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        onSuccess={handleAuthSuccess}
-      />
-
       {/* Checkout Modal */}
-      {showCheckout && selectedPlan && selectedPlan.priceId && isAuthenticated && (
+      {showCheckout && selectedPlan && selectedPlan.priceId && (
         <CheckoutForm
           priceId={selectedPlan.priceId}
           planName={selectedPlan.name}
