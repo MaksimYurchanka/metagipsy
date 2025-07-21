@@ -254,26 +254,13 @@ const HomePage: React.FC = () => {
                 </motion.div>
               ))}
             </div>
-          </div>ground">
-                From automatic platform detection to detailed analytics, MetaGipsy provides 
-                comprehensive tools for improving your AI interactions.
-              </p>
-            </div>
 
-            <div className="space-y-3">
-              {benefits.map((benefit, index) => (
-                <motion.div
-                  key={benefit}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 1.3 + index * 0.1 }}
-                  className="flex items-center space-x-3"
-                >
-                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                  <span>{benefit}</span>
-                </motion.div>
-              ))}
-            </div>
+            <Button asChild size="lg" className="w-fit">
+              <Link to="/analyze">
+                Get Started Now
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
+            </Button>
           </div>
 
           {/* ✅ ENHANCED: Sample analysis with Context dimension */}
@@ -290,7 +277,7 @@ const HomePage: React.FC = () => {
                     <span className="text-sm">Strategic Score</span>
                     <div className="flex items-center space-x-2">
                       <span className="font-semibold">85</span>
-                      <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                      <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
                         !
                       </div>
                     </div>
@@ -301,26 +288,6 @@ const HomePage: React.FC = () => {
                     <div className="flex items-center space-x-2">
                       <span className="font-semibold">78</span>
                       <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                        !
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-background rounded-lg">
-                    <span className="text-sm">Cognitive Score</span>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-semibold">82</span>
-                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                        !
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-background rounded-lg">
-                    <span className="text-sm">Innovation Score</span>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-semibold">75</span>
-                      <div className="w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
                         !
                       </div>
                     </div>
@@ -340,12 +307,12 @@ const HomePage: React.FC = () => {
                     </div>
                   </div>
                   
-                  <div className="flex items-center justify-between p-3 bg-background rounded-lg border-t-2 border-gradient-to-r from-blue-500 to-purple-500">
-                    <span className="text-sm font-semibold">Overall Score</span>
+                  <div className="flex items-center justify-between p-3 bg-background rounded-lg">
+                    <span className="text-sm">Overall Score</span>
                     <div className="flex items-center space-x-2">
-                      <span className="font-semibold text-lg">79</span>
-                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                        !
+                      <span className="font-semibold text-lg">82</span>
+                      <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold">
+                        !!
                       </div>
                     </div>
                   </div>
