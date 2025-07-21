@@ -335,8 +335,11 @@ const VerifyPage: React.FC = () => {
           timestamp: new Date().toISOString(),
           // ✅ ENHANCED: Include format detection metadata
           parsingSource: usingPreParsed ? 'ConversationInput' : 'VerifyPage',
-          originalMessageCount: verifyData.messageCount
-          // TODO: Add formatDetection fields after backend update
+          originalMessageCount: verifyData.messageCount,
+          formatDetection: verifyData.formatDetection,
+          parsingConfidence: verifyData.formatDetection?.confidence,
+          detectedFormat: verifyData.formatDetection?.format,
+          detectionMethod: verifyData.formatDetection?.detectionMethod
         },
         // ✅ SIMPLIFIED: Use defaults instead of removed settings (unchanged)
         options: {
