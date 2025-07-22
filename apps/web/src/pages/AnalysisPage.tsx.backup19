@@ -154,7 +154,7 @@ const AnalysisPage: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* ✅ HOW IT WORKS - UPDATED WORKFLOW */}
+      {/* ✅ HOW IT WORKS */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -175,9 +175,9 @@ const AnalysisPage: React.FC = () => {
             
             <div className="space-y-2">
               <div className="text-2xl">🎯</div>
-              <h3 className="font-semibold">2. Parse & Verify</h3>
+              <h3 className="font-semibold">2. Choose Your Path</h3>
               <p className="text-sm text-muted-foreground">
-                Intelligent parsing with verification and editing options
+                Parse & Verify for editing, or Direct Analysis for speed
               </p>
             </div>
             
