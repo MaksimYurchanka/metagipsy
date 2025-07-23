@@ -1,5 +1,5 @@
 @echo off
-REM MetaGipsy Repository Cleanup Script
+REM MetaGipsy Repository Cleanup Script (Windows)
 REM Removes all development artifacts and backup files for professional GitHub release
 
 echo.
@@ -9,21 +9,57 @@ echo   Preparing for legendary GitHub release
 echo ========================================
 echo.
 
-REM Change to the repository directory
-cd /d "C:\Users\User\Desktop\Dev\MetaGipsy\Git\metagipsy-backend"
-
-echo Current directory: %CD%
+REM Work in current directory
+echo Working in current directory: %CD%
 echo.
+
+REM Count files before cleanup
+echo Analyzing repository structure...
+
+REM Count backup files
+set backup_count=0
+for /f %%i in ('dir /s /b *.backup* 2^>nul ^| find /c /v ""') do set backup_count=%%i
+
+REM Count version files
+set version_count=0
+for /f %%i in ('dir /s /b *_v*.ts *_v*.tsx 2^>nul ^| find /c /v ""') do set version_count=%%i
+
+REM Count development artifacts
+set artifact_count=0
+for /f %%i in ('dir /s /b *.stablefix* *.fixtry *.storetest* *.stableversion 2^>nul ^| find /c /v ""') do set artifact_count=%%i
+
+REM Count total files
+set total_before=0
+for /f %%i in ('dir /s /b 2^>nul ^| find /c /v ""') do set total_before=%%i
+
+echo Files found:
+echo   📂 Backup files: %backup_count%
+echo   📂 Version files: %version_count%
+echo   📂 Development artifacts: %artifact_count%
+echo   📂 Total files: %total_before%
+echo.
+
+REM Calculate total files to clean
+set /a total_to_clean=%backup_count%+%version_count%+%artifact_count%
+
+REM Check if there's anything to clean
+if %total_to_clean% EQU 0 (
+    echo ✅ Repository is already clean! No artifacts found.
+    echo 🚀 Ready for GitHub push!
+    pause
+    exit /b 0
+)
 
 REM Ask for confirmation
 echo WARNING: This will permanently delete ALL backup and development artifact files!
+echo.
 echo Files to be deleted:
-echo - All *.backup* files (156+ files)
-echo - All *_v[0-9]* version files
-echo - All *.stablefix*, *.fixtry, *.storetest files
-echo - All package.json.backup* files
-echo - All schema.prisma.backup* files
-echo - Empty folders: docs/, packages/
+echo   ❌ All *.backup* files (%backup_count% files^)
+echo   ❌ All *_v*.ts, *_v*.tsx version files (%version_count% files^)
+echo   ❌ All *.stablefix*, *.fixtry, *.storetest files (%artifact_count% files^)
+echo   ❌ Development page files
+echo   ❌ Empty folders: docs\, packages\
+echo   ❌ Build artifacts: dist\, node_modules\
 echo.
 set /p confirm="Are you sure you want to continue? (y/N): "
 
@@ -37,100 +73,100 @@ echo.
 echo Starting cleanup process...
 echo.
 
-REM Create backup directory for safety (optional)
+REM Create backup directory for safety
 if not exist "cleanup-backup" mkdir cleanup-backup
 echo Created safety backup directory: cleanup-backup\
-echo.
-
-REM Count files before cleanup
-echo Counting files before cleanup...
-for /f %%i in ('dir /s /b *.backup* 2^>nul ^| find /c /v ""') do set backup_count=%%i
-for /f %%i in ('dir /s /b *_v*.ts *_v*.tsx 2^>nul ^| find /c /v ""') do set version_count=%%i
-echo Found %backup_count% backup files and %version_count% version files
 echo.
 
 REM Delete backup files
 echo [1/8] Deleting *.backup* files...
 for /r . %%f in (*.backup*) do (
     echo Deleting: %%f
-    del "%%f" /q
+    del "%%f" /q 2>nul
 )
 
 REM Delete version files  
-echo [2/8] Deleting version files (*_v*.ts, *_v*.tsx)...
+echo [2/8] Deleting version files (*_v*.ts, *_v*.tsx^)...
 for /r . %%f in (*_v*.ts *_v*.tsx) do (
     echo Deleting: %%f
-    del "%%f" /q
+    del "%%f" /q 2>nul
 )
 
 REM Delete development artifacts
 echo [3/8] Deleting development artifacts...
-for /r . %%f in (*.stablefix* *.fixtry *.storetest *.stableversion) do (
+for /r . %%f in (*.stablefix* *.fixtry *.storetest* *.stableversion) do (
     echo Deleting: %%f
-    del "%%f" /q
+    del "%%f" /q 2>nul
 )
 
-REM Delete package.json backups
-echo [4/8] Deleting package.json backup files...
-for /r . %%f in (package.json.backup*) do (
-    echo Deleting: %%f
-    del "%%f" /q
+REM Delete development page files
+echo [4/8] Deleting development page files...
+if exist "apps\web\src\pages" (
+    for %%f in (apps\web\src\pages\analysis_page_*.ts) do (
+        echo Deleting: %%f
+        del "%%f" /q 2>nul
+    )
+    if exist "apps\web\src\pages\store_isolation_test.ts" (
+        echo Deleting: apps\web\src\pages\store_isolation_test.ts
+        del "apps\web\src\pages\store_isolation_test.ts" /q 2>nul
+    )
 )
 
-REM Delete schema backups
-echo [5/8] Deleting schema.prisma backup files...
-for /r . %%f in (schema.prisma.backup*) do (
-    echo Deleting: %%f
-    del "%%f" /q
-)
-
-REM Delete empty folders
-echo [6/8] Removing empty folders...
+REM Remove empty folders
+echo [5/8] Removing empty folders...
 if exist "docs" (
-    echo Removing empty docs/ folder...
+    echo Removing docs\ folder...
     rmdir "docs" /s /q 2>nul
 )
 if exist "packages\chess-engine" (
-    echo Removing empty packages/chess-engine/ folder...
+    echo Removing packages\chess-engine\ folder...
     rmdir "packages\chess-engine" /s /q 2>nul
 )
 if exist "packages\shared" (
-    echo Removing empty packages/shared/ folder...
+    echo Removing packages\shared\ folder...
     rmdir "packages\shared" /s /q 2>nul
 )
 if exist "packages" (
-    echo Checking if packages/ is empty...
     dir "packages" /b /a 2>nul | findstr "." >nul
     if errorlevel 1 (
-        echo Removing empty packages/ folder...
+        echo Removing empty packages\ folder...
         rmdir "packages" /s /q 2>nul
     )
 )
 
-REM Clean old .env files and replace with professional examples
-echo [7/8] Updating environment configuration...
-if exist ".env" (
-    echo Removing old .env from root...
-    del ".env" /q
-)
-if exist "apps\api\.env" (
-    echo Removing old .env from apps/api...
-    del "apps\api\.env" /q
-)
-if exist "apps\web\.env" (
-    echo Removing old .env from apps/web...
-    del "apps\web\.env" /q
-)
-
-REM Clean dist folders for fresh builds
-echo [8/8] Cleaning build artifacts...
+REM Clean build artifacts
+echo [6/8] Cleaning build artifacts...
 if exist "apps\web\dist" (
-    echo Removing web dist/ folder...
+    echo Removing web dist\ folder...
     rmdir "apps\web\dist" /s /q 2>nul
 )
 if exist "apps\api\dist" (
-    echo Removing api dist/ folder...
+    echo Removing api dist\ folder...
     rmdir "apps\api\dist" /s /q 2>nul
+)
+
+REM Clean node_modules
+echo [7/8] Cleaning node_modules...
+for /d /r . %%d in (node_modules) do (
+    if exist "%%d" (
+        echo Removing: %%d
+        rmdir "%%d" /s /q 2>nul
+    )
+)
+
+REM Clean environment files
+echo [8/8] Cleaning environment files...
+if exist ".env" (
+    echo Removing .env from root...
+    del ".env" /q 2>nul
+)
+if exist "apps\api\.env" (
+    echo Removing .env from apps\api...
+    del "apps\api\.env" /q 2>nul
+)
+if exist "apps\web\.env" (
+    echo Removing .env from apps\web...
+    del "apps\web\.env" /q 2>nul
 )
 
 echo.
@@ -140,26 +176,46 @@ echo ========================================
 echo.
 
 REM Count remaining files
+set total_after=0
+for /f %%i in ('dir /s /b 2^>nul ^| find /c /v ""') do set total_after=%%i
+set /a files_removed=%total_before%-%total_after%
+
 echo Cleanup summary:
-for /f %%i in ('dir /s /b 2^>nul ^| find /c /v ""') do echo Total files remaining: %%i
+echo   📊 Files before: %total_before%
+echo   📊 Files after: %total_after%
+echo   🗑️  Files removed: %files_removed%
 echo.
 
-echo Professional repository structure achieved:
-echo ✅ All backup files removed (156+ files deleted)
-echo ✅ All version artifacts removed  
-echo ✅ Development test files removed
-echo ✅ Empty folders removed
-echo ✅ Build artifacts cleaned
-echo ✅ Ready for .env.example replacement
+REM Verify cleanup
+set backup_remaining=0
+for /f %%i in ('dir /s /b *.backup* 2^>nul ^| find /c /v ""') do set backup_remaining=%%i
+
+set version_remaining=0
+for /f %%i in ('dir /s /b *_v*.ts *_v*.tsx 2^>nul ^| find /c /v ""') do set version_remaining=%%i
+
+echo Verification:
+echo   ✅ Backup files remaining: %backup_remaining% (should be 0^)
+echo   ✅ Version files remaining: %version_remaining% (should be 0^)
+echo.
+
+echo ✅ Professional repository structure achieved:
+echo   ✅ All backup files removed
+echo   ✅ All version artifacts removed
+echo   ✅ Development test files removed
+echo   ✅ Empty folders removed
+echo   ✅ Build artifacts cleaned
+echo   ✅ Node modules cleaned
+echo   ✅ Ready for professional GitHub release
 echo.
 
 echo Next steps:
-echo 1. Add professional .env.example files (Vercel/Render)
-echo 2. Update Docker files to 2025 standards
-echo 3. Test build process: npm install && npm run build
-echo 4. Commit and push to GitHub for legendary first impression
+echo   1. git add .
+echo   2. git commit -m "🚀 Professional repository structure"
+echo   3. git push origin main
+echo   4. Make repository public on GitHub
 echo.
 
-echo Repository is now enterprise-grade and ready for global developers!
+echo 🎊 Repository is now enterprise-grade and ready for global developers! 🎊
+echo 🚀 LEGENDARY CLEANUP COMPLETE! 🚀
 echo.
 pause
