@@ -1,48 +1,162 @@
-# MetaGipsy API Dockerfile
-FROM node:20-alpine AS base
+# MetaGipsy API Dockerfile - 2025 Express.js Production Standards
+# Multi-stage build for optimal production image size and security
 
-# Install dependencies only when needed
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
+ARG NODE_VERSION=20-alpine
+
+# ============================================================================
+# Stage 1: Base image with common dependencies
+# ============================================================================
+FROM node:${NODE_VERSION} AS base
+
+# Install security updates and required system dependencies
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+    dumb-init \
+    curl \
+    wget \
+    ca-certificates && \
+    rm -rf /var/cache/apk/*
+
+# Create app directory with proper permissions
 WORKDIR /app
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S metagipsy && \
+    adduser -S -D -H -u 1001 -s /sbin/nologin -G metagipsy metagipsy
+
+# ============================================================================
+# Stage 2: Dependencies installation
+# ============================================================================
+FROM base AS deps
+
+# Copy package files for dependency installation
+COPY apps/api/package*.json ./
+
+# Install all dependencies (including devDependencies for build)
+RUN npm ci --include=dev && \
+    npm cache clean --force
+
+# ============================================================================
+# Stage 3: TypeScript compilation and build
+# ============================================================================
+FROM base AS builder
 
 # Copy package files
 COPY apps/api/package*.json ./
-RUN npm ci --only=production
 
-# Rebuild the source code only when needed
-FROM base AS builder
-WORKDIR /app
-COPY apps/api/package*.json ./
-RUN npm ci
+# Install dependencies
+RUN npm ci --include=dev
 
+# Copy source code
 COPY apps/api/ .
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Build TypeScript to JavaScript
 RUN npm run build
 
-# Production image, copy all the files and run the app
+# Remove development dependencies after build
+RUN npm prune --omit=dev && \
+    npm cache clean --force
+
+# ============================================================================
+# Stage 4: Production runtime image
+# ============================================================================
 FROM base AS runner
-WORKDIR /app
 
+# Set production environment
 ENV NODE_ENV=production
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Copy built application
-COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-
-# Copy Prisma files
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-
-USER nextjs
-
-EXPOSE 3001
-
 ENV PORT=3001
 ENV HOST=0.0.0.0
 
-# Generate Prisma client and start the application
-CMD ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && node dist/index.js"]
+# Create necessary directories
+RUN mkdir -p /app/logs /app/data && \
+    chown -R metagipsy:metagipsy /app
 
+# Copy built application from builder stage
+COPY --from=builder --chown=metagipsy:metagipsy /app/dist ./dist
+COPY --from=builder --chown=metagipsy:metagipsy /app/node_modules ./node_modules
+COPY --from=builder --chown=metagipsy:metagipsy /app/package.json ./package.json
+
+# Copy Prisma files for runtime
+COPY --from=builder --chown=metagipsy:metagipsy /app/prisma ./prisma
+
+# Copy startup script
+COPY --from=builder --chown=metagipsy:metagipsy /app/scripts/start.sh ./scripts/start.sh
+RUN chmod +x ./scripts/start.sh 2>/dev/null || echo "# No start script found, using default startup"
+
+# Switch to non-root user
+USER metagipsy
+
+# Expose port
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3001/api/v1/health || exit 1
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Default startup command with proper error handling
+CMD ["sh", "-c", "\
+    echo 'Starting MetaGipsy API...' && \
+    echo 'Generating Prisma client...' && \
+    npx prisma generate && \
+    echo 'Running database migrations...' && \
+    npx prisma migrate deploy && \
+    echo 'Starting Express server...' && \
+    node dist/index.js"]
+
+# ============================================================================
+# Metadata labels for better container management
+# ============================================================================
+LABEL maintainer="MetaGipsy Team <hello@metagipsy.com>"
+LABEL version="1.0.0"
+LABEL description="MetaGipsy API - Revolutionary AI Conversation Analysis"
+LABEL org.opencontainers.image.title="MetaGipsy API"
+LABEL org.opencontainers.image.description="Express.js API for AI conversation analysis with chess-style scoring"
+LABEL org.opencontainers.image.vendor="MetaGipsy"
+LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.created="2025-07-24"
+LABEL org.opencontainers.image.source="https://github.com/MaksimYurchanka/metagipsy"
+LABEL org.opencontainers.image.documentation="https://docs.metagipsy.com"
+
+# ============================================================================
+# Production optimizations and security
+# ============================================================================
+
+# Set proper file permissions (security)
+USER metagipsy
+
+# Optimize Node.js for production
+ENV NODE_OPTIONS="--max-old-space-size=1024 --optimize-for-size"
+
+# Enable source maps for better debugging (optional in production)
+ENV NODE_OPTIONS="${NODE_OPTIONS} --enable-source-maps"
+
+# Set timezone
+ENV TZ=UTC
+
+# Disable npm update check in production
+ENV NO_UPDATE_NOTIFIER=1
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+
+# ============================================================================
+# Development override example (use docker-compose.override.yml)
+# ============================================================================
+# 
+# For development, create docker-compose.override.yml:
+# 
+# services:
+#   api:
+#     build:
+#       target: builder  # Use builder stage with dev dependencies
+#     volumes:
+#       - ./apps/api:/app  # Mount source code for hot reload
+#     environment:
+#       - NODE_ENV=development
+#     command: npm run dev  # Use development command
+#
+# ============================================================================

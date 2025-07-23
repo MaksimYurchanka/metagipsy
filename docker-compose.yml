@@ -1,90 +1,294 @@
+# MetaGipsy Docker Compose - 2025 Production Standards
+# Revolutionary AI Conversation Analysis Platform
 version: '3.8'
 
 services:
-  # PostgreSQL Database
+  # PostgreSQL Database - Latest with performance optimization
   postgres:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: metagipsy-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: metagipsy
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-metagipsy_secure_password_2025}
+      # Performance optimizations
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./apps/api/prisma/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "pg_isready -U postgres -d metagipsy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - metagipsy-backend
+    # Security and performance
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
 
-  # Redis Cache
+  # Redis Cache - Latest with persistence
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     container_name: metagipsy-redis
-    command: redis-server --appendonly yes
+    restart: unless-stopped
+    command: >
+      redis-server 
+      --appendonly yes 
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - metagipsy-backend
+    security_opt:
+      - no-new-privileges:true
 
-  # API Backend
+  # API Backend - Express.js with TypeScript
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
+      args:
+        NODE_VERSION: 20-alpine
     container_name: metagipsy-api
+    restart: unless-stopped
     environment:
-      NODE_ENV: production
+      # Server Configuration
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: 3001
       HOST: 0.0.0.0
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/metagipsy
+      
+      # Database Configuration
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-metagipsy_secure_password_2025}@postgres:5432/metagipsy?schema=public&connection_limit=20&pool_timeout=60
       REDIS_URL: redis://redis:6379
+      
+      # Authentication
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
-      CLAUDE_API_KEY: ${CLAUDE_API_KEY}
-      JWT_SECRET: ${JWT_SECRET}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      JWT_SECRET: ${JWT_SECRET:-metagipsy_jwt_secret_change_in_production}
+      
+      # AI Services
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      
+      # Security
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000,http://localhost:80}
+      
+      # Performance
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
+      
+      # Business Logic
+      MAX_MESSAGES_PER_ANALYSIS: ${MAX_MESSAGES_PER_ANALYSIS:-50}
+      MAX_SESSIONS_PER_MONTH: ${MAX_SESSIONS_PER_MONTH:-1000}
+      
+      # Monitoring
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      
     ports:
-      - "3001:3001"
+      - "${API_PORT:-3001}:3001"
+    volumes:
+      # Production logs
+      - api_logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 60s
+    networks:
+      - metagipsy-backend
+      - metagipsy-frontend
+    security_opt:
+      - no-new-privileges:true
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
 
-  # Web Frontend
+  # Web Frontend - React with Vite
   web:
     build:
       context: .
       dockerfile: Dockerfile.web
+      args:
+        NODE_VERSION: 20-alpine
+        # Build-time environment variables
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api/v1}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_STRIPE_PUBLISHABLE_KEY: ${VITE_STRIPE_PUBLISHABLE_KEY}
+        VITE_GA_MEASUREMENT_ID: ${VITE_GA_MEASUREMENT_ID}
     container_name: metagipsy-web
+    restart: unless-stopped
     ports:
-      - "80:80"
+      - "${WEB_PORT:-80}:80"
+      - "${WEB_HTTPS_PORT:-443}:443"
+    volumes:
+      # Nginx logs
+      - web_logs:/var/log/nginx
+      # SSL certificates (if using)
+      - ./ssl:/etc/ssl/certs:ro
     depends_on:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+    networks:
+      - metagipsy-frontend
+    security_opt:
+      - no-new-privileges:true
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
 
+  # Nginx Load Balancer (Optional for production scaling)
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: metagipsy-nginx
+    restart: unless-stopped
+    profiles:
+      - production  # Only start with --profile production
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/ssl/certs:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - web
+      - api
+    networks:
+      - metagipsy-frontend
+    security_opt:
+      - no-new-privileges:true
+
+  # Monitoring with Prometheus (Optional)
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: metagipsy-prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring  # Only start with --profile monitoring
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - metagipsy-backend
+    security_opt:
+      - no-new-privileges:true
+
+# Named volumes for data persistence
 volumes:
   postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/postgres
+  
   redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/redis
+  
+  api_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/logs/api
+  
+  web_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/logs/web
+  
+  nginx_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-./data}/logs/nginx
+  
+  prometheus_data:
+    driver: local
 
+# Networks for service isolation
 networks:
-  default:
-    name: metagipsy-network
+  metagipsy-backend:
+    driver: bridge
+    name: metagipsy-backend
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  
+  metagipsy-frontend:
+    driver: bridge
+    name: metagipsy-frontend
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
 
+# Production deployment configurations
+x-production-config: &production-config
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+# Development overrides (use with docker-compose.override.yml)
+# Example usage:
+# docker-compose up                           # Development
+# docker-compose --profile production up     # Production with load balancer
+# docker-compose --profile monitoring up     # With monitoring stack

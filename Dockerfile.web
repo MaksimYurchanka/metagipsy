@@ -1,36 +1,274 @@
-# MetaGipsy Web Dockerfile
-FROM node:20-alpine AS base
+# MetaGipsy Web Dockerfile - 2025 React/Vite Production Standards
+# Multi-stage build for optimal frontend performance and security
 
-# Install dependencies only when needed
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
+ARG NODE_VERSION=20-alpine
+
+# ============================================================================
+# Stage 1: Base image with system dependencies
+# ============================================================================
+FROM node:${NODE_VERSION} AS base
+
+# Install security updates and build dependencies
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+    dumb-init \
+    curl \
+    wget \
+    ca-certificates && \
+    rm -rf /var/cache/apk/*
+
+# Create app directory
 WORKDIR /app
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S metagipsy && \
+    adduser -S -D -H -u 1001 -s /sbin/nologin -G metagipsy metagipsy
+
+# ============================================================================
+# Stage 2: Dependencies installation  
+# ============================================================================
+FROM base AS deps
+
+# Copy package files for dependency installation
+COPY apps/web/package*.json ./
+
+# Install dependencies with clean cache
+RUN npm ci --include=dev && \
+    npm cache clean --force
+
+# ============================================================================
+# Stage 3: Build stage with environment variables
+# ============================================================================
+FROM base AS builder
+
+# Build-time environment variables for Vite
+ARG VITE_API_URL=https://api.metagipsy.com/api/v1
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_STRIPE_PUBLISHABLE_KEY
+ARG VITE_STRIPE_PRICE_DAILY
+ARG VITE_STRIPE_PRICE_MONTHLY
+ARG VITE_PRICE_DAILY_USD=9.99
+ARG VITE_PRICE_MONTHLY_USD=199.99
+ARG VITE_GA_MEASUREMENT_ID
+ARG VITE_ENABLE_CLAUDE_ANALYSIS=true
+ARG VITE_ENABLE_PATTERN_DETECTION=true
+ARG VITE_ENABLE_EXPORT=true
+ARG VITE_DEBUG=false
+
+# Set environment variables for build
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+ENV VITE_STRIPE_PUBLISHABLE_KEY=$VITE_STRIPE_PUBLISHABLE_KEY
+ENV VITE_STRIPE_PRICE_DAILY=$VITE_STRIPE_PRICE_DAILY
+ENV VITE_STRIPE_PRICE_MONTHLY=$VITE_STRIPE_PRICE_MONTHLY
+ENV VITE_PRICE_DAILY_USD=$VITE_PRICE_DAILY_USD
+ENV VITE_PRICE_MONTHLY_USD=$VITE_PRICE_MONTHLY_USD
+ENV VITE_GA_MEASUREMENT_ID=$VITE_GA_MEASUREMENT_ID
+ENV VITE_ENABLE_CLAUDE_ANALYSIS=$VITE_ENABLE_CLAUDE_ANALYSIS
+ENV VITE_ENABLE_PATTERN_DETECTION=$VITE_ENABLE_PATTERN_DETECTION
+ENV VITE_ENABLE_EXPORT=$VITE_ENABLE_EXPORT
+ENV VITE_DEBUG=$VITE_DEBUG
 
 # Copy package files
 COPY apps/web/package*.json ./
-RUN npm ci
 
-# Rebuild the source code only when needed
-FROM base AS builder
-WORKDIR /app
-COPY apps/web/package*.json ./
-RUN npm ci
+# Install dependencies
+RUN npm ci --include=dev
 
+# Copy source code
 COPY apps/web/ .
 
-# Build the application
-RUN npm run build
+# Build the application with optimizations
+RUN npm run build && \
+    npm prune --omit=dev && \
+    npm cache clean --force
 
-# Production image, copy all the files and run nginx
-FROM nginx:alpine AS runner
+# Verify build output
+RUN ls -la dist/ && \
+    echo "Build completed successfully"
 
-# Copy built application to nginx
-COPY --from=builder /app/dist /usr/share/nginx/html
+# ============================================================================
+# Stage 4: Production runtime with Nginx
+# ============================================================================
+FROM nginx:1.25-alpine AS runner
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/nginx.conf
+# Install security updates and required tools
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+    curl \
+    wget \
+    ca-certificates && \
+    rm -rf /var/cache/apk/*
 
+# Create non-root user for nginx
+RUN addgroup -g 1001 -S metagipsy && \
+    adduser -S -D -H -u 1001 -s /sbin/nologin -G metagipsy metagipsy
+
+# Copy built application from builder stage
+COPY --from=builder --chown=metagipsy:metagipsy /app/dist /usr/share/nginx/html
+
+# Create custom nginx configuration for React SPA
+RUN cat > /etc/nginx/nginx.conf << 'EOF'
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+    use epoll;
+    multi_accept on;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    # Logging format
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log /var/log/nginx/access.log main;
+
+    # Performance optimizations
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 16M;
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/json
+        application/javascript
+        application/xml+rss
+        application/atom+xml
+        image/svg+xml;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+    add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+
+    server {
+        listen 80;
+        listen [::]:80;
+        server_name _;
+
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # Health check endpoint
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+
+        # Handle client-side routing (SPA)
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        # Optimize static assets caching
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            access_log off;
+        }
+
+        # API proxy (optional, if API on same domain)
+        location /api/ {
+            proxy_pass http://metagipsy-api:3001;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade;
+        }
+
+        # Security: deny access to hidden files
+        location ~ /\. {
+            deny all;
+            access_log off;
+            log_not_found off;
+        }
+    }
+}
+EOF
+
+# Create log directories with proper permissions
+RUN mkdir -p /var/log/nginx && \
+    chown -R nginx:nginx /var/log/nginx && \
+    chown -R nginx:nginx /var/cache/nginx && \
+    chown -R nginx:nginx /usr/share/nginx/html
+
+# Test nginx configuration
+RUN nginx -t
+
+# Expose ports
 EXPOSE 80
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:80/health || exit 1
+
+# Use nginx in foreground
 CMD ["nginx", "-g", "daemon off;"]
 
+# ============================================================================
+# Metadata labels for container management
+# ============================================================================
+LABEL maintainer="MetaGipsy Team <hello@metagipsy.com>"
+LABEL version="1.0.0"
+LABEL description="MetaGipsy Web Frontend - Revolutionary AI Conversation Analysis UI"
+LABEL org.opencontainers.image.title="MetaGipsy Web"
+LABEL org.opencontainers.image.description="React frontend for AI conversation analysis with chess-style scoring"
+LABEL org.opencontainers.image.vendor="MetaGipsy"
+LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.created="2025-07-24"
+LABEL org.opencontainers.image.source="https://github.com/MaksimYurchanka/metagipsy"
+LABEL org.opencontainers.image.documentation="https://docs.metagipsy.com"
+
+# ============================================================================
+# Production optimizations
+# ============================================================================
+
+# Set timezone
+ENV TZ=UTC
+
+# Nginx worker process optimization
+ENV NGINX_WORKER_PROCESSES=auto
+ENV NGINX_WORKER_CONNECTIONS=1024
+
+# ============================================================================
+# Build verification and debugging
+# ============================================================================
+# 
+# To verify build contents:
+# docker build -t metagipsy-web .
+# docker run --rm metagipsy-web ls -la /usr/share/nginx/html
+#
+# To test locally:
+# docker run -p 8080:80 metagipsy-web
+# curl http://localhost:8080/health
+#
+# ============================================================================
