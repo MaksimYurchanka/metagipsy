@@ -1,0 +1,281 @@
+# MetaGipsy .gitignore - Professional Node.js Monorepo
+# ================================================================
+
+# ============================================================================
+# 🔐 SECURITY - Never commit these files!
+# ============================================================================
+
+# Environment variables (CRITICAL!)
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
+
+# API Keys and secrets
+.env.*
+*.key
+*.pem
+secrets/
+config/secrets/
+
+# ============================================================================
+# 📦 Dependencies
+# ============================================================================
+
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Package manager files
+.pnpm-debug.log*
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# ============================================================================
+# 🏗️ Build outputs
+# ============================================================================
+
+# Frontend build (Vite/React)
+apps/web/dist/
+apps/web/build/
+dist/
+build/
+
+# Backend build (TypeScript)
+apps/api/dist/
+apps/api/build/
+
+# Coverage reports
+coverage/
+*.lcov
+.nyc_output
+
+# ============================================================================
+# 🔧 Development tools
+# ============================================================================
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ============================================================================
+# 📝 Logs and temporary files
+# ============================================================================
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Runtime data
+pids/
+lib-cov/
+
+# ============================================================================
+# 🗄️ Database and cache
+# ============================================================================
+
+# SQLite databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Redis dump files
+dump.rdb
+
+# Cache directories
+.cache/
+.parcel-cache/
+.next/cache/
+
+# ============================================================================
+# 🐳 Docker
+# ============================================================================
+
+# Docker files (keep Dockerfile, ignore runtime)
+.dockerignore
+docker-compose.override.yml
+
+# ============================================================================
+# ☁️ Cloud and deployment
+# ============================================================================
+
+# Vercel
+.vercel
+
+# Render
+.render/
+
+# Serverless
+.serverless/
+
+# AWS
+.aws/
+
+# ============================================================================
+# 🧪 Testing
+# ============================================================================
+
+# Test coverage
+coverage/
+.coverage
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jest
+jest-coverage/
+
+# ============================================================================
+# 📊 Analytics and monitoring
+# ============================================================================
+
+# Sentry
+.sentryclirc
+
+# ============================================================================
+# 🔄 Version control
+# ============================================================================
+
+# Git
+.git/
+.gitconfig
+
+# ============================================================================
+# 📱 Mobile (future React Native support)
+# ============================================================================
+
+# React Native
+.react-native/
+.expo/
+
+# ============================================================================
+# 🎯 MetaGipsy specific
+# ============================================================================
+
+# Backup files (from cleanup scripts)
+cleanup-backup/
+*.backup
+*.backup.*
+
+# Development artifacts
+*.fixtry
+*.stablefix*
+*.storetest*
+*_v*.ts
+*_v*.tsx
+analysis_page_*.ts
+store_isolation_test.ts
+
+# Temporary development files
+tmp/
+temp/
+.tmp/
+
+# AI model files (if added in future)
+*.model
+models/
+
+# ============================================================================
+# 💰 Business and legal
+# ============================================================================
+
+# Stripe webhook logs
+stripe-events.log
+
+# User data exports (GDPR compliance)
+exports/
+user-data/
+
+# ============================================================================
+# 🚀 Performance and optimization
+# ============================================================================
+
+# Bundle analyzer outputs
+bundle-analyzer-report.html
+stats.json
+
+# Lighthouse reports
+lighthouse-report.html
+
+# ============================================================================
+# 📚 Documentation build outputs
+# ============================================================================
+
+# Storybook
+storybook-static/
+
+# Docs generators
+docs/build/
+site/
+
+# ============================================================================
+# 🔬 Development experiments
+# ============================================================================
+
+# Playground files
+playground/
+experiments/
+sandbox/
+
+# Temporary code snippets
+scratch.js
+scratch.ts
+test.js
+test.ts
+
+# ============================================================================
+# 🎨 Design assets (large files)
+# ============================================================================
+
+# Design files
+*.sketch
+*.fig
+*.psd
+*.ai
+
+# Large media files (use Git LFS if needed)
+*.mp4
+*.mov
+*.avi
+
+# ============================================================================
+# END OF .GITIGNORE
+# ============================================================================
+
+# 📝 Note: This .gitignore is designed for MetaGipsy monorepo structure
+# with React frontend (apps/web) and Express backend (apps/api)
+# 
+# Remember to:
+# 1. Add .env.example files for environment templates
+# 2. Use Git LFS for large assets if needed
+# 3. Regularly audit what files are being tracked
+# 
+# 🚀 Professional repository hygiene for enterprise-grade projects!
