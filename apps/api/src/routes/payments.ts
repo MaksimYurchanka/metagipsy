@@ -9,7 +9,7 @@ const router = express.Router();
 
 // Initialize Stripe with secret key
 const stripe = new Stripe(config.stripe.secretKey, {
-  apiVersion: '2025-06-30.basil',
+  apiVersion: '2025-07-30.basil',
   typescript: true,
 });
 
